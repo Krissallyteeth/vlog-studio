@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Vlog Studio</title>
+    <meta name="description" content="촬영 전 기획부터 현장 기록, 촬영 후 이야기 구성까지 관리하는 Vlog 제작 노트" />
+    <meta name="theme-color" content="#f6f6f4" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Vlog Studio" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+    <script>
+      // Apply the saved theme before first paint to avoid a light/dark flash.
+      try {
+        var t = localStorage.getItem('vs-theme') || 'system';
+        if (t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark');
+        }
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="app" aria-live="off"></div>
+    <noscript>Vlog Studio를 사용하려면 JavaScript를 켜 주세요.</noscript>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

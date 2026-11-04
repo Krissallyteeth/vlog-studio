@@ -1,0 +1,25 @@
+{
+  "name": "vlog-studio",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "check:dist": "node scripts/check-dist.mjs",
+    "icons": "node scripts/generate-icons.mjs"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.4",
+    "fake-indexeddb": "^6.2.7",
+    "tailwindcss": "^4.3.4",
+    "vite": "^8.3.5",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}
