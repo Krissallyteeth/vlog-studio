@@ -1253,4 +1253,8 @@ export default {
   "adr.c.goalLikeFav": "좋아요·저장 목표 주문 {n}건: 좋아요+저장 1개당 {cost}.",
   "adr.c.goalFollow": "关注 목표 주문 {n}건: 팔로워 1명당 {cost}.",
   "adr.goalOrders": "{goal} 목표 주문 {n}건 기준",
+
+  "ocr.candCopied": "\"{v}\" 값을 넣고 복사했어요.",
+  "ocr.candUsed": "\"{v}\" 값을 넣었어요(이 브라우저에서는 복사가 안 돼요).",
+  "ocr.candTitle": "누르면 저장할 값에 넣고 클립보드에 복사해요",
 };

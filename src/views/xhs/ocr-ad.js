@@ -2,7 +2,7 @@ import { compressImage } from '../../data/media.js';
 import { uid } from '../../lib/ids.js';
 import { t } from '../../i18n/index.js';
 import { navigate } from '../../router.js';
-import { $, esc, openSheet, toast } from '../../ui/dom.js';
+import { $, copyText, esc, openSheet, toast } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { putMany } from '../../xhs/db.js';
 import { AD_FIELDS, AD_METRICS, parseAdOrder } from '../../xhs/ocr-ad-parse.js';
@@ -62,6 +62,12 @@ export function suggestPosts(posts, text, startedAt) {
     .filter((x) => x.score >= 2)
     .sort((a, b) => b.score - a.score)
     .slice(0, 6);
+}
+
+/** A clicked recognition candidate is also copied, so it can be pasted elsewhere. */
+async function copyCandidate(text) {
+  if (!text) return;
+  toast((await copyText(text)) ? t('ocr.candCopied', { v: text }) : t('ocr.candUsed', { v: text }));
 }
 
 export async function renderOcrAd([postId], { isCurrent }) {
@@ -239,7 +245,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
             const cand = r ? r.value ?? r.candidate ?? r.options?.[0]?.value : null;
             const st = !r ? 'missing' : k in o.values ? 'ok' : r.status === 'conflict' ? 'conflict' : 'check';
             return `<tr class="${st === 'check' || st === 'conflict' ? 'cf-mid' : ''}"><td>${esc(label)}</td><td class="text-[12px] text-muted">${esc(r?.text ?? '')}${r?.reason ? ` · ${esc(t(`ocr.why.${r.reason}`) )}` : ''}</td>
-              <td>${cand != null && !(k in o.values) ? `<button type="button" class="ocr-cand" data-use="${oi}:${k}">${esc(show(k, cand))}</button>` : ''}</td>
+              <td>${cand != null && !(k in o.values) ? `<button type="button" class="ocr-cand" data-use="${oi}:${k}" title="${esc(t('ocr.candTitle'))}">${esc(show(k, cand))}</button>` : ''}</td>
               <td><input class="input !h-9 !w-36 tabular-nums" data-o="${oi}" data-k="${k}" value="${esc(show(k, o.values[k]))}" placeholder="${st === 'missing' ? '' : esc(t('ocr.needCheck'))}" />${k === 'beatPct' ? ' %' : ''}</td><td>${esc(t(`ocr.st.${st}`))}</td></tr>`;
           };
           const aud = o.parsed.audience;
@@ -401,6 +407,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
       const o = state.orders[Number(oi)];
       const r = o.parsed.fields[k];
       o.values[k] = r.value ?? r.candidate ?? r.options?.[0]?.value;
+      copyCandidate(use.textContent.trim());
       // keep typed edits in other boxes
       for (const inp of result.querySelectorAll(`[data-o="${oi}"]`)) {
         const v = parseField(inp.dataset.k, inp.value);

@@ -2,7 +2,7 @@ import { compressImage } from '../../data/media.js';
 import { uid } from '../../lib/ids.js';
 import { t } from '../../i18n/index.js';
 import { navigate } from '../../router.js';
-import { $, confirmDialog, esc, openSheet, toast } from '../../ui/dom.js';
+import { $, confirmDialog, copyText, esc, openSheet, toast } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { deleteOne, getAll, putMany } from '../../xhs/db.js';
 import { fmt, parseInput, toEditText } from '../../xhs/format.js';
@@ -243,6 +243,9 @@ export async function renderOcr([postId], { isCurrent }) {
     const cand = e.target.closest('[data-cand]');
     if (cand) {
       state.choice[cand.dataset.cand] = Number(cand.dataset.v);
+      // Also copy what was read (the text before the image number), so it can be pasted elsewhere.
+      const text = (cand.firstChild?.textContent ?? '').trim();
+      if (text) copyText(text).then((ok) => toast(ok ? t('ocr.candCopied', { v: text }) : t('ocr.candUsed', { v: text })));
       return drawResult();
     }
     const rm = e.target.closest('[data-rm-img]');

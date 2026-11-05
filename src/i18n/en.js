@@ -1253,4 +1253,8 @@ export default {
   "adr.c.goalLikeFav": "{n} like/save-goal orders: {cost} per like+save.",
   "adr.c.goalFollow": "{n} 关注-goal orders: {cost} per follower.",
   "adr.goalOrders": "from {n} {goal}-goal orders",
+
+  "ocr.candCopied": "Used and copied \"{v}\".",
+  "ocr.candUsed": "Used \"{v}\" (copying is not available in this browser).",
+  "ocr.candTitle": "Click to use this value and copy it",
 };

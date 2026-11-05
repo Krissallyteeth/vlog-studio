@@ -1253,4 +1253,8 @@ export default {
   "adr.c.goalLikeFav": "点赞收藏目标订单 {n} 个：每个点赞+收藏 {cost}。",
   "adr.c.goalFollow": "关注目标订单 {n} 个：每个关注 {cost}。",
   "adr.goalOrders": "基于 {n} 个{goal}目标订单",
+
+  "ocr.candCopied": "已填入并复制“{v}”。",
+  "ocr.candUsed": "已填入“{v}”（此浏览器无法复制）。",
+  "ocr.candTitle": "点击填入此值并复制",
 };
