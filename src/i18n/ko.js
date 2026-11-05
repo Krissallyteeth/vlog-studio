@@ -1157,4 +1157,13 @@ export default {
 
   "exp.syncTitle": "성과 데이터가 로그인한 기기들과 동기화돼요.",
   "exp.syncBody": "게시물·광고·수익·기준선은 같은 계정의 컴퓨터와 폰에 자동으로 맞춰져요. 원본 스크린샷 이미지는 용량 때문에 각 기기에만 남아요. 백업 파일도 가끔 저장해 두세요.",
+
+  "data.viewTable": "표로 보기",
+  "data.viewCards": "카드로 보기",
+
+  "crit.fixedShort": "고정 기준",
+  "crit.recent5Short": "최근 5편",
+  "crit.impShort": "개선율",
+
+  "grid.hintTouch": "셀을 눌러 선택하고 한 번 더 누르면 수정해요 · 표는 옆으로 밀어서 볼 수 있어요. 퍼센트는 17.5처럼 입력해요.",
 };

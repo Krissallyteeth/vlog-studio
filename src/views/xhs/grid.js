@@ -24,6 +24,7 @@ export function createGrid(host, opts) {
   let rows = opts.rows;
   let sel = null; // { r, c }
   let editing = null; // { r, c, input }
+  const touchUI = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
   const pending = new Map(); // `${rowKey}\u0000${colId}` → { row, col, before, after }
   const undo = []; // batches: [{ key, prev }] (prev = previous pending entry or undefined)
 
@@ -113,7 +114,7 @@ export function createGrid(host, opts) {
          <button type="button" class="btn btn-secondary btn-sm" data-act="undo">${esc(t('grid.undo'))}</button>
          <button type="button" class="btn btn-ghost btn-sm" data-act="revert">${esc(t('grid.revert'))}</button>
          <button type="button" class="btn btn-primary btn-sm" data-act="save">${esc(t('grid.review'))}</button>`
-      : `<span class="text-[12px] text-muted">${esc(t('grid.hint'))}</span>`;
+      : `<span class="text-[12px] text-muted">${esc(t(matchMedia('(pointer: coarse)').matches ? 'grid.hintTouch' : 'grid.hint'))}</span>`;
     bar.classList.toggle('has-pending', n > 0);
   }
 
@@ -287,7 +288,12 @@ export function createGrid(host, opts) {
     if (!td || e.target.closest('.grid-input')) return;
     if (!e.target.closest('[data-open-row]')) e.preventDefault(); // keep focus on the typing proxy
     if (editing) commitEdit();
-    select(Number(td.dataset.r), Number(td.dataset.c));
+    const r = Number(td.dataset.r);
+    const c = Number(td.dataset.c);
+    // Touch screens: a second tap on the selected cell starts editing (double-tap is unreliable there).
+    const again = touchUI && sel?.r === r && sel?.c === c;
+    select(r, c);
+    if (again && !e.target.closest('[data-open-row]')) startEdit();
   });
   scroll.addEventListener('click', (e) => {
     const open = e.target.closest('[data-open-row]');

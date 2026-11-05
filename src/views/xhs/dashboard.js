@@ -60,21 +60,21 @@ export async function renderDashboard({ isCurrent }) {
       </div>
       <div class="mt-2 flex flex-wrap items-center justify-between gap-2">${relativeNote()}${chartLegend()}</div>
 
-      <div class="mt-4 grid gap-4 xl:grid-cols-[1fr_minmax(0,460px)]">
-        <div class="grid gap-3 md:grid-cols-2">
+      <div class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,460px)]">
+        <div class="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
           ${CHARTS.map((c) => `<section class="card"><h3 class="text-[14px] font-semibold">${esc(METRIC[c.key].zh)} <span class="font-normal text-muted">${esc(t(`m.${c.key}`))}${METRIC[c.key].dir < 0 ? ` · ${esc(t('dash.lowerBetter'))}` : ''}</span></h3><div class="mt-2" data-chart="${c.key}"></div></section>`).join('')}
           <section class="card"><h3 class="text-[14px] font-semibold">粉丝 <span class="font-normal text-muted">${esc(t('dash.fans'))}</span></h3><div class="mt-2" data-chart="followers"></div></section>
           <section class="card"><h3 class="text-[14px] font-semibold">涨粉丝 <span class="font-normal text-muted">${esc(t('dash.newFans'))}</span></h3><div class="mt-2" data-chart="newFollowers"></div></section>
         </div>
-        <aside class="flex flex-col gap-4">
+        <aside class="flex min-w-0 flex-col gap-4">
           <section class="card">
             <div class="flex items-center justify-between"><h3 class="text-[15px] font-semibold">${esc(t('dash.recent5'))}</h3><a class="link-btn text-[13px]" href="#/data/posts">${esc(t('dash.all'))}</a></div>
-            <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t('xg.title'))}</th>${['views', 'ctr', 'exit2s', 'retain5s', 'completion'].map((k) => `<th class="num">${esc(METRIC[k].zh)}</th>`).join('')}</tr></thead>
+            <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th class="col-title">${esc(t('xg.title'))}</th>${['views', 'ctr', 'exit2s', 'retain5s', 'completion'].map((k) => `<th class="num">${esc(METRIC[k].zh)}</th>`).join('')}</tr></thead>
             <tbody>${list
               .slice(-5)
               .reverse()
               .map(
-                (p) => `<tr class="cursor-pointer" data-goto="${esc(p.id)}"><td><span class="font-medium">${esc(p.title)}</span>${p.validity === '광고혼입' ? ` <span class="badge cf-mid">${esc(t('xg.admixed'))}</span>` : ''}<span class="block text-[11px] text-muted">${esc(p.date)}</span></td>${['views', 'ctr', 'exit2s', 'retain5s', 'completion']
+                (p) => `<tr class="cursor-pointer" data-goto="${esc(p.id)}"><td class="col-title"><span class="font-medium">${esc(p.title)}</span>${p.validity === '광고혼입' ? ` <span class="badge cf-mid">${esc(t('xg.admixed'))}</span>` : ''}<span class="block text-[11px] text-muted">${esc(p.date)}</span></td>${['views', 'ctr', 'exit2s', 'retain5s', 'completion']
                   .map((k) => `<td class="num ${CF[judge(k, stage(p)[k], baseline?.medians[k], p.validity)] ?? ''}">${esc(fmt(k, stage(p)[k]))}</td>`)
                   .join('')}</tr>`,
               )

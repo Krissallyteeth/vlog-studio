@@ -1157,4 +1157,13 @@ export default {
 
   "exp.syncTitle": "Performance data syncs across your signed-in devices.",
   "exp.syncBody": "Posts, ads, income and baselines stay the same on your computer and phone. Original screenshot images stay on each device because of their size. Keep an occasional backup file too.",
+
+  "data.viewTable": "Table view",
+  "data.viewCards": "Card view",
+
+  "crit.fixedShort": "Fixed base",
+  "crit.recent5Short": "Latest 5",
+  "crit.impShort": "Change",
+
+  "grid.hintTouch": "Tap a cell to select it, tap again to edit · swipe the table sideways to see more. Enter percentages like 17.5.",
 };

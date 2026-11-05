@@ -1157,4 +1157,13 @@ export default {
 
   "exp.syncTitle": "表现数据会在已登录的设备间同步。",
   "exp.syncBody": "笔记、推广、收益和基准线会在同一账号的电脑和手机上自动保持一致。原始截图图片因体积原因只保存在各自设备上。也请不时保存备份文件。",
+
+  "data.viewTable": "表格视图",
+  "data.viewCards": "卡片视图",
+
+  "crit.fixedShort": "固定基准",
+  "crit.recent5Short": "最近 5 篇",
+  "crit.impShort": "改善率",
+
+  "grid.hintTouch": "点一下选中单元格，再点一下即可修改 · 表格可左右滑动查看。百分比请输入 17.5 这样的数字。",
 };

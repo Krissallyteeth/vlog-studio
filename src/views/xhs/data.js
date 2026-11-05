@@ -54,7 +54,7 @@ export async function renderData([tab = 'posts', focus], { isCurrent }) {
     actions: `<a href="#/import" class="btn btn-secondary btn-sm">${icon('upload', 'size-4')}${esc(t('data.import'))}</a>
       <button type="button" class="btn btn-secondary btn-sm" id="data-export">${icon('download', 'size-4')}${esc(t('data.export'))}</button>`,
     body: `
-      <div class="segmented segmented-4 mb-3" role="tablist">
+      <div class="segmented segmented-tabs mb-3" role="tablist">
         ${TABS.map((x, i) => `<a href="#/data/${x}" role="tab" class="seg ${x === tab ? 'is-active' : ''}" aria-selected="${x === tab}">${['①', '②', '③', '④'][i]} ${esc(t(`data.tab.${x}`))}</a>`).join('')}
       </div>
       <div id="data-body"></div>`,
@@ -90,27 +90,31 @@ function renderPosts(body, ctx, focus) {
   const types = [...new Set([...ctx.settings.contentTypes, ...ctx.posts.map((p) => p.contentType).filter(Boolean)])];
 
   body.innerHTML = `
-    <div class="flex flex-wrap items-center gap-2">
-      <label class="search !min-h-10 flex-1 min-w-[180px]">${icon('search', 'size-4 text-muted')}<input id="d-q" type="search" placeholder="${esc(t('data.search'))}" value="${esc(prefs.q)}" /></label>
-      <select id="d-sort" class="input !h-10 !w-auto text-[13px]" aria-label="${esc(t('data.sort'))}">
+    <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+      <div class="col-span-2 flex gap-2 sm:contents">
+      <label class="search !min-h-10 min-w-0 flex-1 sm:min-w-[180px]">${icon('search', 'size-4 text-muted')}<input id="d-q" type="search" placeholder="${esc(t('data.search'))}" value="${esc(prefs.q)}" /></label>
+      <select id="d-sort" class="input !h-10 !w-auto shrink-0 text-[13px]" aria-label="${esc(t('data.sort'))}">
         <option value="asc" ${prefs.sort === 'asc' ? 'selected' : ''}>${esc(t('data.oldest'))}</option>
         <option value="desc" ${prefs.sort === 'desc' ? 'selected' : ''}>${esc(t('data.newest'))}</option>
       </select>
-      <select id="d-type" class="input !h-10 !w-auto text-[13px]" aria-label="${esc(t('xg.type'))}">
+      </div>
+      <select id="d-type" class="input !h-10 min-w-0 text-[13px] sm:!w-auto" aria-label="${esc(t('xg.type'))}">
         <option value="">${esc(t('data.allTypes'))}</option>${types.map((x) => `<option ${prefs.type === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}<option value="__none" ${prefs.type === '__none' ? 'selected' : ''}>${esc(t('data.noType'))}</option>
       </select>
-      <select id="d-validity" class="input !h-10 !w-auto text-[13px]" aria-label="D+1 유효성">
+      <select id="d-validity" class="input !h-10 min-w-0 text-[13px] sm:!w-auto" aria-label="D+1 유효성">
         <option value="">${esc(t('data.allValidity'))}</option>${['유효', '광고혼입', '미확인'].map((x) => `<option ${prefs.validity === x ? 'selected' : ''}>${x}</option>`).join('')}
       </select>
-      <button type="button" class="btn btn-secondary btn-sm" id="d-cols">${icon('eye', 'size-4')}${esc(t('data.columns'))}</button>
-      <button type="button" class="btn btn-secondary btn-sm" id="d-types">${esc(t('data.editTypes'))}</button>
+    </div>
+    <div class="tool-row mt-2">
       <div class="segmented segmented-2 !w-auto" role="radiogroup" aria-label="${esc(t('data.viewMode'))}">
-        <button type="button" class="seg px-3 ${prefs.view === 'table' ? 'is-active' : ''}" data-view="table">${icon('table', 'size-4')}</button>
-        <button type="button" class="seg px-3 ${prefs.view === 'cards' ? 'is-active' : ''}" data-view="cards">${icon('grid', 'size-4')}</button>
+        <button type="button" class="seg px-3 ${prefs.view === 'table' ? 'is-active' : ''}" data-view="table" aria-label="${esc(t('data.viewTable'))}">${icon('table', 'size-4')}</button>
+        <button type="button" class="seg px-3 ${prefs.view === 'cards' ? 'is-active' : ''}" data-view="cards" aria-label="${esc(t('data.viewCards'))}">${icon('grid', 'size-4')}</button>
       </div>
-      <button type="button" class="btn btn-secondary btn-sm" id="d-ocr">${icon('scan', 'size-4')}${esc(t('data.ocr'))}</button>
-      <button type="button" class="btn btn-secondary btn-sm" id="d-del">${icon('trash', 'size-4')}${esc(t('data.deleteRow'))}</button>
       <button type="button" class="btn btn-primary btn-sm" id="d-add">${icon('plus', 'size-4')}${esc(t('data.addPost'))}</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="d-ocr">${icon('scan', 'size-4')}${esc(t('data.ocr'))}</button>
+      <button type="button" class="btn btn-secondary btn-sm table-only" id="d-cols">${icon('eye', 'size-4')}${esc(t('data.columns'))}</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="d-types">${esc(t('data.editTypes'))}</button>
+      <button type="button" class="btn btn-secondary btn-sm table-only" id="d-del">${icon('trash', 'size-4')}${esc(t('data.deleteRow'))}</button>
     </div>
     <div class="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
       ${relativeNote()}
@@ -140,6 +144,7 @@ function renderPosts(body, ctx, focus) {
 
   function draw() {
     current = rows();
+    body.dataset.mode = prefs.view; // hides table-only tools in card view
     if (prefs.view === 'cards') {
       grid = null;
       host.innerHTML = cardsHtml(current, ctx);
@@ -332,7 +337,24 @@ function renderCriteria(body, ctx) {
       <div class="kpi"><p class="kpi-label">${esc(t('crit.priority'))}</p><p class="mt-1 font-semibold">${esc(t(`crit.pri.${c.priority}`))}</p></div>
     </div>
     <p class="mt-3 text-[13px]">${esc(t('crit.principle'))}</p>
-    <div class="mt-3 table-scroll"><table class="xtable">
+    <div class="mt-3 grid gap-2 sm:hidden">${c.rows
+      .map(
+        (r) => `<div class="card !p-3">
+        <div class="flex items-start justify-between gap-2">
+          <p><b>${esc(METRIC[r.key].zh)}</b> <span class="text-[12px] text-muted">${esc(t(`m.${r.key}`))} · ${esc(t(`crit.area.${r.area}`))} · ${r.dir < 0 ? '↓' : '↑'}</span></p>
+          <select class="select-mini shrink-0" data-core="${r.key}" aria-label="${esc(t('crit.core'))}"><option value="1" ${r.core ? 'selected' : ''}>${esc(t('crit.coreY'))}</option><option value="0" ${r.core ? '' : 'selected'}>${esc(t('crit.coreN'))}</option></select>
+        </div>
+        <div class="mt-2 grid grid-cols-4 gap-1.5 text-[12px]">
+          <div class="rounded-[10px] bg-surface-2 px-2 py-1.5"><p class="text-[11px] text-muted">${esc(t('crit.fixedShort'))}</p><p class="font-semibold tabular-nums">${esc(val(r.key, r.fixed) || '–')}</p></div>
+          <div class="rounded-[10px] bg-surface-2 px-2 py-1.5"><p class="text-[11px] text-muted">${esc(t('crit.recent5Short'))}</p><p class="font-semibold tabular-nums">${esc(val(r.key, r.recent) || '–')}</p></div>
+          <div class="rounded-[10px] px-2 py-1.5 ${impCls(r.improvement) || 'bg-surface-2'}"><p class="text-[11px] opacity-75">${esc(t('crit.impShort'))}</p><p class="font-semibold tabular-nums">${esc(r.improvement == null ? (r.early === 0 ? t('crit.zeroBase') : '–') : signedPct(r.improvement))}</p></div>
+          <div class="rounded-[10px] px-2 py-1.5 ${trendCls[r.trend]}"><p class="text-[11px] opacity-75">${esc(t('crit.trend'))}</p><p class="font-semibold">${esc(t(`crit.t.${r.trend}`))}</p></div>
+        </div>
+        <p class="mt-1.5 text-[11px] text-muted tabular-nums">${esc(t('crit.early5'))} ${esc(val(r.key, r.early) || '–')} · ${esc(t('crit.recent10'))} ${esc(val(r.key, r.recent10) || '–')} · ${esc(t('crit.n'))} ${r.validCount} · ${esc(t('crit.adN'))} ${r.adMixedCount}</p>
+      </div>`,
+      )
+      .join('')}</div>
+    <div class="mt-3 table-scroll hidden sm:block"><table class="xtable">
       <thead><tr><th>${esc(t('crit.area'))}</th><th>${esc(t('crit.metric'))}</th><th>${esc(t('crit.dir'))}</th><th class="num">${esc(fixedLabel)}</th><th class="num">${esc(t('crit.early5'))}</th><th class="num">${esc(t('crit.recent5'))}</th><th class="num">${esc(t('crit.recent10'))}</th><th class="num">${esc(t('crit.imp'))}</th><th>${esc(t('crit.trend'))}</th><th>${esc(t('crit.core'))}</th><th class="num">${esc(t('crit.n'))}</th><th class="num">${esc(t('crit.adN'))}</th></tr></thead>
       <tbody>${c.rows
         .map(
@@ -348,11 +370,11 @@ function renderCriteria(body, ctx) {
 
     <section class="card mt-4">
       <h3 class="text-[15px] font-semibold">${esc(t('crit.recentTable'))}</h3>
-      <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t('crit.seq'))}</th><th>${esc(t('crit.content'))}</th>${['exposure', 'views', 'ctr', 'exit2s', 'retain5s', 'interactionRate', 'totalInteraction', 'avgWatchRatio', 'completion', 'newFollowers'].map((k) => `<th class="num">${esc(METRIC[k].zh)}</th>`).join('')}</tr></thead>
+      <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t('crit.seq'))}</th><th class="col-title">${esc(t('crit.content'))}</th>${['exposure', 'views', 'ctr', 'exit2s', 'retain5s', 'interactionRate', 'totalInteraction', 'avgWatchRatio', 'completion', 'newFollowers'].map((k) => `<th class="num">${esc(METRIC[k].zh)}</th>`).join('')}</tr></thead>
       <tbody>${c.recent
         .map((p, i) => {
           const seqNo = c.validCount - c.recent.length + i + 1;
-          return `<tr><td class="num">${seqNo}</td><td><a class="link-btn" href="#/c/${encodeURIComponent(p.id)}">${esc(p.title)}</a></td>${['exposure', 'views', 'ctr', 'exit2s', 'retain5s', 'interactionRate', 'totalInteraction', 'avgWatchRatio', 'completion', 'newFollowers'].map((k) => `<td class="num">${esc(fmt(k, postValue(p, { kind: 'metric', stage: 'd1', metric: k, computed: METRIC[k].computed }, {})))}</td>`).join('')}</tr>`;
+          return `<tr><td class="num">${seqNo}</td><td class="col-title"><a class="link-btn" href="#/c/${encodeURIComponent(p.id)}">${esc(p.title)}</a></td>${['exposure', 'views', 'ctr', 'exit2s', 'retain5s', 'interactionRate', 'totalInteraction', 'avgWatchRatio', 'completion', 'newFollowers'].map((k) => `<td class="num">${esc(fmt(k, postValue(p, { kind: 'metric', stage: 'd1', metric: k, computed: METRIC[k].computed }, {})))}</td>`).join('')}</tr>`;
         })
         .join('') || `<tr><td colspan="12" class="text-muted">${esc(t('crit.needFive'))}</td></tr>`}</tbody></table></div>
     </section>
