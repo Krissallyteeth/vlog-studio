@@ -47,10 +47,23 @@ export function openSheet({ title = '', body, onMount, variant = 'sheet' }) {
         ${title ? `<h2 class="sheet-title">${esc(title)}</h2>` : ''}
         <div class="sheet-body">${body}</div>
       </div>`;
+    // iOS Safari keeps position:fixed sized to the whole screen when the keyboard opens, so a
+    // bottom sheet ends up under the keyboard. Pin the overlay to the visible area instead.
+    const vv = window.visualViewport;
+    const fitViewport = () => {
+      overlay.style.top = `${vv.offsetTop}px`;
+      overlay.style.height = `${vv.height}px`;
+      overlay.style.bottom = 'auto';
+      overlay.classList.toggle('has-keyboard', window.innerHeight - vv.height > 80);
+    };
+    vv?.addEventListener('resize', fitViewport);
+    vv?.addEventListener('scroll', fitViewport);
     let done = false;
     const close = (value = null) => {
       if (done) return;
       done = true;
+      vv?.removeEventListener('resize', fitViewport);
+      vv?.removeEventListener('scroll', fitViewport);
       overlay.classList.remove('is-open');
       document.removeEventListener('keydown', onKey);
       setTimeout(() => overlay.remove(), 220);
@@ -65,6 +78,7 @@ export function openSheet({ title = '', body, onMount, variant = 'sheet' }) {
     });
     document.addEventListener('keydown', onKey);
     document.body.append(overlay);
+    if (vv) fitViewport();
     requestAnimationFrame(() => overlay.classList.add('is-open'));
     onMount?.(overlay.querySelector('.sheet'), close);
     const focusable = overlay.querySelector('[autofocus], button, input, textarea, select');
