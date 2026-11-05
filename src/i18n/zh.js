@@ -1257,4 +1257,12 @@ export default {
   "ocr.candCopied": "已填入并复制“{v}”。",
   "ocr.candUsed": "已填入“{v}”（此浏览器无法复制）。",
   "ocr.candTitle": "点击填入此值并复制",
+
+  "oad.cropAlt": "读取该数值的截图部分",
+  "oad.needCheckN": "需要确认的数值 {n} 个 — 对照截图片段选择或输入",
+  "oad.allOk": "没有需要确认的数值。看一下下面的数值即可保存。",
+  "oad.okValues": "已确认的数值 {n} 个（有误请直接修改）",
+  "oad.missingN": "截图中未找到的项目 {n} 个 — 如有请手动输入",
+  "oad.originals": "查看原始截图（{n} 张）",
+  "oad.matchedStart": "未能识别发布时间，已选择推广开始前最后发布的帖子。请确认：{title}（{date}）",
 };

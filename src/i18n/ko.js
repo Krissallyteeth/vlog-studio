@@ -1257,4 +1257,12 @@ export default {
   "ocr.candCopied": "\"{v}\" 값을 넣고 복사했어요.",
   "ocr.candUsed": "\"{v}\" 값을 넣었어요(이 브라우저에서는 복사가 안 돼요).",
   "ocr.candTitle": "누르면 저장할 값에 넣고 클립보드에 복사해요",
+
+  "oad.cropAlt": "이 값을 읽은 캡처 부분",
+  "oad.needCheckN": "확인이 필요한 값 {n}개 — 캡처 조각과 비교해 고르거나 입력하세요",
+  "oad.allOk": "확인이 필요한 값이 없어요. 아래 값만 훑어보고 저장하면 돼요.",
+  "oad.okValues": "확정된 값 {n}개 (틀렸으면 바로 고치세요)",
+  "oad.missingN": "캡처에서 찾지 못한 항목 {n}개 — 있으면 직접 입력",
+  "oad.originals": "원본 캡처 보기 ({n}장)",
+  "oad.matchedStart": "발행 시각을 못 읽어서, 광고 시작 직전에 발행된 게시물을 골라 두었어요. 맞는지 확인해 주세요: {title} ({date})",
 };

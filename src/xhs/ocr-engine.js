@@ -25,11 +25,35 @@ async function getWorker() {
   return workerPromise;
 }
 
+/**
+ * Grayscale with the light grey labels darkened (same size, so word boxes match the original).
+ * Measured on 薯条 order screenshots: one more field read and titles read more cleanly; enlarging
+ * or pure black/white made it worse.
+ */
+async function grayscale(image) {
+  if (typeof createImageBitmap !== 'function' || typeof document === 'undefined') return image;
+  const bmp = await createImageBitmap(image);
+  const c = document.createElement('canvas');
+  c.width = bmp.width;
+  c.height = bmp.height;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(bmp, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height);
+  const a = d.data;
+  for (let i = 0; i < a.length; i += 4) {
+    const y = 0.299 * a[i] + 0.587 * a[i + 1] + 0.114 * a[i + 2];
+    a[i] = a[i + 1] = a[i + 2] = Math.max(0, Math.min(255, ((y - 60) * 255) / 175));
+  }
+  g.putImageData(d, 0, 0);
+  return c;
+}
+
 /** Recognises one image (File/Blob/URL). Returns { text, lines } with word boxes and confidences. */
-export async function recognize(image, progress = () => {}) {
+export async function recognize(image, progress = () => {}, { gray = false } = {}) {
   onProgress = progress;
   const worker = await getWorker();
-  const { data } = await worker.recognize(image, {}, { text: true, blocks: true, hocr: false, tsv: false });
+  const input = gray ? await grayscale(image).catch(() => image) : image;
+  const { data } = await worker.recognize(input, {}, { text: true, blocks: true, hocr: false, tsv: false });
   const lines = (data.blocks ?? []).flatMap((b) => b.paragraphs.flatMap((p) => p.lines)).map((l) => ({
     text: l.text,
     words: l.words.map((w) => ({ text: w.text, confidence: w.confidence, bbox: w.bbox })),

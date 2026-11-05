@@ -186,3 +186,23 @@ describe('amounts that agree confirm each other', () => {
     expect(r.fields.paid.status).toBe('check');
   });
 });
+
+describe('order → post without a readable publish time', () => {
+  const posts = [
+    normalizePost({ id: 'p1', title: 'T1', date: '2026-03-01', adTitles: ['测试vlog|海边咖啡'] }),
+    normalizePost({ id: 'p2', title: 'T2', date: '2026-03-10' }),
+    normalizePost({ id: 'p3', title: 'T3', date: '2026-03-20' }),
+  ];
+  it('picks the post published last before the ad started, even if another title looks closer', () => {
+    const m = matchPost(posts, null, '测试vlog|海边逛街', '2026-03-11T17:12');
+    expect(m.post.id).toBe('p2');
+    expect(m.byStart).toBe(true);
+    expect(matchPost(posts, null, '', '2026-03-25T10:00').post.id).toBe('p3');
+  });
+  it('reads a publish time whose label is garbled (the only date-time with seconds)', () => {
+    const r = parseAdOrder([[L('笔记 作者 : 某某'), L('友 和 时 问 : 2026-03-10 19:20:09'), L('下 单 时间 2026-03-11 17:12')]]);
+    expect(r.fields.publishedAt.value ?? r.fields.publishedAt.candidate).toBe('2026-03-10T19:20');
+    expect(r.fields.startedAt.value).toBe('2026-03-11T17:12');
+    expect(r.fields.startedAt.at).toMatchObject({ img: 0 }); // where it was read (shown on the review screen)
+  });
+});

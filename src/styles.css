@@ -723,6 +723,7 @@
   .ocr-thumb { @apply relative w-24 text-center text-[11px] text-muted; }
   .ocr-thumb img { @apply h-24 w-24 rounded-[10px] border border-line object-cover; }
   .ocr-x { @apply absolute -right-1.5 -top-1.5 grid size-6 place-items-center rounded-full bg-surface shadow; }
+  .ocr-crop { @apply mt-2 w-full rounded-[8px] border border-line bg-no-repeat; background-size: 100% auto; }
   .ocr-cand { @apply mb-1 rounded-[8px] border border-line bg-surface px-1.5 py-0.5 text-[12px] tabular-nums; }
   .ocr-cand.is-on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
   .select-mini {

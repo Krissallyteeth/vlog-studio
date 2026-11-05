@@ -1257,4 +1257,12 @@ export default {
   "ocr.candCopied": "Used and copied \"{v}\".",
   "ocr.candUsed": "Used \"{v}\" (copying is not available in this browser).",
   "ocr.candTitle": "Click to use this value and copy it",
+
+  "oad.cropAlt": "Part of the screenshot this value was read from",
+  "oad.needCheckN": "{n} values to check — compare with the screenshot strip, then pick or type",
+  "oad.allOk": "Nothing to check. Glance over the values below and save.",
+  "oad.okValues": "{n} confirmed values (fix any that are wrong)",
+  "oad.missingN": "{n} items not found in the screenshots — type them if you have them",
+  "oad.originals": "Show the screenshots ({n})",
+  "oad.matchedStart": "The publish time could not be read, so the post published last before the ad started was chosen. Please check: {title} ({date})",
 };

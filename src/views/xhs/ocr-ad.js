@@ -5,7 +5,7 @@ import { navigate } from '../../router.js';
 import { $, copyText, esc, openSheet, toast } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { putMany } from '../../xhs/db.js';
-import { AD_FIELDS, AD_METRICS, parseAdOrder } from '../../xhs/ocr-ad-parse.js';
+import { AD_METRICS, AD_REVIEW_FIELDS, parseAdOrder } from '../../xhs/ocr-ad-parse.js';
 import { ordered } from '../../xhs/stats.js';
 import { memoAds, memoToReplace, orderAds, placeOrder, rememberTitle, splitMoney } from '../../xhs/ad-orders.js';
 import { listPosts, savePosts, stageFromDates } from '../../xhs/store.js';
@@ -38,18 +38,26 @@ export function titleScore(post, text) {
   return best;
 }
 
-/** Best matching post: same publish date (±1 day) first, then title overlap. */
-export function matchPost(posts, publishedAt, title) {
+/**
+ * Best matching post: same publish date (±1 day) first, then title overlap. Without a publish
+ * time, the post published last before the ad started (an ad promotes a note already out).
+ */
+export function matchPost(posts, publishedAt, title, startedAt = '') {
   const day = (s) => (s ? Date.parse(`${s.slice(0, 10)}T00:00:00Z`) / 86400000 : null);
   const d = day(publishedAt);
+  const sd = d == null ? day(startedAt) : null;
+  const before = sd == null ? [] : posts.filter((p) => p.date && day(p.date) <= sd).sort((a, b) => b.date.localeCompare(a.date));
+  const latest = before[0];
   const chars = new Set(String(title ?? '').replace(/[\s|｜]/g, ''));
   let best = null;
   for (const p of posts) {
     const pd = day(p.date);
-    const dateScore = d != null && pd != null ? Math.max(0, 2 - Math.abs(pd - d)) : 0; // 2 same day, 1 = ±1 day
+    let dateScore = d != null && pd != null ? Math.max(0, 2 - Math.abs(pd - d)) : 0; // 2 same day, 1 = ±1 day
+    if (sd != null && p === latest) dateScore = sd - pd <= 7 ? 2 : 1;
+    if (sd != null && pd != null && pd > sd) dateScore = -10; // published after the ad started: not it
     const overlap = [...new Set(p.title.replace(/\s/g, ''))].filter((c) => chars.has(c)).length;
     const score = dateScore * 10 + overlap + titleScore(p, title) * 2;
-    if (score > 0 && (!best || score > best.score)) best = { post: p, score, sameDay: dateScore === 2 };
+    if (score > 0 && (!best || score > best.score)) best = { post: p, score, sameDay: dateScore === 2 && d != null, byStart: sd != null && p === latest };
   }
   return best;
 }
@@ -116,13 +124,20 @@ export async function renderOcrAd([postId], { isCurrent }) {
       im.status = 'run';
       drawThumbs();
       try {
-        const out = await recognize(im.file, (m) => {
-          if (m.status === 'recognizing text') {
-            im.progress = m.progress;
-            const cap = thumbs.querySelectorAll('figcaption')[state.images.indexOf(im)];
-            if (cap) cap.textContent = `${Math.round(m.progress * 100)}%`;
-          }
-        });
+        const out = await recognize(
+          im.file,
+          (m) => {
+            if (m.status === 'recognizing text') {
+              im.progress = m.progress;
+              const cap = thumbs.querySelectorAll('figcaption')[state.images.indexOf(im)];
+              if (cap) cap.textContent = `${Math.round(m.progress * 100)}%`;
+            }
+          },
+          { gray: true },
+        );
+        // Image size: to show the part of the screenshot each value was read from.
+        const bmp = await createImageBitmap(im.file).catch(() => null);
+        if (bmp) [im.w, im.h] = [bmp.width, bmp.height];
         im.lines = out.lines;
         im.text = out.text.replace(/\s+/g, '');
         im.status = 'done';
@@ -142,7 +157,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
     state.orders = groups.map((imgs) => {
       const parsed = parseAdOrder(imgs.map((im) => im.lines));
       const f = parsed.fields;
-      const match = matchPost(posts, f.publishedAt?.value ?? f.publishedAt?.candidate, f.title?.value ?? f.title?.candidate);
+      const match = matchPost(posts, f.publishedAt?.value ?? f.publishedAt?.candidate, f.title?.value ?? f.title?.candidate, f.startedAt?.value ?? f.startedAt?.candidate);
       const values = {};
       for (const [k, v] of Object.entries(f)) if (v.status === 'ok') values[k] = v.value;
       const n = Math.min(Math.max(f.noteCount?.value ?? 1, 1), 20);
@@ -230,6 +245,47 @@ export async function renderOcrAd([postId], { isCurrent }) {
     if (note) note.textContent = stageNote(o);
   };
 
+  const labelOf = (k) => AD_METRICS.find(([key]) => key === k)?.[1][0] ?? t(`oad.f.${k}`);
+  /** The strip of the screenshot a value was read from (full width, so the label is visible too). */
+  const crop = (o, at) => {
+    const im = o.imgs[at?.img];
+    if (!at?.box || !im?.w) return '';
+    const pad = 16;
+    const y0 = Math.max(0, at.box.y0 - pad);
+    const y1 = Math.min(im.h, at.box.y1 + pad);
+    const h = Math.max(1, y1 - y0);
+    const pos = im.h - h > 0 ? (y0 / (im.h - h)) * 100 : 0;
+    return `<div class="ocr-crop" role="img" aria-label="${esc(t('oad.cropAlt'))}" style="aspect-ratio:${im.w}/${h};background-image:url('${im.url}');background-position:0 ${pos}%"></div>`;
+  };
+  const input = (o, oi, k, extra = '') => `<span class="flex min-w-0 items-center gap-1"><input class="input !h-10 min-w-0 flex-1 tabular-nums" data-o="${oi}" data-k="${k}" value="${esc(show(k, o.values[k]))}" ${extra} />${k === 'beatPct' ? '%' : ''}</span>`;
+  /** Values to check first (with the screenshot strip), then the confirmed ones, then the missing ones. */
+  function fieldsHtml(o, oi) {
+    const f = o.parsed.fields;
+    const keys = AD_REVIEW_FIELDS.filter((k) => !(k === 'noteCount' && o.postIds.length === 1 && f.noteCount?.status === 'ok'));
+    const toCheck = keys.filter((k) => f[k] && !(k in o.values));
+    const done = keys.filter((k) => k in o.values);
+    const missing = keys.filter((k) => !f[k] && !(k in o.values));
+    const checkItem = (k) => {
+      const r = f[k];
+      const cands = r.status === 'conflict' ? r.options.map((x) => x.value) : [r.candidate];
+      return `<div class="rounded-[14px] border border-line p-3 cf-mid">
+        <div class="flex items-baseline justify-between gap-2"><b class="text-[14px]">${esc(labelOf(k))}</b><span class="text-[12px] opacity-75">${esc(r.reason ? t(`ocr.why.${r.reason}`) : t('ocr.st.conflict'))}</span></div>
+        ${crop(o, r.at ?? r.options?.[0]?.at)}
+        <div class="mt-2 flex flex-wrap items-center gap-2">${cands.filter((c) => c != null).map((c) => `<button type="button" class="ocr-cand !mb-0 !px-2.5 !py-1.5 !text-[14px]" data-use="${oi}:${k}" title="${esc(t('ocr.candTitle'))}">${esc(show(k, c))}</button>`).join('')}${input(o, oi, k, `placeholder="${esc(t('ocr.needCheck'))}"`)}</div>
+      </div>`;
+    };
+    const okItem = (k) => `<label class="flex min-w-0 flex-col gap-0.5 ${k === 'startedAt' || k === 'publishedAt' ? 'col-span-2 sm:col-span-1' : ''}"><span class="truncate text-[11px] text-muted">${esc(labelOf(k))}</span>${input(o, oi, k)}</label>`;
+    return `<div class="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div class="flex min-w-0 flex-col gap-3">
+        ${toCheck.length ? `<div><p class="text-[14px] font-semibold">${esc(t('oad.needCheckN', { n: toCheck.length }))}</p><div class="mt-2 grid gap-2 lg:grid-cols-2">${toCheck.map(checkItem).join('')}</div></div>` : `<p class="rounded-[12px] cf-good px-3 py-2 text-[14px]">${esc(t('oad.allOk'))}</p>`}
+        <div><p class="text-[14px] font-semibold">${esc(t('oad.okValues', { n: done.length }))}</p><div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">${done.map(okItem).join('')}</div></div>
+        ${missing.length ? `<details><summary class="link-btn cursor-pointer text-[13px]">${esc(t('oad.missingN', { n: missing.length }))}</summary><div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">${missing.map(okItem).join('')}</div></details>` : ''}
+        <details class="xl:hidden"><summary class="link-btn cursor-pointer text-[13px]">${esc(t('oad.originals', { n: o.imgs.length }))}</summary><div class="mt-2 flex flex-col gap-2">${o.imgs.map((im) => `<img src="${im.url}" alt="" class="w-full rounded-[10px] border border-line" />`).join('')}</div></details>
+      </div>
+      <div class="sticky top-4 hidden max-h-[85vh] flex-col gap-2 self-start overflow-y-auto xl:flex">${o.imgs.map((im) => `<img src="${im.url}" alt="" class="w-full rounded-[10px] border border-line" />`).join('')}</div>
+    </div>`;
+  }
+
   function drawOrders() {
     if (!state.orders.length) {
       result.innerHTML = `<p class="card text-[14px] text-muted">${esc(t('oad.none'))}</p>`;
@@ -239,15 +295,6 @@ export async function renderOcrAd([postId], { isCurrent }) {
       state.orders
         .map((o, oi) => {
           const f = o.parsed.fields;
-          const row = (k) => {
-            const r = f[k];
-            const label = AD_METRICS.find(([key]) => key === k)?.[1][0] ?? t(`oad.f.${k}`);
-            const cand = r ? r.value ?? r.candidate ?? r.options?.[0]?.value : null;
-            const st = !r ? 'missing' : k in o.values ? 'ok' : r.status === 'conflict' ? 'conflict' : 'check';
-            return `<tr class="${st === 'check' || st === 'conflict' ? 'cf-mid' : ''}"><td>${esc(label)}</td><td class="text-[12px] text-muted">${esc(r?.text ?? '')}${r?.reason ? ` · ${esc(t(`ocr.why.${r.reason}`) )}` : ''}</td>
-              <td>${cand != null && !(k in o.values) ? `<button type="button" class="ocr-cand" data-use="${oi}:${k}" title="${esc(t('ocr.candTitle'))}">${esc(show(k, cand))}</button>` : ''}</td>
-              <td><input class="input !h-9 !w-36 tabular-nums" data-o="${oi}" data-k="${k}" value="${esc(show(k, o.values[k]))}" placeholder="${st === 'missing' ? '' : esc(t('ocr.needCheck'))}" />${k === 'beatPct' ? ' %' : ''}</td><td>${esc(t(`ocr.st.${st}`))}</td></tr>`;
-          };
           const aud = o.parsed.audience;
           const audRows = Object.entries(aud).flatMap(([sec, list]) => Object.entries(list).map(([label, r]) => ({ sec, label, r })));
           return `<section class="card">
@@ -264,16 +311,13 @@ export async function renderOcrAd([postId], { isCurrent }) {
                 <p class="mt-1 text-[12px] text-muted">${esc(t(o.values.startedAt ? 'oad.multiStage' : 'oad.stageNeedStart'))}</p></div>`
                 : `<div class="mt-2 grid gap-3 sm:grid-cols-[2fr_1fr]">
               <label class="field"><span class="field-label">${esc(t('ocr.post'))}</span><select class="input" data-post="${oi}" data-slot="0"><option value="">${esc(t('oad.choosePost'))}</option>${posts.map((p) => `<option value="${esc(p.id)}" ${p.id === o.postIds[0] ? 'selected' : ''}>${esc(`${p.date} · ${p.title}`)}</option>`).join('')}</select>
-                <span class="text-[12px] text-muted">${esc(o.match ? t(o.match.sameDay ? 'oad.matched' : 'oad.matchedNear', { title: o.match.post.title, date: o.match.post.date }) : t('oad.noMatch'))} · ${esc(t('oad.read', { title: f.title?.value ?? f.title?.candidate ?? '?', at: (f.publishedAt?.value ?? f.publishedAt?.candidate ?? '?').replace('T', ' ') }))}</span></label>
+                <span class="text-[12px] text-muted">${esc(o.match ? t(o.match.byStart ? 'oad.matchedStart' : o.match.sameDay ? 'oad.matched' : 'oad.matchedNear', { title: o.match.post.title, date: o.match.post.date }) : t('oad.noMatch'))} · ${esc(t('oad.read', { title: f.title?.value ?? f.title?.candidate ?? '?', at: (f.publishedAt?.value ?? f.publishedAt?.candidate ?? '?').replace('T', ' ') }))}</span></label>
               <label class="field"><span class="field-label">${esc(t('ads.stage'))}</span><input class="input" data-stage="${oi}" list="oad-stages" value="${esc(o.stage)}" placeholder="${esc(autoStage(o) || 'D+n')}" /><span class="text-[12px] text-muted" data-stage-note="${oi}">${esc(stageNote(o))}</span></label>
             </div>${singleExtras(o, oi)}`
             }
-            <div class="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
-              <div class="table-scroll"><table class="xtable"><thead><tr><th>${esc(t('crit.metric'))}</th><th>${esc(t('oad.readText'))}</th><th>${esc(t('ocr.recognised'))}</th><th>${esc(t('ocr.toSave'))}</th><th>${esc(t('imp.th.status'))}</th></tr></thead><tbody>${AD_FIELDS.map(row).join('')}</tbody></table></div>
-              <div class="flex max-h-[60vh] flex-col gap-2 overflow-y-auto">${o.imgs.map((im) => `<img src="${im.url}" alt="" class="w-full rounded-[10px] border border-line" />`).join('')}</div>
-            </div>
+            ${fieldsHtml(o, oi)}
             ${audRows.length ? `<details class="mt-3"><summary class="link-btn cursor-pointer">${esc(t('oad.audience', { n: audRows.length }))}</summary>
-              <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th></th><th>${esc(t('oad.label'))}</th><th>${esc(t('ocr.toSave'))} (%)</th></tr></thead><tbody>${audRows.map(({ sec, label, r }) => `<tr class="${r.status === 'ok' ? '' : 'cf-mid'}"><td>${esc(t(`oad.sec.${sec}`))}</td><td>${esc(label)}</td><td><input class="input !h-8 !w-24" data-aud="${oi}|${sec}|${esc(label)}" value="${r.status === 'ok' ? Math.round(r.value * 1000) / 10 : ''}" placeholder="${r.candidate != null ? Math.round(r.candidate * 1000) / 10 : '?'}" /></td></tr>`).join('')}</tbody></table></div>
+              <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">${audRows.map(({ sec, label, r }) => `<label class="flex flex-col gap-0.5 rounded-[10px] px-2 py-1.5 ${r.status === 'ok' ? 'bg-surface-2' : 'cf-mid'}"><span class="text-[11px] opacity-75">${esc(t(`oad.sec.${sec}`))} · ${esc(label)}</span><span class="flex items-center gap-1"><input class="input !h-8 min-w-0 flex-1 tabular-nums" inputmode="decimal" data-aud="${oi}|${sec}|${esc(label)}" value="${r.status === 'ok' ? Math.round(r.value * 1000) / 10 : ''}" placeholder="${r.candidate != null ? Math.round(r.candidate * 1000) / 10 : '?'}" />%</span></label>`).join('')}</div>
               <p class="mt-1 text-[12px] text-muted">${esc(t('oad.audHelp'))}</p></details>` : ''}
           </section>`;
         })

@@ -47,8 +47,10 @@ export function splitSpent(raw) {
 /** linesPerImage: [[{ words: [{ text, confidence, bbox }] }]] — one array of lines per screenshot. */
 export function parseAdOrder(linesPerImage) {
   const f = {}; // field → result
+  let here = null; // where the current line is: { img, box } — shown next to the value for checking
   const set = (key, r) => {
     if (!r) return;
+    if (here && !r.at) r = { ...r, at: here };
     const prev = f[key];
     if (!prev) f[key] = r;
     else if (prev.status === 'ok' && r.status === 'ok' && prev.value !== r.value && typeof prev.value !== 'object') f[key] = { status: 'conflict', options: [prev, r] };
@@ -59,12 +61,13 @@ export function parseAdOrder(linesPerImage) {
   let budgetUsedUp = false;
   const noteCountSeen = () => f.noteCount?.value ?? 1;
   const noteText = []; // text under the thumbnails of a multi-note order (titles, often garbled)
-  for (const lines of linesPerImage) {
+  for (const [img, lines] of linesPerImage.entries()) {
     let section = '';
     let inNotes = false;
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       if (!line?.words?.length) continue;
+      here = { img, box: boxOf([line]) };
       const text = squeeze(line.words.map((w) => w.text).join(''));
       const c = conf(line);
       let m;
@@ -74,7 +77,9 @@ export function parseAdOrder(linesPerImage) {
       // Status / title / publish time
       if (/推广完成|推广结束/.test(text)) set('status', ok('done', text, 100));
       else if (/推广中/.test(text)) set('status', ok('running', text, 100));
-      if ((m = /发布时间:?(\d{4}-\d{2}-\d{2})(\d{2}:\d{2})(?::\d{2})?/.exec(text))) set('publishedAt', judge(`${m[1]}T${m[2]}`, m[0], Math.max(c, 80)));
+      if ((m = /(?:发|布|时)[布时间问]*:?(\d{4}-\d{2}-\d{2})(\d{2}:\d{2})(?::\d{2})?/.exec(text)) && !/下单|创建|投放|开始|推广时间|订单时间/.test(text)) set('publishedAt', judge(`${m[1]}T${m[2]}`, m[0], Math.max(c, 80)));
+      // Label unreadable: the note header is the only place with a date-time that has seconds.
+      else if ((m = /(\d{4}-\d{2}-\d{2})(\d{2}:\d{2}):\d{2}/.exec(text)) && !/下单|创建|投放|开始|订单|快去/.test(text)) set('publishedAt', check(`${m[1]}T${m[2]}`, m[0], c, 'text'));
       // Order / delivery start time (shown in 订单管理 and the expanded order details).
       if ((m = /(?:下单时间|创建时间|投放时间|开始时间|推广时间|订单时间):?(\d{4}-\d{2}-\d{2})(\d{2}:\d{2})/.exec(text))) set('startedAt', judge(`${m[1]}T${m[2]}`, m[0], Math.max(c, 80)));
       if (/vlog|Vlog|VLOG|viog|\|/.test(text) && !/作者|发布|互动|订单|消耗|保障/.test(text) && text.length > 6 && !f.title && noteCountSeen() <= 1) {
@@ -103,13 +108,14 @@ export function parseAdOrder(linesPerImage) {
       if ((m = /推广目标:?(点赞收藏量|关注|阅读量|主页浏览|私信开口)/.exec(text))) set('goal', ok(m[1], m[1], c));
       if ((m = /(?:互动率)?超(?:过|越)(\d+(?:\.\d+)?)%的同类笔记/.exec(text))) set('beatPct', judge(Number(m[1]) / 100, `${m[1]}%`, Math.max(c, 70)));
       // Spend: "当前已消耗金额 100/100 元"
-      if ((m = /已消耗金额[^\d]*([\d./|lI]+)元/.exec(text))) spendTexts.push({ raw: m[1], c });
+      if ((m = /已消耗金额[^\d]*([\d./|lI]+)元/.exec(text))) spendTexts.push({ raw: m[1], c, at: here });
       // Coupon: "满 100.0 元 赠 40.0 元", expiry on the line before
       if ((m = /满(\d+(?:\.\d+)?)元赠(\d+(?:\.\d+)?)元/.exec(text))) set('coupon', judge({ threshold: Number(m[1]), bonus: Number(m[2]) }, m[0], Math.max(c, 70)));
       if ((m = /^(\d{4}-\d{2}-\d{2})\d{2}:\d{2}:\d{2},?快去/.exec(text))) set('couponExpires', judge(m[1], m[1], 80));
       // Metric grid: a label row followed by a row of numbers in the same order.
       const labels = AD_METRICS.map(([key, names]) => ({ key, at: Math.min(...names.map((n) => (text.indexOf(n) < 0 ? Infinity : text.indexOf(n)))) })).filter((x) => x.at !== Infinity).sort((a, b) => a.at - b.at);
       if (labels.length >= 2 && lines[i + 1]) {
+        here = { img, box: boxOf([line, lines[i + 1]]) }; // label row + number row
         const nums = lines[i + 1].words.map((w) => ({ p: parseNumber(w.text), c: w.confidence, text: w.text })).filter((x) => x.p);
         if (nums.length === labels.length) labels.forEach((l, j) => set(l.key, judge(nums[j].p.value, nums[j].text, nums[j].c, nums[j].p.unit === 'pct' ? 'format' : '')));
         else labels.forEach((l) => set(l.key, { status: 'check', candidate: null, text: lines[i + 1].words.map((w) => w.text).join(' '), conf: 0, reason: 'layout' }));
@@ -144,7 +150,9 @@ export function parseAdOrder(linesPerImage) {
     }
   }
   // Spend "50/50 元": the slash is often read as "1" ("50150") or as "/1" ("50/150").
-  for (const { raw, c } of spendTexts) {
+  here = null;
+  for (const { raw, c, at } of spendTexts) {
+    here = at;
     const sp = splitSpent(raw);
     if (!sp) continue;
     let { spend, budget, sure } = sp;
@@ -160,7 +168,7 @@ export function parseAdOrder(linesPerImage) {
       set('spend', { ...ok(spend, raw, c), confirmedBy: 'orderAmount' });
       set('budget', { ...ok(budget, raw, c), confirmedBy: 'orderAmount' });
       // Four readings of the same amount (consumed / budget / 订单金额 / 实付金额) confirm each other.
-      for (const k of ['orderAmount', 'paid']) if (f[k]?.status === 'check' && f[k].candidate === spend) f[k] = { ...ok(spend, f[k].text, f[k].conf), confirmedBy: 'spend' };
+      for (const k of ['orderAmount', 'paid']) if (f[k]?.status === 'check' && f[k].candidate === spend) f[k] = { ...ok(spend, f[k].text, f[k].conf), at: f[k].at, confirmedBy: 'spend' };
       continue;
     }
     set('spend', sure ? judge(spend, raw, c) : check(spend, raw, c, 'format'));
@@ -169,7 +177,7 @@ export function parseAdOrder(linesPerImage) {
   // Values that confirm each other: cost per result × result ≈ spend; result − top of the estimate = bonus.
   const val = (k) => f[k]?.value ?? f[k]?.candidate;
   const confirm = (k, why) => {
-    if (f[k] && f[k].status === 'check' && f[k].candidate != null) f[k] = { ...ok(f[k].candidate, f[k].text, f[k].conf), confirmedBy: why };
+    if (f[k] && f[k].status === 'check' && f[k].candidate != null) f[k] = { ...ok(f[k].candidate, f[k].text, f[k].conf), at: f[k].at, confirmedBy: why };
   };
   if (val('result') != null && val('spend') != null && val('costPerResult') != null && Math.abs(val('spend') / val('result') - val('costPerResult')) < 0.01) {
     confirm('result', 'costPerResult');
@@ -182,6 +190,13 @@ export function parseAdOrder(linesPerImage) {
   }
   if (f.paid?.status === 'check' && f.orderAmount?.status === 'ok' && f.paid.candidate === f.orderAmount.value) confirm('paid', 'orderAmount');
   return { fields: f, audience, noteText: noteText.join(' ') };
+}
+
+/** Bounding box around some OCR lines (image pixels). */
+function boxOf(lines) {
+  const ws = lines.flatMap((l) => l?.words ?? []).filter((w) => w.bbox);
+  if (!ws.length) return null;
+  return { x0: Math.min(...ws.map((w) => w.bbox.x0)), y0: Math.min(...ws.map((w) => w.bbox.y0)), x1: Math.max(...ws.map((w) => w.bbox.x1)), y1: Math.max(...ws.map((w) => w.bbox.y1)) };
 }
 
 /** Age bucket from the start of an OCR line ("18X下", "s1~20" …); null when unclear. */
@@ -202,4 +217,6 @@ function pctOf(s) {
 }
 
 /** Field list shown in the review table (order matters). */
+/** Fields shown on the review screen (the others are still read and saved, just not asked about). */
+export const AD_REVIEW_FIELDS = ['publishedAt', 'startedAt', 'paid', 'spend', 'goal', ...AD_METRICS.map(([k]) => k), 'result', 'estimate', 'bonus', 'costPerResult', 'beatPct', 'noteCount'];
 export const AD_FIELDS = ['startedAt', 'orderNo', 'noteCount', 'spend', 'budget', 'orderAmount', 'paid', 'goal', 'status', ...AD_METRICS.map(([k]) => k), 'result', 'estimate', 'bonus', 'costPerResult', 'beatPct', 'duration', 'targeting', 'payMethod', 'coupon', 'couponExpires', 'title', 'publishedAt'];
