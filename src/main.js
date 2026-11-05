@@ -1,6 +1,7 @@
 import './styles.css';
 import { initSync } from './data/sync.js';
 import { setupPWA } from './pwa.js';
+import { watchTables } from './ui/stack-tables.js';
 import { route, startRouter } from './router.js';
 import { toast } from './ui/dom.js';
 import { applyTheme } from './ui/theme.js';
@@ -52,5 +53,6 @@ if (authRedirect) {
   startRouter();
 }
 setupPWA();
+watchTables();
 // Drop photos nothing refers to any more (the sync engine does this too while signed in).
 setTimeout(() => import('./data/media.js').then((m) => m.collectUnusedMedia()).catch(() => {}), 5000);

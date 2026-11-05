@@ -26,7 +26,7 @@ function draw(host) {
   const pad = { l: 46, r: 14, t: 14, b: 24 };
   const vals = points.map((p) => p.y).filter((v) => typeof v === 'number');
   if (!vals.length) {
-    host.innerHTML = `<p class="py-10 text-center text-[13px] text-muted">${esc(t('chart.noData'))}</p>`;
+    host.innerHTML = `<p class="py-3 text-center text-[13px] text-muted sm:py-10">${esc(t('chart.noData'))}</p>`;
     return;
   }
   let lo = Math.min(...vals, baseline ?? Infinity);

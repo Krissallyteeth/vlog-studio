@@ -1265,4 +1265,6 @@ export default {
   "oad.missingN": "截图中未找到的项目 {n} 个 — 如有请手动输入",
   "oad.originals": "查看原始截图（{n} 张）",
   "oad.matchedStart": "未能识别发布时间，已选择推广开始前最后发布的帖子。请确认：{title}（{date}）",
+
+  "adr.c.monthSpend": "{cur} 实际推广花费 {spend}（上期 {prev}：{spendPrev}）。",
 };

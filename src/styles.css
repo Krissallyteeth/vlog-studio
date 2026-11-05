@@ -605,6 +605,35 @@
   .xtable th.col-title { @apply z-[3] bg-surface-2; }
   .xtable tbody tr:last-child td { @apply border-b-0; }
 
+  /* Stacked tables (phones): each row becomes a card — see src/ui/stack-tables.js. */
+  @media (max-width: 639.98px) {
+    .table-scroll:has(> table.stack) { overflow: visible; border: 0; border-radius: 0; }
+    table.stack, table.stack tbody { display: block; width: 100%; min-width: 0; }
+    table.stack thead { display: none; }
+    table.stack tr {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 2px 6px;
+      margin-bottom: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 14px;
+      background: var(--surface) !important; color: var(--ink);
+    }
+    table.stack tr:last-child { margin-bottom: 0; }
+    table.stack tr.cf-mid, table.stack tr.cf-bad, table.stack tr.cf-good { border-left-width: 4px; }
+    table.stack tr.cf-mid { border-left-color: #f59e0b; }
+    table.stack tr.cf-bad { border-left-color: #ef4444; }
+    table.stack tr.cf-good { border-left-color: #22c55e; }
+    table.stack td {
+      position: static; display: flex; min-width: 0; max-width: none; flex-direction: column; gap: 1px;
+      align-items: flex-start; padding: 4px 6px; border: 0 !important; border-radius: 8px; white-space: normal; text-align: left !important;
+      font-size: 14px; overflow-wrap: anywhere;
+    }
+    table.stack td::before { content: attr(data-label); font-size: 11px; font-weight: 400; color: var(--muted); }
+    table.stack td.cf-good::before, table.stack td.cf-mid::before, table.stack td.cf-bad::before { color: inherit; opacity: 0.75; }
+    table.stack td:first-child { grid-column: 1 / -1; padding-left: 0; padding-right: 0; font-size: 15px; background: transparent; }
+    table.stack td:first-child::before, table.stack td[data-label='']::before { display: none; }
+    table.stack td[colspan] { grid-column: 1 / -1; }
+    table.stack td.is-blank, table.stack tr.is-blank-row { display: none; }
+    table.stack td input, table.stack td select { width: 100% !important; }
+  }
+
   /* Spreadsheet grid */
   .grid-scroll {
     @apply max-h-[calc(100dvh-230px)] min-h-[240px] bg-surface outline-none;

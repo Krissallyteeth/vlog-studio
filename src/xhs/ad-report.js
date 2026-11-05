@@ -243,7 +243,7 @@ export function adComments(orders, { posts = [], baseline = null, income = [], c
   const months = periodRows(orders, 'month').filter((r) => r.count);
   if (months.length >= 2) {
     const [cur, prev] = months;
-    out.push({ tone: 'info', key: 'month', vars: { cur: cur.period, prev: prev.period, spend: cur.spend, spendPrev: prev.spend, perRead: cur.perRead, perReadPrev: prev.perRead } });
+    out.push({ tone: 'info', key: cur.perRead == null && prev.perRead == null ? 'monthSpend' : 'month', vars: { cur: cur.period, prev: prev.period, spend: cur.spend, spendPrev: prev.spend, perRead: cur.perRead, perReadPrev: prev.perRead } });
   }
 
   // Ad spend vs sponsorship income (no causal claim).

@@ -1265,4 +1265,6 @@ export default {
   "oad.missingN": "{n} items not found in the screenshots — type them if you have them",
   "oad.originals": "Show the screenshots ({n})",
   "oad.matchedStart": "The publish time could not be read, so the post published last before the ad started was chosen. Please check: {title} ({date})",
+
+  "adr.c.monthSpend": "{cur}: real ad spend {spend} (previous {prev}: {spendPrev}).",
 };
