@@ -1,4 +1,5 @@
 import { now } from '../lib/ids.js';
+import { t } from '../i18n/index.js';
 
 const DB_NAME = 'vlog-studio';
 // Bump only when adding stores or indexes. Upgrades must never delete stores,
@@ -11,7 +12,7 @@ export function openDB() {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') {
-      reject(new Error('이 브라우저는 IndexedDB를 지원하지 않아요.'));
+      reject(new Error(t('db.unsupported')));
       return;
     }
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -52,7 +53,7 @@ async function run(storeNames, mode, work) {
     let result;
     tx.oncomplete = () => resolve(result);
     tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error ?? new Error('저장이 취소되었어요.'));
+    tx.onabort = () => reject(tx.error ?? new Error(t('db.aborted')));
     const stores = names.map((n) => tx.objectStore(n));
     const req = work(Array.isArray(storeNames) ? stores : stores[0]);
     if (req) req.onsuccess = () => (result = req.result);

@@ -1,6 +1,7 @@
 import { SHOT_TYPES, STATUSES, TYPES, VALUES, DEFAULT_TARGET } from './constants.js';
 import { isEndBeforeStart, isValidDate, todayString } from './dates.js';
 import { uid } from './ids.js';
+import { t } from '../i18n/index.js';
 
 export const APP_ID = 'vlog-studio';
 export const SCHEMA_VERSION = 2;
@@ -108,7 +109,7 @@ export function normalizeScene(raw = {}) {
 }
 
 export function normalizeProject(raw, now = Date.now()) {
-  if (!raw || typeof raw !== 'object') throw new Error('프로젝트 데이터 형식이 올바르지 않아요.');
+  if (!raw || typeof raw !== 'object') throw new Error(t('backup.badProject'));
   const plan = obj(raw.plan);
   const story = obj(raw.story);
   const target = obj(raw.target);
@@ -120,7 +121,7 @@ export function normalizeProject(raw, now = Date.now()) {
   return {
     id: id(raw.id),
     schemaVersion: SCHEMA_VERSION,
-    name: str(raw.name).trim() || '제목 없는 프로젝트',
+    name: str(raw.name).trim() || t('project.untitled'),
     startDate,
     endDate,
     location: str(raw.location),
@@ -179,7 +180,7 @@ export function cloneProject(src, now = Date.now()) {
   const placeIds = new Map();
   const logIds = new Map();
   p.id = uid();
-  p.name = `${src.name} (복사본)`;
+  p.name = t('project.copyName', { name: src.name });
   p.createdAt = now;
   p.updatedAt = now;
   p.plan.highlights = p.plan.highlights.map((h) => ({ ...h, id: uid() }));
@@ -216,31 +217,31 @@ export function parseBackup(text) {
   try {
     data = JSON.parse(text);
   } catch {
-    return { ok: false, errors: ['JSON 형식이 아니에요. 파일이 손상되었거나 다른 파일일 수 있어요.'], projects: [] };
+    return { ok: false, errors: [t('backup.notJson')], projects: [] };
   }
   return validateBackup(data);
 }
 
 export function validateBackup(data) {
   const fail = (msg) => ({ ok: false, errors: [msg], projects: [] });
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return fail('Vlog Studio 백업 파일이 아니에요.');
-  if (data.app !== APP_ID) return fail('Vlog Studio 백업 파일이 아니에요. (앱 식별자가 없어요)');
-  if (!Number.isInteger(data.schemaVersion) || data.schemaVersion < 1) return fail('백업 파일에 스키마 버전 정보가 없어요.');
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return fail(t('backup.notBackup'));
+  if (data.app !== APP_ID) return fail(t('backup.noAppId'));
+  if (!Number.isInteger(data.schemaVersion) || data.schemaVersion < 1) return fail(t('backup.noVersion'));
   if (data.schemaVersion > SCHEMA_VERSION) {
-    return fail(`더 새로운 버전(v${data.schemaVersion})의 앱에서 만든 백업이에요. 앱을 업데이트한 뒤 다시 시도하세요.`);
+    return fail(t('backup.tooNew', { v: data.schemaVersion }));
   }
-  if (!Array.isArray(data.projects)) return fail('백업 파일에 프로젝트 목록이 없어요.');
+  if (!Array.isArray(data.projects)) return fail(t('backup.noProjects'));
 
   const errors = [];
   const projects = [];
   const seen = new Set();
   data.projects.forEach((p, i) => {
-    const n = `${i + 1}번째 프로젝트`;
-    if (!p || typeof p !== 'object') return errors.push(`${n}: 형식이 올바르지 않아요.`);
-    if (typeof p.id !== 'string' || !p.id) return errors.push(`${n}: ID가 없어요.`);
-    if (seen.has(p.id)) return errors.push(`${n}: ID가 중복돼요.`);
-    if (typeof p.name !== 'string' || !p.name.trim()) return errors.push(`${n}: 프로젝트명이 없어요.`);
-    if (!isValidDate(p.startDate)) return errors.push(`${n} "${p.name}": 촬영 시작일이 올바르지 않아요.`);
+    const n = t('backup.nth', { n: i + 1 });
+    if (!p || typeof p !== 'object') return errors.push(`${n}: ${t('backup.badFormat')}`);
+    if (typeof p.id !== 'string' || !p.id) return errors.push(`${n}: ${t('backup.noId')}`);
+    if (seen.has(p.id)) return errors.push(`${n}: ${t('backup.dupId')}`);
+    if (typeof p.name !== 'string' || !p.name.trim()) return errors.push(`${n}: ${t('backup.noName')}`);
+    if (!isValidDate(p.startDate)) return errors.push(`${n} "${p.name}": ${t('backup.badStart')}`);
     seen.add(p.id);
     try {
       projects.push(migrateProject(p, data.schemaVersion));

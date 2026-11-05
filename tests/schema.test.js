@@ -126,7 +126,7 @@ describe('markdown export', () => {
   it('contains every section in a readable order', () => {
     const md = projectToMarkdown(sample());
     const order = ['# 전주 당일치기 Vlog', '2026.11.04 – 11.05', '전주 · 한옥마을', '느린 하루', '골목을 천천히 걸으며 기록해 본다',
-      '## 2. 실제 동선', '- [x] 环境镜头', '- [ ] 反应镜头', '## 3. 현장 기록', '작은 책방', '최종', '비 덕분에 더 느려진 하루',
+      '## 2. 실제 동선', '- [x] 환경 컷', '- [ ] 반응 컷', '## 3. 현장 기록', '작은 책방', '최종', '비 덕분에 더 느려진 하루',
       '감정 흐름', '반전 없음', '## 5. 편집 장면 구성', '0:57', '1. 오프닝 (12초) ★ 하이라이트'];
     let pos = -1;
     for (const s of order.filter((x) => x !== '최종')) {

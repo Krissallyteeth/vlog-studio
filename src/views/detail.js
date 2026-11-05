@@ -15,25 +15,26 @@ import * as routeTab from './tabs/route.js';
 import * as shotsTab from './tabs/shots.js';
 import * as fieldTab from './tabs/field.js';
 import * as editTab from './tabs/edit.js';
+import { t } from '../i18n/index.js';
 
 const TABS = [
-  { id: 'plan', label: '기획', zh: '策划', icon: 'idea', mod: planTab },
-  { id: 'route', label: '동선', zh: '行程', icon: 'route', mod: routeTab },
-  { id: 'shots', label: '촬영', zh: '镜头', icon: 'camera', mod: shotsTab },
-  { id: 'field', label: '현장 기록', zh: '现场', icon: 'note', mod: fieldTab },
-  { id: 'edit', label: '편집', zh: '后期', icon: 'film', mod: editTab },
+  { id: 'plan', get label() { return t('tab.plan'); }, icon: 'idea', mod: planTab },
+  { id: 'route', get label() { return t('tab.route'); }, icon: 'route', mod: routeTab },
+  { id: 'shots', get label() { return t('tab.shots'); }, icon: 'camera', mod: shotsTab },
+  { id: 'field', get label() { return t('tab.field'); }, icon: 'note', mod: fieldTab },
+  { id: 'edit', get label() { return t('tab.edit'); }, icon: 'film', mod: editTab },
 ];
 const lastTab = new Map();
 
 // "Next step" button at the bottom of each tab, so the flow continues without the bottom nav.
 const NEXT_STEP = {
-  plan: { tab: 'route', label: '동선 짜러 가기' },
-  route: { tab: 'shots', label: '촬영 준비하러 가기', when: (p) => p.places.length > 0 },
-  shots: { tab: 'field', label: '현장 기록 남기러 가기', when: (p) => p.places.length > 0 },
-  field: { tab: 'edit', label: '영상으로 엮으러 가기', when: (_, sub) => !sub },
+  plan: { tab: 'route', label: 'next.route' },
+  route: { tab: 'shots', label: 'next.shots', when: (p) => p.places.length > 0 },
+  shots: { tab: 'field', label: 'next.field', when: (p) => p.places.length > 0 },
+  field: { tab: 'edit', label: 'next.edit', when: (_, sub) => !sub },
 };
 
-const SAVE_TEXT = { idle: '', pending: '입력 중', saving: '저장 중…', saved: '저장됨', error: '저장 실패' };
+const SAVE_TEXT = { idle: '', pending: 'save.pending', saving: 'save.saving', saved: 'save.saved', error: 'save.error' };
 
 export async function renderDetail([id, tab, sub], { isCurrent, previous }) {
   if (previous?.kind === 'detail' && previous.projectId === id && tab) {
@@ -43,7 +44,7 @@ export async function renderDetail([id, tab, sub], { isCurrent, previous }) {
   const project = await getProject(id);
   if (!isCurrent()) return null;
   if (!project) {
-    toast('프로젝트를 찾을 수 없어요. 삭제되었을 수 있어요.');
+    toast(t('project.notFoundDeleted'));
     navigate('/', { replace: true });
     return null;
   }
@@ -56,16 +57,16 @@ export async function renderDetail([id, tab, sub], { isCurrent, previous }) {
   const root = mount(`
     <div class="view">
       <header class="top-bar detail-bar">
-        <a href="#/" class="icon-btn" aria-label="프로젝트 목록으로">${icon('chevronLeft')}</a>
+        <a href="#/" class="icon-btn" aria-label="${esc(t('detail.backToList'))}">${icon('chevronLeft')}</a>
         <div class="min-w-0 flex-1">
           <h1 class="truncate text-[16px] font-semibold leading-tight" id="d-name"></h1>
           <div class="mt-0.5 flex items-center gap-2 text-[12px] text-muted">
             <span class="tabular-nums" id="d-range"></span>
-            <button type="button" id="d-status" class="status-btn" aria-label="상태 변경"></button>
+            <button type="button" id="d-status" class="status-btn" aria-label="${esc(t('detail.changeStatus'))}"></button>
           </div>
         </div>
         <span id="save-state" class="save-state" aria-live="polite"></span>
-        <button type="button" class="icon-btn" id="d-more" aria-label="프로젝트 메뉴">${icon('more')}</button>
+        <button type="button" class="icon-btn" id="d-more" aria-label="${esc(t('detail.menu'))}">${icon('more')}</button>
       </header>
       <main class="page-main pb-36" id="pane-host"></main>
       <div id="d-nav"></div>
@@ -84,7 +85,7 @@ export async function renderDetail([id, tab, sub], { isCurrent, previous }) {
   const ctx = {
     project,
     changed: () => scheduleSave(project),
-    commit: () => saveNow(project).catch((err) => toast(`저장 실패: ${err.message}`, { tone: 'error' })),
+    commit: () => saveNow(project).catch((err) => toast(t('common.saveFailed', { msg: err.message }), { tone: 'error' })),
     touch(path) {
       const m = /^logs#([^.]+)\./.exec(path);
       if (m) {
@@ -108,7 +109,7 @@ export async function renderDetail([id, tab, sub], { isCurrent, previous }) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'btn btn-secondary w-full mt-5';
-      btn.innerHTML = `${esc(next.label)} ${icon('chevronRight', 'size-4')}`;
+      btn.innerHTML = `${esc(t(next.label))} ${icon('chevronRight', 'size-4')}`;
       btn.addEventListener('click', () => ctx.go(next.tab));
       host.replaceChildren(pane, btn);
     } else {
@@ -126,26 +127,26 @@ export async function renderDetail([id, tab, sub], { isCurrent, previous }) {
 
   async function changeStatus() {
     const next = await actionSheet({
-      title: '프로젝트 상태',
+      title: t('project.status'),
       actions: STATUSES.map((s) => ({ id: s.id, label: s.label, active: s.id === project.status })),
     });
     if (!next || next === project.status) return;
     project.status = next;
     await ctx.commit();
     refreshHeader();
-    toast('상태를 바꿨어요.');
+    toast(t('project.statusChanged'));
   }
 
   async function openMenu() {
     const choice = await actionSheet({
       title: project.name,
       actions: [
-        { id: 'info', label: '프로젝트 정보 수정', icon: 'edit', hint: '이름 · 촬영 날짜 · 장소 · 유형' },
-        { id: 'status', label: '상태 변경', icon: 'flag' },
-        { id: 'md', label: 'Markdown 파일로 내보내기', icon: 'download', hint: 'AI에 붙여 넣어 대본 만들기 좋게 정리돼요' },
-        { id: 'copy', label: '프로젝트 내용 복사', icon: 'doc', hint: 'Markdown 형식으로 클립보드에 복사' },
-        { id: 'dup', label: '프로젝트 복제', icon: 'copy', hint: '모든 기록이 독립된 사본으로 복제돼요' },
-        { id: 'del', label: '프로젝트 삭제', icon: 'trash', danger: true },
+        { id: 'info', label: t('form.editTitle'), icon: 'edit', hint: t('menu.infoHint') },
+        { id: 'status', label: t('detail.changeStatus'), icon: 'flag' },
+        { id: 'md', label: t('menu.md'), icon: 'download', hint: t('menu.mdHint') },
+        { id: 'copy', label: t('menu.copy'), icon: 'doc', hint: t('menu.copyHint') },
+        { id: 'dup', label: t('menu.dup'), icon: 'copy', hint: t('menu.dupHint') },
+        { id: 'del', label: t('menu.del'), icon: 'trash', danger: true },
       ],
     });
     if (!choice) return;
@@ -154,26 +155,26 @@ export async function renderDetail([id, tab, sub], { isCurrent, previous }) {
     if (choice === 'status') changeStatus();
     if (choice === 'md') {
       downloadFile(`${safeFileName(project.name)}_${project.startDate}.md`, projectToMarkdown(project), 'text/markdown');
-      toast('Markdown 파일을 내보냈어요.');
+      toast(t('menu.mdDone'));
     }
     if (choice === 'copy') {
-      toast((await copyText(projectToMarkdown(project))) ? '프로젝트 내용을 복사했어요.' : '복사하지 못했어요.');
+      toast((await copyText(projectToMarkdown(project))) ? t('menu.copyDone') : t('menu.copyFailed'));
     }
     if (choice === 'dup') {
       const copy = await duplicateProject(id);
-      toast('복제했어요. 복사본을 열었어요.');
+      toast(t('menu.dupDone'));
       navigate(`/p/${encodeURIComponent(copy.id)}/${current.tab}`);
     }
     if (choice === 'del') {
       const ok = await confirmDialog({
-        title: '프로젝트를 삭제할까요?',
-        message: `"${project.name}"의 기획, 동선, 체크리스트, 현장 기록, 편집 구성이 모두 삭제되며 되돌릴 수 없어요.\n필요하면 먼저 백업하세요.`,
-        confirmText: '삭제',
+        title: t('project.deleteTitle'),
+        message: t('project.deleteBody', { name: project.name }),
+        confirmText: t('common.delete'),
         danger: true,
       });
       if (!ok) return;
       await deleteProject(id);
-      toast('프로젝트를 삭제했어요.');
+      toast(t('project.deleted'));
       navigate('/', { replace: true });
     }
   }
@@ -183,7 +184,8 @@ export async function renderDetail([id, tab, sub], { isCurrent, previous }) {
   const saveState = $('#save-state', root);
   const unsubscribe = onSaveStatus((s) => {
     saveState.dataset.state = s;
-    saveState.innerHTML = s === 'saved' ? `${icon('check', 'size-3.5')}${SAVE_TEXT[s]}` : esc(SAVE_TEXT[s] ?? '');
+    const text = SAVE_TEXT[s] ? t(SAVE_TEXT[s]) : '';
+    saveState.innerHTML = s === 'saved' ? `${icon('check', 'size-3.5')}${esc(text)}` : esc(text);
   });
 
   // Another device edited this project: show its version, unless there are unsaved edits here or the user
@@ -195,7 +197,7 @@ export async function renderDetail([id, tab, sub], { isCurrent, previous }) {
     if (document.querySelector('.overlay')) return;
     const fresh = await getProject(id);
     if (!fresh) {
-      toast('다른 기기에서 이 프로젝트를 삭제했어요.');
+      toast(t('sync.deletedElsewhere'));
       navigate('/', { replace: true });
       return;
     }
@@ -203,7 +205,7 @@ export async function renderDetail([id, tab, sub], { isCurrent, previous }) {
     Object.assign(project, fresh);
     refreshHeader();
     ctx.rerender();
-    toast('다른 기기에서 수정한 내용을 불러왔어요.');
+    toast(t('sync.loadedElsewhere'));
   });
 
   refreshHeader();

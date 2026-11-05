@@ -10,6 +10,7 @@ import {
 } from './db.js';
 import { buildBackup, cloneProject, createProject, migrateProject } from '../lib/schema.js';
 import { now } from '../lib/ids.js';
+import { t } from '../i18n/index.js';
 
 const load = (raw) => migrateProject(raw, raw.schemaVersion ?? 1);
 
@@ -47,7 +48,7 @@ export async function createNewProject(input) {
 
 export async function duplicateProject(id) {
   const src = await getProject(id);
-  if (!src) throw new Error('원본 프로젝트를 찾을 수 없어요.');
+  if (!src) throw new Error(t('project.sourceMissing'));
   const copy = cloneProject(src, now());
   await putProject(copy);
   changed();

@@ -1,5 +1,6 @@
 import { esc, autoGrow } from './dom.js';
 import { setAt } from '../lib/path.js';
+import { t } from '../i18n/index.js';
 
 const fieldId = (bind) => `f-${bind.replace(/[^a-zA-Z0-9]+/g, '-')}`;
 
@@ -24,7 +25,7 @@ export function textInput({ bind, value = '', label = '', placeholder = '', type
 
 /** Tapping a keyword appends it to the textarea named by `target` (fast input on the go). */
 export function keywordChips(target, words) {
-  return `<div class="chip-row chip-row-wrap mt-2" aria-label="빠른 입력 키워드">
+  return `<div class="chip-row chip-row-wrap mt-2" aria-label="${esc(t('field.keywords'))}">
     ${words.map((w) => `<button type="button" class="chip chip-sm" data-append="${esc(target)}" data-word="${esc(w)}">+ ${esc(w)}</button>`).join('')}
   </div>`;
 }

@@ -2,6 +2,7 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL, syncConfigured } from '../config.js';
 import { buildPush, planPull } from '../lib/syncMerge.js';
 import { ackOutbox, applyRemote, getAllProjects, getMeta, getOutbox, getProjectRecord, putProject, queueAll, setMeta } from './db.js';
 import { onLocalChange } from './repo.js';
+import { t } from '../i18n/index.js';
 
 /*
  * Device-to-device sync. This device's IndexedDB stays the source the app reads and writes, so
@@ -149,13 +150,13 @@ function onSignedOut() {
 
 function authError(error) {
   const m = error?.message ?? '';
-  if (/invalid login credentials/i.test(m)) return '이메일 또는 비밀번호가 맞지 않아요.';
-  if (/email not confirmed/i.test(m)) return '이메일 인증이 아직 안 됐어요. 받은 메일의 링크를 눌러 주세요.';
-  if (/already registered/i.test(m)) return '이미 가입된 이메일이에요. 로그인해 주세요.';
-  if (/password should be at least/i.test(m)) return '비밀번호는 8자 이상이어야 해요.';
-  if (/signups not allowed/i.test(m)) return '새 가입이 막혀 있어요. 기존 계정으로 로그인해 주세요.';
-  if (/rate limit/i.test(m)) return '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.';
-  return m || '문제가 생겼어요. 다시 시도해 주세요.';
+  if (/invalid login credentials/i.test(m)) return t('auth.err.credentials');
+  if (/email not confirmed/i.test(m)) return t('auth.err.unconfirmed');
+  if (/already registered/i.test(m)) return t('auth.err.registered');
+  if (/password should be at least/i.test(m)) return t('auth.shortPassword');
+  if (/signups not allowed/i.test(m)) return t('auth.err.signupsOff');
+  if (/rate limit/i.test(m)) return t('auth.err.rateLimit');
+  return m || t('auth.err.generic');
 }
 
 export async function signIn(email, password) {

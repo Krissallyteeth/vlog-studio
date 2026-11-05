@@ -622,6 +622,9 @@
   .segmented-3 {
     @apply grid-cols-3;
   }
+  .segmented-4 {
+    @apply grid-cols-4;
+  }
   .seg {
     @apply relative flex min-h-11 items-center justify-center gap-1 rounded-[11px] px-1 text-[13px] font-semibold text-muted transition whitespace-nowrap;
   }

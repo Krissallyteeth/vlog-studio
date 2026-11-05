@@ -1,3 +1,5 @@
+import { t } from '../i18n/index.js';
+
 const filled = (v) => (Array.isArray(v) ? v.length > 0 : typeof v === 'string' ? v.trim() !== '' : Boolean(v));
 const ratio = (count, enough) => Math.min(1, count / enough);
 
@@ -49,10 +51,11 @@ export function formatDuration(sec) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-export function formatDurationKo(sec) {
+/** Human length in the UI language: "1분 30초" / "1m 30s" / "1分30秒". */
+export function formatDurationText(sec) {
   const s = Math.max(0, Math.round(sec));
   const m = Math.floor(s / 60);
   const r = s % 60;
-  if (!m) return `${r}초`;
-  return r ? `${m}분 ${r}초` : `${m}분`;
+  if (!m) return t('dur.s', { s: r });
+  return r ? t('dur.ms', { m, s: r }) : t('dur.m', { m });
 }

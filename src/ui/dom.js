@@ -1,4 +1,5 @@
 import { icon } from './icons.js';
+import { t } from '../i18n/index.js';
 
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ESC[c]);
@@ -86,7 +87,7 @@ export function openSheet({ title = '', body, onMount, variant = 'sheet' }) {
   });
 }
 
-export function confirmDialog({ title, message = '', confirmText = '확인', cancelText = '취소', danger = false }) {
+export function confirmDialog({ title, message = '', confirmText = t('common.ok'), cancelText = t('common.cancel'), danger = false }) {
   return openSheet({
     variant: 'dialog',
     title,
@@ -122,7 +123,7 @@ export function actionSheet({ title = '', actions }) {
           )
           .join('')}
       </div>
-      <button type="button" class="btn btn-secondary w-full mt-3" data-id="">취소</button>`,
+      <button type="button" class="btn btn-secondary w-full mt-3" data-id="">${esc(t('common.cancel'))}</button>`,
     onMount(el, close) {
       el.addEventListener('click', (e) => {
         const b = e.target.closest('[data-id]');

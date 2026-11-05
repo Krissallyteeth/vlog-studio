@@ -4,19 +4,19 @@ import { normalizePlace } from '../../lib/schema.js';
 import { $, confirmDialog, esc, toast } from '../../ui/dom.js';
 import { textArea, textInput } from '../../ui/fields.js';
 import { icon } from '../../ui/icons.js';
-import { term } from '../../ui/layout.js';
+import { t } from '../../i18n/index.js';
 
 const openPlace = new Map(); // projectId -> open place id
 
 export function dateOptions(project, selected) {
   const days = dateRange(project.startDate, project.endDate);
   const opts = days.map(
-    (d, i) => `<option value="${d}" ${d === selected ? 'selected' : ''}>${days.length > 1 ? `Day ${i + 1} · ` : ''}${formatShortDate(d)}</option>`,
+    (d, i) => `<option value="${d}" ${d === selected ? 'selected' : ''}>${days.length > 1 ? `${esc(t('route.day', { n: i + 1 }))} · ` : ''}${formatShortDate(d)}</option>`,
   );
   if (selected && !days.includes(selected)) {
-    opts.push(`<option value="${selected}" selected>${formatDate(selected)} (촬영 기간 밖)</option>`);
+    opts.push(`<option value="${selected}" selected>${formatDate(selected)} (${esc(t('route.outsideLong'))})</option>`);
   }
-  return `<option value="" ${selected ? '' : 'selected'}>날짜 미정</option>${opts.join('')}`;
+  return `<option value="" ${selected ? '' : 'selected'}>${esc(t('route.noDate'))}</option>${opts.join('')}`;
 }
 
 function placeMeta(project, p) {
@@ -24,7 +24,7 @@ function placeMeta(project, p) {
   const when = [p.date ? formatShortDate(p.date) : '', p.time].filter(Boolean).join(' ');
   const outside = p.date && !isWithinRange(p.date, project.startDate, project.endDate);
   return [
-    when ? `<span class="${outside ? 'text-danger' : ''}">${esc(when)}${outside ? ' · 기간 밖' : ''}</span>` : '<span>날짜 미정</span>',
+    when ? `<span class="${outside ? 'text-danger' : ''}">${esc(when)}${outside ? ` · ${esc(t('route.outside'))}` : ''}</span>` : `<span>${esc(t('route.noDate'))}</span>`,
     st.total ? `<span>${icon('camera', 'size-3.5')}${st.done}/${st.total}</span>` : '',
   ].filter(Boolean).join('<span aria-hidden="true">·</span>');
 }
@@ -36,33 +36,33 @@ function placeCard(project, p, i, isOpen) {
       <div class="flex items-center gap-3">
         <span class="num-badge">${i + 1}</span>
         <button type="button" class="min-w-0 flex-1 text-left py-1" data-toggle="${p.id}" aria-expanded="${isOpen}">
-          <span class="block truncate text-[16px] font-semibold" data-title="${p.id}">${esc(p.name || '이름 없는 장소')}</span>
+          <span class="block truncate text-[16px] font-semibold" data-title="${p.id}">${esc(p.name || t('place.unnamed'))}</span>
           <span class="meta-row">${placeMeta(project, p)}</span>
         </button>
         <div class="flex flex-col -my-1">
-          <button type="button" class="icon-btn icon-btn-sm" data-move="-1" data-id="${p.id}" aria-label="위로 이동" ${i === 0 ? 'disabled' : ''}>${icon('up', 'size-[18px]')}</button>
-          <button type="button" class="icon-btn icon-btn-sm" data-move="1" data-id="${p.id}" aria-label="아래로 이동" ${i === last ? 'disabled' : ''}>${icon('down', 'size-[18px]')}</button>
+          <button type="button" class="icon-btn icon-btn-sm" data-move="-1" data-id="${p.id}" aria-label="${esc(t('common.moveUp'))}" ${i === 0 ? 'disabled' : ''}>${icon('up', 'size-[18px]')}</button>
+          <button type="button" class="icon-btn icon-btn-sm" data-move="1" data-id="${p.id}" aria-label="${esc(t('common.moveDown'))}" ${i === last ? 'disabled' : ''}>${icon('down', 'size-[18px]')}</button>
         </div>
       </div>
       ${
         isOpen
           ? `
       <div class="mt-4 flex flex-col gap-4 border-t border-line pt-4">
-        ${textInput({ bind: `places#${p.id}.name`, value: p.name, label: '장소명', placeholder: '예: 전주 한옥마을' })}
+        ${textInput({ bind: `places#${p.id}.name`, value: p.name, label: t('place.name'), placeholder: t('place.namePh') })}
         <div class="grid grid-cols-[1.4fr_1fr] gap-3">
           <div class="field">
-            <label class="field-label" for="pd-${p.id}">방문 날짜</label>
+            <label class="field-label" for="pd-${p.id}">${esc(t('place.date'))}</label>
             <select id="pd-${p.id}" class="input" data-bind="places#${p.id}.date">${dateOptions(project, p.date)}</select>
           </div>
-          ${textInput({ bind: `places#${p.id}.time`, value: p.time, label: '예상 시간', type: 'time' })}
+          ${textInput({ bind: `places#${p.id}.time`, value: p.time, label: t('place.time'), type: 'time' })}
         </div>
-        ${textArea({ bind: `places#${p.id}.purpose`, value: p.purpose, label: '방문 목적', placeholder: '왜 이곳에 가나요?' })}
-        ${textArea({ bind: `places#${p.id}.expectation`, value: p.expectation, label: '기대하는 경험', placeholder: '무엇을 해 보고 싶나요?' })}
-        ${textArea({ bind: `places#${p.id}.shotIdea`, value: p.shotIdea, label: '촬영 아이디어', placeholder: '예: 골목 입구에서 걸어 들어가는 뒷모습' })}
-        ${textArea({ bind: `places#${p.id}.memo`, value: p.memo, label: '자유 메모', placeholder: '예약, 운영 시간, 주차 등' })}
+        ${textArea({ bind: `places#${p.id}.purpose`, value: p.purpose, label: t('place.purpose'), placeholder: t('place.purposePh') })}
+        ${textArea({ bind: `places#${p.id}.expectation`, value: p.expectation, label: t('place.expectation'), placeholder: t('place.expectationPh') })}
+        ${textArea({ bind: `places#${p.id}.shotIdea`, value: p.shotIdea, label: t('place.shotIdea'), placeholder: t('place.shotIdeaPh') })}
+        ${textArea({ bind: `places#${p.id}.memo`, value: p.memo, label: t('place.memo'), placeholder: t('place.memoPh') })}
         <div class="grid grid-cols-2 gap-2">
-          <button type="button" class="btn btn-secondary" data-shots="${p.id}">${icon('camera', 'size-4')}체크리스트</button>
-          <button type="button" class="btn btn-ghost text-danger" data-del="${p.id}">${icon('trash', 'size-4')}삭제</button>
+          <button type="button" class="btn btn-secondary" data-shots="${p.id}">${icon('camera', 'size-4')}${esc(t('place.checklist'))}</button>
+          <button type="button" class="btn btn-ghost text-danger" data-del="${p.id}">${icon('trash', 'size-4')}${esc(t('common.delete'))}</button>
         </div>
       </div>`
           : ''
@@ -76,21 +76,21 @@ export function render(ctx, pane) {
 
   pane.innerHTML = `
     <div class="section-head">
-      <h2 class="section-title">${term('동선', '行程')}</h2>
-      <p class="section-sub">실제로 방문할 순서예요. 편집 순서는 편집 탭에서 따로 정해요.</p>
+      <h2 class="section-title">${esc(t('route.title'))}</h2>
+      <p class="section-sub">${esc(t('route.sub'))}</p>
     </div>
     ${
       project.places.length
         ? `<div class="flex flex-col gap-2.5" id="places">${project.places.map((p, i) => placeCard(project, p, i, p.id === openId)).join('')}</div>`
         : `<div class="empty card">
             <div class="empty-icon">${icon('route', 'size-6')}</div>
-            <p class="font-semibold">아직 동선이 없어요</p>
-            <p class="mt-1 text-[14px] text-muted">방문할 장소를 순서대로 추가해 보세요.</p>
+            <p class="font-semibold">${esc(t('route.empty'))}</p>
+            <p class="mt-1 text-[14px] text-muted">${esc(t('route.emptyHint'))}</p>
           </div>`
     }
     <form id="place-add" class="add-row mt-3">
-      <input class="input flex-1" name="name" placeholder="장소 이름 입력 후 추가" enterkeyhint="done" aria-label="새 장소 이름" />
-      <button class="btn btn-primary px-4">${icon('plus')}<span class="sr-only sm:not-sr-only">추가</span></button>
+      <input class="input flex-1" name="name" placeholder="${esc(t('route.addPh'))}" enterkeyhint="done" aria-label="${esc(t('route.addAria'))}" />
+      <button class="btn btn-primary px-4">${icon('plus')}<span class="sr-only sm:not-sr-only">${esc(t('common.add'))}</span></button>
     </form>`;
 
   pane.addEventListener('bound', (e) => {
@@ -99,7 +99,7 @@ export function render(ctx, pane) {
     const p = project.places.find((x) => x.id === m[1]);
     const card = pane.querySelector(`[data-place="${m[1]}"]`);
     if (!p || !card) return;
-    if (m[2] === 'name') card.querySelector('[data-title]').textContent = p.name || '이름 없는 장소';
+    if (m[2] === 'name') card.querySelector('[data-title]').textContent = p.name || t('place.unnamed');
     else card.querySelector('.meta-row').innerHTML = placeMeta(project, p);
   });
 
@@ -142,9 +142,9 @@ export function render(ctx, pane) {
     if (del) {
       const p = project.places.find((x) => x.id === del.dataset.del);
       const ok = await confirmDialog({
-        title: '장소를 삭제할까요?',
-        message: `"${p.name || '이름 없는 장소'}"와 촬영 체크리스트 ${p.shots.length}개가 삭제돼요. 이 장소에 연결된 현장 기록은 남아 있어요.`,
-        confirmText: '삭제',
+        title: t('place.deleteTitle'),
+        message: t('place.deleteBody', { name: p.name || t('place.unnamed'), n: p.shots.length }),
+        confirmText: t('common.delete'),
         danger: true,
       });
       if (!ok) return;
@@ -160,7 +160,7 @@ export function render(ctx, pane) {
       });
       ctx.commit();
       ctx.rerender();
-      toast('장소를 삭제했어요.');
+      toast(t('place.deleted'));
     }
   });
 }

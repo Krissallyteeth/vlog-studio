@@ -1,8 +1,9 @@
+import { t } from '../i18n/index.js';
+
 // Date-only values are stored as local "YYYY-MM-DD" strings and never passed
 // through `new Date('YYYY-MM-DD')`, which parses as UTC and can shift the day.
 
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
-const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const pad = (n) => String(n).padStart(2, '0');
 
 export function parseDate(value) {
@@ -34,7 +35,7 @@ export function dateKey(value) {
 
 export function weekday(value) {
   const p = parseDate(value);
-  return p ? WEEKDAYS[new Date(p.y, p.m - 1, p.d).getDay()] : '';
+  return p ? t('date.weekdays')[new Date(p.y, p.m - 1, p.d).getDay()] : '';
 }
 
 export function formatDate(value, { withWeekday = false } = {}) {
@@ -103,7 +104,7 @@ export function formatRelative(ms, now = new Date()) {
   const d = new Date(ms);
   const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const day = toDateString(d);
-  if (day === toDateString(now)) return `오늘 ${time}`;
-  if (day === addDays(toDateString(now), -1)) return `어제 ${time}`;
+  if (day === toDateString(now)) return t('date.todayAt', { time });
+  if (day === addDays(toDateString(now), -1)) return t('date.yesterdayAt', { time });
   return formatDate(day);
 }
