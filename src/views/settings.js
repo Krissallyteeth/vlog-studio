@@ -59,7 +59,7 @@ function syncSection(st) {
       <p class="mt-1 text-[14px] text-muted">컴퓨터와 폰에서 같은 계정으로 로그인하세요. 이 기기에 있던 기록도 계정으로 함께 올라가요.</p>
       <form id="auth-form" class="mt-3 flex flex-col gap-2" novalidate>
         <input name="email" type="email" class="input" autocomplete="email" placeholder="이메일" aria-label="이메일" required />
-        <input name="password" type="password" class="input" autocomplete="current-password" placeholder="비밀번호 (6자 이상)" aria-label="비밀번호" minlength="6" required />
+        <input name="password" type="password" class="input" autocomplete="current-password" placeholder="비밀번호 (8자 이상)" aria-label="비밀번호" minlength="8" required />
         <p class="form-error hidden" id="auth-error" role="alert"></p>
         <div class="grid grid-cols-[2fr_1fr] gap-2">
           <button type="submit" class="btn btn-primary" data-auth="in">로그인</button>
@@ -158,7 +158,7 @@ export async function renderSettings({ isCurrent }) {
       el?.focus();
     };
     if (!/^\S+@\S+\.\S+$/.test(email)) return fail('이메일을 확인해 주세요.', form.email);
-    if (password.length < 6) return fail('비밀번호는 6자 이상이어야 해요.', form.password);
+    if (password.length < 8) return fail('비밀번호는 8자 이상이어야 해요.', form.password);
     busy = true;
     form.querySelectorAll('button').forEach((b) => (b.disabled = true));
     try {

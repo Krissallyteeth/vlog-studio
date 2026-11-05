@@ -152,7 +152,7 @@ function authError(error) {
   if (/invalid login credentials/i.test(m)) return '이메일 또는 비밀번호가 맞지 않아요.';
   if (/email not confirmed/i.test(m)) return '이메일 인증이 아직 안 됐어요. 받은 메일의 링크를 눌러 주세요.';
   if (/already registered/i.test(m)) return '이미 가입된 이메일이에요. 로그인해 주세요.';
-  if (/password should be at least/i.test(m)) return '비밀번호는 6자 이상이어야 해요.';
+  if (/password should be at least/i.test(m)) return '비밀번호는 8자 이상이어야 해요.';
   if (/signups not allowed/i.test(m)) return '새 가입이 막혀 있어요. 기존 계정으로 로그인해 주세요.';
   if (/rate limit/i.test(m)) return '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.';
   return m || '문제가 생겼어요. 다시 시도해 주세요.';
