@@ -119,10 +119,14 @@ export function orderEfficiency(ad) {
   const spend = isNum(ad.orderSpend) ? ad.orderSpend : ad.spend;
   const per = (n) => (isNum(spend) && spend > 0 && isNum(n) && n > 0 ? spend / n : null);
   const likeFav = isNum(o.likes) || isNum(o.favorites) ? (o.likes ?? 0) + (o.favorites ?? 0) : null;
+  // Per like+save / per follower only for orders bought for that goal (see goalType in ad-report.js).
+  const goal = String(ad.goal ?? '');
+  const isFollow = /关注|粉丝|涨粉/.test(goal);
+  const isLikeFav = /点赞|收藏|赞藏/.test(goal);
   return {
     perRead: per(o.reads),
-    perFollow: per(o.follows),
-    perLikeFav: per(likeFav),
+    perFollow: isFollow ? per(o.follows) : null,
+    perLikeFav: isLikeFav ? per(likeFav) : null,
     perProfile: per(o.profileViews),
     likeFav,
     engagement: isNum(o.exposure) && o.exposure > 0 && isNum(likeFav) ? likeFav / o.exposure : null,

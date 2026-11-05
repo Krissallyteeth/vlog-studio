@@ -19,7 +19,7 @@ function commentText(c) {
   const v = c.vars;
   const y = (x) => (x == null ? t('adr.na') : yuan(x));
   const vars = { ...v };
-  for (const k of ['spend', 'perRead', 'perLikeFav', 'perFollow', 'cost', 'early', 'late', 'strong', 'weak', 'spendPrev', 'perReadPrev']) if (k in v) vars[k] = y(v[k]);
+  for (const k of ['spend', 'credit', 'perRead', 'perLikeFav', 'perFollow', 'cost', 'early', 'late', 'strong', 'weak', 'spendPrev', 'perReadPrev']) if (k in v) vars[k] = y(v[k]);
   for (const k of ['diff']) if (k in v) vars[k] = pct(Math.abs(v[k] ?? 0));
   for (const k of ['spendKRW', 'cash', 'inKind']) if (k in v) vars[k] = won(v[k]) || won(0);
   return t(`adr.c.${c.key}`, vars);
@@ -61,9 +61,10 @@ export async function renderAds({ isCurrent }) {
     body: `
       <div class="kpi-grid">
         <div class="kpi"><p class="kpi-label">${esc(t('ads.spendTotal'))}</p><p class="kpi-value">${esc(yuan(totals.spend) || '0元')}</p><p class="text-[11px] opacity-75">${esc(t('adr.ordersN', { n: totals.count }))}</p></div>
+        <div class="kpi"><p class="kpi-label">${esc(t('adr.credit'))}</p><p class="kpi-value">${esc(yuan(totals.credit) || '0元')}</p><p class="text-[11px] opacity-75">${esc(t('adr.creditSub'))}</p></div>
         <div class="kpi"><p class="kpi-label">${esc(t('ads.perRead'))}</p><p class="kpi-value">${esc(cost(sum.perRead))}</p></div>
-        <div class="kpi"><p class="kpi-label">${esc(t('ads.perLikeFav'))}</p><p class="kpi-value">${esc(cost(sum.perLikeFav))}</p></div>
-        <div class="kpi"><p class="kpi-label">${esc(t('ads.perFollow'))}</p><p class="kpi-value">${esc(cost(sum.perFollow))}</p></div>
+        <div class="kpi"><p class="kpi-label">${esc(t('ads.perLikeFav'))}</p><p class="kpi-value">${esc(cost(sum.perLikeFav))}</p><p class="text-[11px] opacity-75">${esc(t('adr.goalOrders', { goal: '点赞收藏', n: sum.likeFavOrders }))}</p></div>
+        <div class="kpi"><p class="kpi-label">${esc(t('ads.perFollow'))}</p><p class="kpi-value">${esc(cost(sum.perFollow))}</p><p class="text-[11px] opacity-75">${esc(t('adr.goalOrders', { goal: '关注', n: sum.followOrders }))}</p></div>
         <div class="kpi"><p class="kpi-label">${esc(t('inc.cash'))}</p><p class="kpi-value">${esc(won(income.reduce((a, x) => a + (x.cashKRW ?? 0), 0)) || won(0))}</p></div>
         <div class="kpi ${totals.unconfirmed ? 'cf-mid' : ''}"><p class="kpi-label">${esc(t('ads.toReview'))}</p><p class="kpi-value">${totals.unconfirmed}</p></div>
       </div>
@@ -76,8 +77,8 @@ export async function renderAds({ isCurrent }) {
       <section class="card mt-3">
         <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="text-[16px] font-semibold">${esc(t('adr.byPeriod'))}</h2>
           <div class="segmented segmented-2 !w-auto"><button type="button" class="seg px-3 ${prefs.unit === 'month' ? 'is-active' : ''}" data-unit="month">${esc(t('adr.month'))}</button><button type="button" class="seg px-3 ${prefs.unit === 'year' ? 'is-active' : ''}" data-unit="year">${esc(t('adr.year'))}</button></div></div>
-        <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t(prefs.unit === 'year' ? 'adr.year' : 'adr.month'))}</th><th class="num">${esc(t('adr.orders'))}</th><th class="num">${esc(t('ads.spendYuan'))}</th><th class="num">曝光量</th><th class="num">阅读量</th><th class="num">点赞+收藏</th><th class="num">新增关注</th>${costHead}<th class="num">${esc(t('adr.spendKRW'))}</th><th class="num">${esc(t('inc.cash'))}</th><th class="num">${esc(t('inc.inKind'))}</th><th class="num">${esc(t('adr.net'))}</th></tr></thead>
-        <tbody>${periods.map((r) => `<tr><td>${esc(r.period)}${r.estimatedDates ? ` <span class="badge cf-mid" title="${esc(t('adr.estDate'))}">${esc(t('adr.estShort'))}</span>` : ''}</td><td class="num">${r.count}</td><td class="num">${esc(yuan(r.spend))}</td><td class="num">${n0(r.exposure)}</td><td class="num">${n0(r.reads)}</td><td class="num">${n0(r.likeFav)}</td><td class="num">${n0(r.follows)}</td>${costCells(r)}<td class="num">${esc(r.spendKRW == null ? '–' : won(r.spendKRW))}</td><td class="num">${esc(won(r.cash) || '–')}</td><td class="num">${esc(won(r.inKind) || '–')}</td><td class="num ${r.net == null ? '' : r.net >= 0 ? 'cf-good' : 'cf-bad'}">${esc(r.net == null ? '–' : won(r.net))}</td></tr>`).join('') || `<tr><td colspan="15" class="text-muted">${esc(t('ads.none'))}</td></tr>`}</tbody></table></div>
+        <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t(prefs.unit === 'year' ? 'adr.year' : 'adr.month'))}</th><th class="num">${esc(t('adr.orders'))}</th><th class="num">${esc(t('ads.spendYuan'))}</th><th class="num">${esc(t('adr.creditCol'))}</th><th class="num">曝光量</th><th class="num">阅读量</th><th class="num">点赞+收藏</th><th class="num">新增关注</th>${costHead}<th class="num">${esc(t('adr.spendKRW'))}</th><th class="num">${esc(t('inc.cash'))}</th><th class="num">${esc(t('inc.inKind'))}</th><th class="num">${esc(t('adr.net'))}</th></tr></thead>
+        <tbody>${periods.map((r) => `<tr><td>${esc(r.period)}${r.estimatedDates ? ` <span class="badge cf-mid" title="${esc(t('adr.estDate'))}">${esc(t('adr.estShort'))}</span>` : ''}</td><td class="num">${r.count}</td><td class="num">${esc(yuan(r.spend))}</td><td class="num">${esc(r.credit ? yuan(r.credit) : '')}</td><td class="num">${n0(r.exposure)}</td><td class="num">${n0(r.reads)}</td><td class="num">${n0(r.likeFav)}</td><td class="num">${n0(r.follows)}</td>${costCells(r)}<td class="num">${esc(r.spendKRW == null ? '–' : won(r.spendKRW))}</td><td class="num">${esc(won(r.cash) || '–')}</td><td class="num">${esc(won(r.inKind) || '–')}</td><td class="num ${r.net == null ? '' : r.net >= 0 ? 'cf-good' : 'cf-bad'}">${esc(r.net == null ? '–' : won(r.net))}</td></tr>`).join('') || `<tr><td colspan="16" class="text-muted">${esc(t('ads.none'))}</td></tr>`}</tbody></table></div>
         <div class="mt-2 flex flex-wrap items-center gap-2 text-[13px]"><label for="adr-rate">${esc(t('adr.rate'))}</label><input id="adr-rate" class="input !h-9 !w-28 tabular-nums" inputmode="decimal" value="${settings.cnyKrw ?? ''}" placeholder="${esc(t('adr.ratePh'))}" /><span class="text-muted">${esc(t('adr.rateHelp'))}</span></div>
         <p class="mt-1 text-[12px] text-muted">${esc(t('adr.netNote'))}</p>
       </section>
@@ -95,16 +96,16 @@ export async function renderAds({ isCurrent }) {
 
       <section class="card mt-3">
         <h2 class="text-[16px] font-semibold">${esc(t('ads.history'))}</h2>
-        <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th class="col-title">${esc(t('xg.title'))}</th><th>${esc(t('adr.start'))}</th><th>${esc(t('ads.stage'))}</th><th>${esc(t('ads.goal'))}</th><th class="num">${esc(t('ads.spendYuan'))}</th><th class="num">阅读量</th><th class="num">点赞+收藏</th><th class="num">新增关注</th>${costHead}<th>${esc(t('adr.orderNo'))}</th><th></th></tr></thead>
+        <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th class="col-title">${esc(t('xg.title'))}</th><th>${esc(t('adr.start'))}</th><th>${esc(t('ads.stage'))}</th><th>${esc(t('ads.goal'))}</th><th class="num">${esc(t('ads.spendYuan'))}</th><th class="num">${esc(t('adr.creditCol'))}</th><th class="num">阅读量</th><th class="num">点赞+收藏</th><th class="num">新增关注</th>${costHead}<th>${esc(t('adr.orderNo'))}</th><th></th></tr></thead>
         <tbody>${rows
           .map(({ p, a, i }) => {
             const e = orderEfficiency(a);
             return `<tr class="${a.needsReview ? 'cf-mid' : ''}"><td class="col-title"><a class="link-btn" href="#/c/${encodeURIComponent(p.id)}">${esc(p.title)}</a><span class="block text-[11px] text-muted">${esc(p.date)}${a.sourceText ? ` · ${esc(t('ads.from', { text: a.sourceText }))}` : ''}${a.noteCount > 1 ? ` · ${esc(t('adr.multiShort', { n: a.noteCount, total: a.orderSpend ?? '?' }))}` : ''}</span></td>
-            <td class="tabular-nums">${esc((a.start || '').replace('T', ' '))}</td><td>${esc(a.stage)}${a.executed ? '' : ` (${esc(t('ads.notExecuted'))})`}</td><td>${esc(a.goal)}</td><td class="num">${esc(yuan(a.spend))}${a.allocation === 'equal' ? ` <span class="badge cf-mid">${esc(t('adr.estShort'))}</span>` : ''}</td>
+            <td class="tabular-nums">${esc((a.start || '').replace('T', ' '))}</td><td>${esc(a.stage)}${a.executed ? '' : ` (${esc(t('ads.notExecuted'))})`}</td><td>${esc(a.goal)}</td><td class="num">${esc(yuan(a.spend))}${a.allocation === 'equal' ? ` <span class="badge cf-mid">${esc(t('adr.estShort'))}</span>` : ''}</td><td class="num">${esc(a.credit ? yuan(a.credit) : '')}</td>
             <td class="num">${a.order.reads ?? ''}</td><td class="num">${e.likeFav ?? ''}</td><td class="num">${a.order.follows ?? ''}</td><td class="num">${esc(e.perRead == null ? '' : yuan(e.perRead))}</td><td class="num">${esc(e.perLikeFav == null ? '' : yuan(e.perLikeFav))}</td><td class="num">${esc(e.perFollow == null ? '' : yuan(e.perFollow))}</td><td class="text-[12px] text-muted">${esc(a.orderNo ? a.orderNo.slice(0, 8) : '')}</td>
             <td><button type="button" class="link-btn" data-ad="${esc(p.id)}" data-i="${i}">${esc(t('ads.edit'))}</button></td></tr>`;
           })
-          .join('') || `<tr><td colspan="14" class="text-muted">${esc(t('ads.none'))}</td></tr>`}</tbody></table></div>
+          .join('') || `<tr><td colspan="15" class="text-muted">${esc(t('ads.none'))}</td></tr>`}</tbody></table></div>
       </section>
       <section class="card mt-3">
         <div class="flex items-center justify-between"><h2 class="text-[16px] font-semibold">${esc(t('data.tab.income'))}</h2><a class="link-btn text-[13px]" href="#/data/income">${esc(t('ads.editIncome'))}</a></div>

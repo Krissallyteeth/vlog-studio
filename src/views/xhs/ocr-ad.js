@@ -7,7 +7,7 @@ import { icon } from '../../ui/icons.js';
 import { putMany } from '../../xhs/db.js';
 import { AD_FIELDS, AD_METRICS, parseAdOrder } from '../../xhs/ocr-ad-parse.js';
 import { ordered } from '../../xhs/stats.js';
-import { orderAds, placeOrder, rememberTitle } from '../../xhs/ad-orders.js';
+import { memoAds, memoToReplace, orderAds, placeOrder, rememberTitle, splitMoney } from '../../xhs/ad-orders.js';
 import { listPosts, savePosts, stageFromDates } from '../../xhs/store.js';
 import { xhsPage } from './shell.js';
 
@@ -178,7 +178,28 @@ export async function renderOcrAd([postId], { isCurrent }) {
   /** D+n of an order: typed value wins, otherwise publish date of the chosen post vs ad start time. */
   const autoStage = (o, id = o.postIds[0]) => {
     const p = posts.find((x) => x.id === id);
-    return stageFromDates(p?.date, o.values.startedAt);
+    // One note: the publish time shown in the screenshot beats the workbook date.
+    const published = o.postIds.length === 1 && o.values.publishedAt ? o.values.publishedAt : p?.date;
+    return stageFromDates(published, o.values.startedAt);
+  };
+  /** Single-note order: date check, real money vs platform credit, and which memo record it replaces. */
+  const singleExtras = (o, oi) => {
+    const post = posts.find((x) => x.id === o.postIds[0]);
+    const out = [];
+    const pub = (o.values.publishedAt ?? '').slice(0, 10);
+    if (post && pub && post.date && pub !== post.date) out.push(`<p class="notice mt-2 text-[13px]">${esc(t('oad.dateDiff', { shot: pub, book: post.date }))}</p>`);
+    const { money, credit } = splitMoney(o.values);
+    if (credit) out.push(`<p class="mt-2 text-[13px]">${esc(t('oad.moneySplit', { consumed: o.values.spend, money, credit }))}</p>`);
+    const memos = memoAds(post);
+    if (memos.length) {
+      const probe = orderAds({ values: o.values, postIds: o.postIds, posts, stage: o.stage })[0]?.ad;
+      const chosen = o.replace === undefined ? memoToReplace(post, probe)?.id ?? '' : o.replace;
+      out.push(`<label class="field mt-2"><span class="field-label">${esc(t('oad.replaceMemo'))}</span><select class="input" data-replace="${oi}">
+        ${memos.map((a) => `<option value="${esc(a.id)}" ${a.id === chosen ? 'selected' : ''}>${esc(t('oad.memoOption', { stage: a.stage || '?', spend: a.spend ?? '?', text: a.sourceText || a.memo || '' }))}</option>`).join('')}
+        <option value="" ${chosen === '' ? 'selected' : ''}>${esc(t('oad.keepBoth'))}</option></select>
+        <span class="text-[12px] text-muted">${esc(t('oad.replaceHelp'))}</span></label>`);
+    }
+    return out.join('');
   };
   /** Copies what was typed into the boxes of an order before it is redrawn. */
   const keepEdits = (oi) => {
@@ -239,7 +260,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
               <label class="field"><span class="field-label">${esc(t('ocr.post'))}</span><select class="input" data-post="${oi}" data-slot="0"><option value="">${esc(t('oad.choosePost'))}</option>${posts.map((p) => `<option value="${esc(p.id)}" ${p.id === o.postIds[0] ? 'selected' : ''}>${esc(`${p.date} · ${p.title}`)}</option>`).join('')}</select>
                 <span class="text-[12px] text-muted">${esc(o.match ? t(o.match.sameDay ? 'oad.matched' : 'oad.matchedNear', { title: o.match.post.title, date: o.match.post.date }) : t('oad.noMatch'))} · ${esc(t('oad.read', { title: f.title?.value ?? f.title?.candidate ?? '?', at: (f.publishedAt?.value ?? f.publishedAt?.candidate ?? '?').replace('T', ' ') }))}</span></label>
               <label class="field"><span class="field-label">${esc(t('ads.stage'))}</span><input class="input" data-stage="${oi}" list="oad-stages" value="${esc(o.stage)}" placeholder="${esc(autoStage(o) || 'D+n')}" /><span class="text-[12px] text-muted" data-stage-note="${oi}">${esc(stageNote(o))}</span></label>
-            </div>`
+            </div>${singleExtras(o, oi)}`
             }
             <div class="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
               <div class="table-scroll"><table class="xtable"><thead><tr><th>${esc(t('crit.metric'))}</th><th>${esc(t('oad.readText'))}</th><th>${esc(t('ocr.recognised'))}</th><th>${esc(t('ocr.toSave'))}</th><th>${esc(t('imp.th.status'))}</th></tr></thead><tbody>${AD_FIELDS.map(row).join('')}</tbody></table></div>
@@ -274,7 +295,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
         const n = Number(inp.value);
         if (inp.value.trim() && Number.isFinite(n)) audience[sec][label] = n / 100;
       }
-      return { o, entries: orderAds({ values: o.values, postIds: o.postIds, posts, stage: o.stage, audience }) };
+      return { o, entries: orderAds({ values: o.values, postIds: o.postIds, posts, stage: o.stage, audience, replace: o.replace }) };
     });
     const titleOf = (id) => posts.find((p) => p.id === id)?.title ?? '';
     const ok = await openSheet({
@@ -283,7 +304,10 @@ export async function renderOcrAd([postId], { isCurrent }) {
         .map(({ o, entries }) => {
           const ad = entries[0].ad;
           const total = ad.orderSpend ?? ad.spend;
-          return `<li><b>${esc(entries.map((x) => `${titleOf(x.postId)} (${x.ad.stage || '?'})`).join(' + '))}</b> · ${total}元${entries.length > 1 ? ` · ${esc(t('oad.splitNote', { n: entries.length, each: ad.spend }))}` : ''}${savedOrder(o) ? ` · ${esc(t('oad.replaces'))}` : ''}<br/><span class="text-[12px] text-muted">${esc(AD_METRICS.map(([k, n]) => `${n[0]} ${ad.order[k] ?? '–'}`).join(', '))}</span></li>`;
+          const credit = entries.reduce((a, x) => a + (x.ad.credit ?? 0), 0);
+          const post = posts.find((p) => p.id === entries[0].postId);
+          const memo = entries.length === 1 && (o.replace === undefined ? memoToReplace(post, ad) : memoAds(post).find((a) => a.id === o.replace));
+          return `<li><b>${esc(entries.map((x) => `${titleOf(x.postId)} (${x.ad.stage || '?'})`).join(' + '))}</b> · ${esc(t('oad.realSpend', { v: total }))}${credit ? ` · ${esc(t('oad.creditPart', { v: Math.round(credit * 100) / 100 }))}` : ''}${entries.length > 1 ? ` · ${esc(t('oad.splitNote', { n: entries.length, each: ad.spend }))}` : ''}${savedOrder(o) || memo ? ` · ${esc(t('oad.replaces'))}${memo ? ` (${esc(memo.sourceText || memo.stage)})` : ''}` : ''}<br/><span class="text-[12px] text-muted">${esc(AD_METRICS.map(([k, n]) => `${n[0]} ${ad.order[k] ?? '–'}`).join(', '))}</span></li>`;
         })
         .join('')}</ul>
         <p class="mt-2 text-[12px] text-muted">${esc(t('oad.confirmNote'))}</p>
@@ -326,13 +350,12 @@ export async function renderOcrAd([postId], { isCurrent }) {
     if (e.target.dataset.post) {
       const o = state.orders[Number(e.target.dataset.post)];
       o.postIds[Number(e.target.dataset.slot ?? 0)] = e.target.value;
-      if (o.postIds.length > 1) {
-        keepEdits(Number(e.target.dataset.post));
-        drawOrders();
-      }
-      else refreshStage(Number(e.target.dataset.post));
+      o.replace = undefined;
+      keepEdits(Number(e.target.dataset.post));
+      drawOrders();
     }
     if (e.target.dataset.save) state.orders[Number(e.target.dataset.save)].save = e.target.checked;
+    if (e.target.dataset.replace != null) state.orders[Number(e.target.dataset.replace)].replace = e.target.value;
     if (e.target.dataset.k === 'noteCount') {
       // Corrected number of notes: one post choice per note.
       const oi = Number(e.target.dataset.o);

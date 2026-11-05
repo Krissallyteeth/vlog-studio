@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { orderAds, placeOrder, rememberTitle, sameOrder } from '../src/xhs/ad-orders.js';
-import { adComments, adOrders, adSummary, periodRows, stageBucket, stageRows } from '../src/xhs/ad-report.js';
+import { memoAds, orderAds, placeOrder, rememberTitle, sameOrder, splitMoney } from '../src/xhs/ad-orders.js';
+import { adComments, adOrders, adSummary, goalType, periodRows, stageBucket, stageRows } from '../src/xhs/ad-report.js';
 import { parseAdOrder } from '../src/xhs/ocr-ad-parse.js';
 import { adTotals } from '../src/xhs/stats.js';
 import { normalizeAd, normalizePost } from '../src/xhs/store.js';
@@ -84,6 +84,47 @@ describe('saving orders', () => {
     // A different amount is a different ad: kept.
     placeOrder(ps, orderAds({ values: { spend: 30, startedAt: '2026-03-02T20:00', orderNo: 'x2' }, postIds: ['m'], posts: ps }));
     expect(ps[0].ads).toHaveLength(2);
+  });
+
+  it('keeps real money and platform credit apart, and uses the screenshot publish date for D+n', () => {
+    expect(splitMoney({ spend: 85, paid: 60, orderAmount: 60 })).toEqual({ money: 60, credit: 25 });
+    expect(splitMoney({ spend: 60, paid: 60 })).toEqual({ money: 60, credit: null });
+    expect(splitMoney({ spend: 50 })).toEqual({ money: 50, credit: null });
+    // Workbook says 03-02, the screenshot says the note went out 03-01 19:20; ad 03-02 09:20 → D+1.
+    const ps = [normalizePost({ id: 'k', title: 'K', date: '2026-03-02', ads: [{ stage: 'D+1', spend: 60, sourceText: '진행(60元)' }] })];
+    const entries = orderAds({ values: { spend: 85, paid: 60, orderAmount: 60, startedAt: '2026-03-02T09:20', publishedAt: '2026-03-01T19:20', orderNo: 'k1' }, postIds: ['k'], posts: ps });
+    expect(entries[0].ad).toMatchObject({ stage: 'D+1', spend: 60, credit: 25 });
+    placeOrder(ps, entries);
+    expect(ps[0].ads).toHaveLength(1); // the memo record was replaced
+    expect(adTotals(ps)).toMatchObject({ spend: 60, credit: 25 });
+    expect(adSummary(adOrders(ps))).toMatchObject({ spend: 60, credit: 25 });
+  });
+
+  it('the review screen choice wins: replace a given memo, or keep both', () => {
+    const mk = () => [normalizePost({ id: 'q', title: 'Q', date: '2026-03-01', ads: [{ stage: 'D+2', spend: 100, sourceText: '진행(100元)' }] })];
+    const a = mk();
+    placeOrder(a, orderAds({ values: { spend: 60, startedAt: '2026-03-02T10:00', orderNo: 'q1' }, postIds: ['q'], posts: a })); // D+1, 60: no likely memo
+    expect(a[0].ads).toHaveLength(2);
+    const b = mk();
+    expect(memoAds(b[0])).toHaveLength(1);
+    placeOrder(b, orderAds({ values: { spend: 60, startedAt: '2026-03-02T10:00', orderNo: 'q1' }, postIds: ['q'], posts: b, replace: b[0].ads[0].id }));
+    expect(b[0].ads).toHaveLength(1);
+    const c = mk();
+    placeOrder(c, orderAds({ values: { spend: 100, startedAt: '2026-03-03T10:00', orderNo: 'q2' }, postIds: ['q'], posts: c, replace: '' })); // same D+2 but "keep both"
+    expect(c[0].ads).toHaveLength(2);
+  });
+
+  it('cost per follower / like+save only from orders bought for that goal', () => {
+    const ps = [
+      normalizePost({ id: 'x', date: '2026-04-01', ads: [{ start: '2026-04-02T10:00', spend: 60, goal: '点赞收藏量', order: { reads: 200, likes: 50, favorites: 10, follows: 1 } }] }),
+      normalizePost({ id: 'y', date: '2026-04-05', ads: [{ start: '2026-04-06T10:00', spend: 40, goal: '关注', order: { reads: 100, likes: 5, favorites: 1, follows: 10 } }] }),
+    ];
+    const s = adSummary(adOrders(ps));
+    expect(s.perFollow).toBe(4); // 40 / 10, not (60 + 40) / 11
+    expect(s.perLikeFav).toBe(1); // 60 / 60
+    expect(s.perRead).toBeCloseTo(100 / 300);
+    expect(goalType('关注')).toBe('follow');
+    expect(adSummary(adOrders(ps.slice(0, 1))).perFollow).toBeNull();
   });
 
   it('remembers the screenshot title so the next order matches by title alone', () => {

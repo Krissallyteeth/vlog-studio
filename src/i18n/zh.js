@@ -1098,7 +1098,7 @@ export default {
   "ads.budget": "预算（元）",
   "ads.orderReport": "薯条订单结果（推广带来的数据）",
   "ads.perRead": "每次阅读成本",
-  "ads.perLikeFav": "每次点赞+收藏成本",
+  "ads.perLikeFav": "每个点赞+收藏成本",
   "ads.perFollow": "每个粉丝成本",
   "ads.goalResult": "{goal} {v}（预估 {lo}~{hi}）",
   "ads.beat": "超过 {v}% 的同类笔记",
@@ -1236,4 +1236,21 @@ export default {
   "ocr.why.sum": "合计不是 100%",
 
   "adr.na": "无法计算（结果为 0）",
+
+  "oad.dateDiff": "截图中的笔记发布日期（{shot}）与 Excel（{book}）不同。D+n 按截图计算。如果 Excel 日期有误，请在数据表中修改。",
+  "oad.moneySplit": "已消耗 {consumed}元 = 实际支出 {money}元 + 平台赠送 {credit}元。统计只计入实际支出。",
+  "oad.replaceMemo": "该帖子已有的推广记录（Excel 备注 / 手动输入）",
+  "oad.memoOption": "用此订单替换：{stage} · {spend}元 {text}",
+  "oad.keepBoth": "不替换，作为新记录添加（另一次推广）",
+  "oad.replaceHelp": "如果是同一次推广，请选择替换，避免花费重复计算。D+n 相同的记录会自动选中。",
+  "oad.realSpend": "实际支出 {v}元",
+  "oad.creditPart": "平台赠送 {v}元（另计）",
+
+  "adr.credit": "平台赠送（另计）",
+  "adr.creditSub": "不计入统计和成本",
+  "adr.creditCol": "赠送(元)",
+  "adr.c.overallCredit": "目前共 {n} 个订单，实际支出 {spend}（平台赠送 {credit} 另计）。所有订单共有的每次阅读成本为 {perRead}。",
+  "adr.c.goalLikeFav": "点赞收藏目标订单 {n} 个：每个点赞+收藏 {cost}。",
+  "adr.c.goalFollow": "关注目标订单 {n} 个：每个关注 {cost}。",
+  "adr.goalOrders": "基于 {n} 个{goal}目标订单",
 };

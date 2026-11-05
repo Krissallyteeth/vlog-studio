@@ -173,7 +173,7 @@ export function adTotals(posts) {
       count++;
       const s = a.groupKey && isNum(a.orderSpend) ? a.orderSpend : a.spend;
       if (isNum(s)) spend += s;
-      if (isNum(a.credit)) credit += a.credit;
+      if (isNum(a.credit)) credit += a.groupKey ? Math.round(a.credit * (a.noteCount || 1) * 100) / 100 : a.credit;
       if (a.needsReview) unconfirmed++;
     }
   }

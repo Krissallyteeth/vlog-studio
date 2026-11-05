@@ -48,8 +48,10 @@ describe('ad statistics', () => {
   });
 
   it('computes per-order cost from the order report', () => {
-    const e = orderEfficiency(normalizeAd({ spend: 100, order: { reads: 50, likes: 15, favorites: 5, follows: 2 } }));
-    expect(e).toMatchObject({ perRead: 2, perLikeFav: 5, perFollow: 50, likeFav: 20 });
+    const order = { reads: 50, likes: 15, favorites: 5, follows: 2 };
+    // Cost per like+save / follower only for orders bought for that goal; per read for every order.
+    expect(orderEfficiency(normalizeAd({ spend: 100, goal: '点赞收藏量', order }))).toMatchObject({ perRead: 2, perLikeFav: 5, perFollow: null, likeFav: 20 });
+    expect(orderEfficiency(normalizeAd({ spend: 100, goal: '关注', order }))).toMatchObject({ perRead: 2, perLikeFav: null, perFollow: 50 });
   });
 
   it('matches an order to the post published that day', () => {

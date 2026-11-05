@@ -33,12 +33,15 @@ export function adOrders(posts) {
     const date = start || fallback;
     const m = Object.fromEntries(KEYS.map((k) => [k, isNum(ad.order?.[k]) ? ad.order[k] : null]));
     const likeFav = isNum(m.likes) || isNum(m.favorites) ? (m.likes ?? 0) + (m.favorites ?? 0) : null;
+    const credit = sum(links, (l) => l.ad.credit);
     return {
       key,
       ad,
       links,
       multi: links.length > 1,
+      // Real money only; the platform's bonus credit is kept apart and never counted as spend.
       spend: isNum(spend) ? spend : null,
+      credit: credit || null,
       date,
       dateEstimated: !start && !!date,
       month: date.slice(0, 7),
@@ -54,17 +57,35 @@ export function adOrders(posts) {
   });
 }
 
-/** Cost per unit over a group: total spend / total results (orders without that result are left out). */
+/** What an order was bought for, from its 推广目标. */
+export function goalType(goal) {
+  const g = String(goal ?? '');
+  if (/关注|粉丝|涨粉/.test(g)) return 'follow';
+  if (/点赞|收藏|赞藏/.test(g)) return 'likeFav';
+  if (/阅读|观看|播放/.test(g)) return 'read';
+  if (/主页/.test(g)) return 'profile';
+  return '';
+}
+
+/**
+ * Cost per unit over a group: real spend / total results (orders without that result are left
+ * out). Cost per like+save and per follower only count orders bought for that goal (an order bought
+ * for likes says nothing about the price of a follower); cost per read is shared by every order and
+ * is the common yardstick for comparing orders.
+ */
 function costs(orders) {
-  const per = (f) => {
-    const withIt = orders.filter((o) => isNum(o.spend) && isNum(f(o)));
+  const per = (f, list = orders) => {
+    const withIt = list.filter((o) => isNum(o.spend) && isNum(f(o)));
     const n = sum(withIt, f);
     return n > 0 ? sum(withIt, (o) => o.spend) / n : null;
   };
+  const forGoal = (g) => orders.filter((o) => goalType(o.goal) === g);
   return {
     perRead: per((o) => o.metrics.reads),
-    perLikeFav: per((o) => o.metrics.likeFav),
-    perFollow: per((o) => o.metrics.follows),
+    perLikeFav: per((o) => o.metrics.likeFav, forGoal('likeFav')),
+    perFollow: per((o) => o.metrics.follows, forGoal('follow')),
+    likeFavOrders: forGoal('likeFav').length,
+    followOrders: forGoal('follow').length,
     perProfile: per((o) => o.metrics.profileViews),
     perExposure1k: (() => {
       const x = per((o) => o.metrics.exposure);
@@ -78,6 +99,7 @@ function totals(orders) {
   return {
     count: orders.length,
     spend: sum(orders, (o) => o.spend),
+    credit: sum(orders, (o) => o.credit),
     exposure: t('exposure'),
     reads: t('reads'),
     likeFav: t('likeFav'),
@@ -161,7 +183,10 @@ export function adComments(orders, { posts = [], baseline = null, income = [], c
   const out = [];
   if (!orders.length) return out;
   const all = totals(orders);
-  out.push({ tone: 'info', key: 'overall', vars: { n: all.count, spend: all.spend, perRead: all.perRead, perLikeFav: all.perLikeFav, perFollow: all.perFollow } });
+  out.push({ tone: 'info', key: all.credit ? 'overallCredit' : 'overall', vars: { n: all.count, spend: all.spend, credit: all.credit, perRead: all.perRead } });
+  // Cost of what each order was bought for.
+  if (all.likeFavOrders) out.push({ tone: 'info', key: 'goalLikeFav', vars: { n: all.likeFavOrders, cost: all.perLikeFav } });
+  if (all.followOrders) out.push({ tone: 'info', key: 'goalFollow', vars: { n: all.followOrders, cost: all.perFollow } });
 
   // Best and worst order by cost per read, against the median of all orders.
   const rated = orders.filter((o) => perReadOf(o) != null);
@@ -194,11 +219,11 @@ export function adComments(orders, { posts = [], baseline = null, income = [], c
   }
 
   // Like/favourite orders hardly bring followers.
-  const lf = orders.filter((o) => /点赞|收藏/.test(o.goal || '') && isNum(o.metrics.follows));
+  const lf = orders.filter((o) => goalType(o.goal) === 'likeFav' && isNum(o.metrics.follows));
   if (lf.length >= MIN_GROUP) {
     const follows = sum(lf, (o) => o.metrics.follows);
     const spend = sum(lf, (o) => o.spend);
-    out.push({ tone: follows / lf.length < 2 ? 'warn' : 'info', key: 'followsFromLikeFav', vars: { n: lf.length, follows, perFollow: follows > 0 ? spend / follows : null } });
+    out.push({ tone: follows / lf.length < 2 ? 'warn' : 'info', key: 'followsFromLikeFav', vars: { n: lf.length, follows, spend } });
   }
 
   // Did the post already do well before the ad? (D+1 views vs the fixed median.)

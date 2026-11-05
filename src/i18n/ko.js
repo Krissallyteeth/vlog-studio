@@ -1236,4 +1236,21 @@ export default {
   "ocr.why.sum": "합계가 100%가 아님",
 
   "adr.na": "계산 불가(결과 0)",
+
+  "oad.dateDiff": "캡처의 노트 발행일({shot})과 엑셀 날짜({book})가 달라요. D+n은 캡처 기준으로 계산했어요. 엑셀 날짜가 틀렸다면 데이터 표에서 고쳐 주세요.",
+  "oad.moneySplit": "소모 {consumed}元 = 실제 지출 {money}元 + 플랫폼 서비스 {credit}元. 통계에는 실제 지출만 넣어요.",
+  "oad.replaceMemo": "이 게시물의 기존 광고 기록(엑셀 메모·직접 입력)",
+  "oad.memoOption": "이 주문으로 대체: {stage} · {spend}元 {text}",
+  "oad.keepBoth": "대체하지 않고 새 기록으로 추가 (다른 광고일 때)",
+  "oad.replaceHelp": "같은 광고라면 대체를 골라야 광고비가 두 번 잡히지 않아요. 시점이 같은 기록은 자동으로 골라 둬요.",
+  "oad.realSpend": "실제 지출 {v}元",
+  "oad.creditPart": "플랫폼 서비스 {v}元(별도)",
+
+  "adr.credit": "플랫폼 서비스(별도)",
+  "adr.creditSub": "통계·단가에 넣지 않아요",
+  "adr.creditCol": "서비스(元)",
+  "adr.c.overallCredit": "지금까지 주문 {n}건에 실제로 {spend}를 썼어요(플랫폼 서비스 {credit}는 별도). 모든 주문에 공통인 열람 1회당 비용은 {perRead}예요.",
+  "adr.c.goalLikeFav": "좋아요·저장 목표 주문 {n}건: 좋아요+저장 1개당 {cost}.",
+  "adr.c.goalFollow": "关注 목표 주문 {n}건: 팔로워 1명당 {cost}.",
+  "adr.goalOrders": "{goal} 목표 주문 {n}건 기준",
 };

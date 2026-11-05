@@ -15,23 +15,29 @@ const round2 = (n) => Math.round(n * 100) / 100;
 
 /**
  * values: recognised / typed fields (spend, startedAt, orderNo …); postIds: the linked posts in
- * note order; stage: typed D+n (single-note orders only). Returns [{ postId, ad }].
+ * note order; stage: typed D+n (single-note orders only). Returns [{ postId, ad, replace }].
  */
-export function orderAds({ values: v, postIds, posts, stage = '', audience = null }) {
+export function orderAds({ values: v, postIds, posts, stage = '', audience = null, replace = undefined }) {
   const ids = postIds.filter(Boolean);
   const n = ids.length;
   const groupKey = n > 1 ? v.orderNo || uid() : '';
+  const { money, credit } = splitMoney(v);
   return ids.map((postId) => {
     const post = posts.find((p) => p.id === postId);
-    const auto = stageFromDates(post?.date, v.startedAt);
+    // A single note's publish time from the screenshot beats the workbook date (it can be a day off).
+    const published = n === 1 && v.publishedAt ? v.publishedAt : post?.date;
+    const auto = stageFromDates(published, v.startedAt);
     return {
       postId,
+      // Memo record to replace: an id, '' = replace none, undefined = the most likely one.
+      replace: n === 1 ? replace : undefined,
       ad: normalizeAd({
         stage: (n === 1 && normalizeStage(stage)) || auto,
         start: v.startedAt ?? '',
         executed: true,
-        spend: v.spend == null ? null : n > 1 ? round2(v.spend / n) : v.spend,
-        orderSpend: n > 1 ? v.spend : null,
+        spend: money == null ? null : n > 1 ? round2(money / n) : money,
+        credit: credit == null ? null : n > 1 ? round2(credit / n) : credit,
+        orderSpend: n > 1 ? money : null,
         share: 1 / n,
         allocation: n > 1 ? 'equal' : 'single',
         noteCount: n,
@@ -60,6 +66,28 @@ export function orderAds({ values: v, postIds, posts, stage = '', audience = nul
   });
 }
 
+/**
+ * Real money vs bonus credit. "已消耗 85/85" with 订单金额 / 实付金额 60 means 25元 came from a bonus
+ * credit: the real ad spend is 60 and the credit 25. Without the paid amount, the consumed amount is
+ * the spend.
+ */
+export function splitMoney(v) {
+  const consumed = v.spend ?? null;
+  const paid = v.paid ?? v.orderAmount ?? null;
+  if (consumed != null && paid != null && consumed > paid) return { money: paid, credit: Math.round((consumed - paid) * 100) / 100 };
+  return { money: consumed, credit: null };
+}
+
+/** Records on a post that only come from a memo / manual entry (no order number, no report numbers). */
+export const memoAds = (post) => (post?.ads ?? []).filter((a) => a.executed !== false && !a.orderNo && !Object.values(a.order ?? {}).some((x) => typeof x === 'number'));
+
+/** The memo record an order most likely replaces: same D+n; otherwise the only memo with the same amount. */
+export function memoToReplace(post, ad) {
+  const memos = memoAds(post);
+  const amounts = [ad.spend, ad.credit != null ? ad.spend + ad.credit : null].filter((x) => x != null);
+  return memos.find((a) => a.stage && a.stage === ad.stage) ?? (memos.filter((a) => amounts.includes(a.spend)).length === 1 ? memos.find((a) => amounts.includes(a.spend)) : null) ?? null;
+}
+
 /** True when two ad records describe the same 薯条 order. */
 export function sameOrder(a, b) {
   if (a.orderNo && b.orderNo) return a.orderNo === b.orderNo;
@@ -85,23 +113,19 @@ export function placeOrder(posts, entries) {
       changed.add(p);
     }
   }
-  for (const { postId, ad } of entries) {
+  for (const { postId, ad, replace } of entries) {
     const p = posts.find((x) => x.id === postId);
     if (!p) continue;
-    // A record typed or imported from the workbook memo ("진행(60元)") for the same D+n and amount
-    // is this order without its report: the screenshot data takes its place.
-    const memo = p.ads.findIndex((a) => isMemoOf(a, ad));
-    if (memo >= 0) p.ads[memo] = { ...ad, id: p.ads[memo].id, sourceText: p.ads[memo].sourceText, memo: p.ads[memo].memo || ad.memo };
+    // A record typed or imported from the workbook memo ("진행(60元)") is this order without its
+    // report: the screenshot data takes its place. `replace` = the id chosen on the review screen
+    // ('' = keep both); not given = the most likely memo (same D+n, or the only one with that amount).
+    const target = replace === undefined ? memoToReplace(p, ad) : memoAds(p).find((a) => a.id === replace);
+    const memo = target ? p.ads.indexOf(target) : -1;
+    if (memo >= 0) p.ads[memo] = { ...ad, id: target.id, sourceText: target.sourceText, memo: target.memo || ad.memo };
     else p.ads.push(ad);
     changed.add(p);
   }
   return [...changed];
-}
-
-/** A record without order number or report numbers, same D+n and same amount as the order. */
-function isMemoOf(a, ad) {
-  const noReport = !a.orderNo && !Object.values(a.order ?? {}).some((v) => typeof v === 'number');
-  return noReport && a.executed !== false && !!a.stage && a.stage === ad.stage && a.spend === ad.spend;
 }
 
 /** Remembers the title a post had in a screenshot so the next order matches by itself. */

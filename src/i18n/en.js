@@ -1236,4 +1236,21 @@ export default {
   "ocr.why.sum": "does not add up to 100%",
 
   "adr.na": "n/a (no results)",
+
+  "oad.dateDiff": "The note's publish date in the screenshot ({shot}) differs from the workbook ({book}). D+n uses the screenshot. If the workbook date is wrong, fix it in the data table.",
+  "oad.moneySplit": "Consumed {consumed}元 = real spend {money}元 + platform credit {credit}元. Only the real spend goes into the statistics.",
+  "oad.replaceMemo": "Existing ad record on this post (workbook memo / typed)",
+  "oad.memoOption": "Replace with this order: {stage} · {spend}元 {text}",
+  "oad.keepBoth": "Do not replace, add as a new record (a different ad)",
+  "oad.replaceHelp": "If it is the same ad, choose replace so the spend is not counted twice. A record with the same D+n is chosen automatically.",
+  "oad.realSpend": "real spend {v}元",
+  "oad.creditPart": "platform credit {v}元 (separate)",
+
+  "adr.credit": "Platform credit (separate)",
+  "adr.creditSub": "not in statistics or costs",
+  "adr.creditCol": "Credit (元)",
+  "adr.c.overallCredit": "So far {n} orders cost you {spend} in real money (platform credit {credit} separate). The cost per read, shared by every order, is {perRead}.",
+  "adr.c.goalLikeFav": "{n} like/save-goal orders: {cost} per like+save.",
+  "adr.c.goalFollow": "{n} 关注-goal orders: {cost} per follower.",
+  "adr.goalOrders": "from {n} {goal}-goal orders",
 };
