@@ -148,7 +148,9 @@ export function parseAdOrder(linesPerImage) {
     const sp = splitSpent(raw);
     if (!sp) continue;
     let { spend, budget, sure } = sp;
-    const amount = f.orderAmount?.value ?? f.paid?.value;
+    const cand = (k) => f[k]?.value ?? f[k]?.candidate;
+    // 订单金额 and 实付金额 read separately and agreeing count as a confirmed amount.
+    const amount = f.orderAmount?.value ?? f.paid?.value ?? (cand('orderAmount') != null && cand('orderAmount') === cand('paid') ? cand('orderAmount') : undefined);
     if (sure && budgetUsedUp && spend !== budget && String(budget) === `1${spend}`) {
       budget = spend; // "已完成全部预算消耗": spent == budget, the extra "1" was the slash
       sure = false;
@@ -157,6 +159,8 @@ export function parseAdOrder(linesPerImage) {
       // Confirmed by 订单金额 / 实付金额 on the same order.
       set('spend', { ...ok(spend, raw, c), confirmedBy: 'orderAmount' });
       set('budget', { ...ok(budget, raw, c), confirmedBy: 'orderAmount' });
+      // Four readings of the same amount (consumed / budget / 订单金额 / 实付金额) confirm each other.
+      for (const k of ['orderAmount', 'paid']) if (f[k]?.status === 'check' && f[k].candidate === spend) f[k] = { ...ok(spend, f[k].text, f[k].conf), confirmedBy: 'spend' };
       continue;
     }
     set('spend', sure ? judge(spend, raw, c) : check(spend, raw, c, 'format'));

@@ -175,3 +175,14 @@ describe('ad report', () => {
     expect(adComments(adOrders(posts.slice(0, 1))).map((x) => x.key)).toContain('needMore');
   });
 });
+
+describe('amounts that agree confirm each other', () => {
+  it('consumed 60/60 (slash misread), 订单金额 60 and 实付金额 60 all read unsure → all confirmed', () => {
+    const r = parseAdOrder([[L('订单 金额 60 元', 40), L('实 付 金 额 60 元', 40), L('当前 已 消耗 金额 60160 元', 60)]]);
+    for (const k of ['spend', 'budget', 'orderAmount', 'paid']) expect(r.fields[k]).toMatchObject({ status: 'ok', value: 60 });
+  });
+  it('a different paid amount is not confirmed by the consumed amount', () => {
+    const r = parseAdOrder([[L('订单 金额 60 元', 40), L('实 付 金 额 50 元', 40), L('当前 已 消耗 金额 60160 元', 60)]]);
+    expect(r.fields.paid.status).toBe('check');
+  });
+});
