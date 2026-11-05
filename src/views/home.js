@@ -1,11 +1,13 @@
-import { listProjects, getLastBackupAt, saveProject } from '../data/repo.js';
+import { deleteProject, listProjects, getLastBackupAt, saveProject } from '../data/repo.js';
 import { CUSTOM_TYPE_PREFIX, SORT_OPTIONS, STATUSES, TYPES, labelOf, typeLabels } from '../lib/constants.js';
 import { formatRange, formatRelative, isEndBeforeStart, isValidDate, isWithinRange } from '../lib/dates.js';
 import { projectProgress } from '../lib/progress.js';
 import { filterProjects, sortProjects } from '../lib/sort.js';
-import { $, actionSheet, esc, openSheet, toast } from '../ui/dom.js';
+import { $, actionSheet, confirmDialog, esc, openSheet, toast } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { HOME_NAV, bottomNav, mount, offlineBadge } from '../ui/layout.js';
+import { swipeRows } from '../ui/swipe.js';
+import { navigate } from '../router.js';
 
 const PREFS_KEY = 'vs-home-prefs';
 const DEFAULT_PREFS = { query: '', status: 'all', type: 'all', sort: 'shootDesc' };
@@ -33,8 +35,11 @@ function card(p) {
   const pct = projectProgress(p);
   const types = typeLabels(p);
   // The whole card opens the project via a stretched link; date, status, name and place sit above it as edit buttons.
+  // Swiping the card left reveals the delete button behind it.
   return `
-    <li class="card project-card" data-id="${esc(p.id)}">
+    <li class="swipe-row" data-id="${esc(p.id)}">
+     <button type="button" class="swipe-action" data-delete aria-label="${esc(p.name)} 삭제">${icon('trash', 'size-5')}<span>삭제</span></button>
+     <div class="card project-card swipe-fg">
       <a class="card-link" href="#/p/${encodeURIComponent(p.id)}" aria-label="${esc(p.name)} 열기"></a>
       <div class="flex items-center justify-between gap-2 text-[13px] text-muted">
         <button type="button" class="card-edit inline-flex items-center gap-1.5 tabular-nums" data-edit="dates" aria-label="촬영 날짜 수정: ${esc(formatRange(p.startDate, p.endDate))}">${icon('calendar', 'size-4')}${esc(formatRange(p.startDate, p.endDate))}</button>
@@ -52,6 +57,7 @@ function card(p) {
         <span class="text-[12px] font-medium tabular-nums w-9 text-right">${pct}%</span>
       </div>
       <p class="mt-2 text-[12px] text-muted">${types.length ? `${esc(types.join(' · '))} · ` : ''}마지막 수정 ${esc(formatRelative(p.updatedAt))}</p>
+     </div>
     </li>`;
 }
 
@@ -243,6 +249,27 @@ export async function renderHome({ isCurrent }) {
         </li>`;
   }
   renderList();
+  const swipe = swipeRows(app);
+
+  async function removeProject(p) {
+    const ok = await confirmDialog({
+      title: '프로젝트를 삭제할까요?',
+      message: `"${p.name}"의 기획, 동선, 체크리스트, 현장 기록, 편집 구성이 모두 삭제되며 되돌릴 수 없어요.\n필요하면 먼저 백업하세요.`,
+      confirmText: '삭제',
+      danger: true,
+    });
+    if (!ok) return swipe.close();
+    try {
+      await deleteProject(p.id);
+    } catch (err) {
+      toast(`삭제하지 못했어요: ${err.message}`, { tone: 'error' });
+      return swipe.close();
+    }
+    projects.splice(projects.indexOf(p), 1);
+    toast('프로젝트를 삭제했어요.');
+    if (!projects.length) return navigate('/', { replace: true }); // reload into the empty-state screen
+    renderList();
+  }
 
   app.addEventListener('input', (e) => {
     if (e.target.id !== 'q') return;
@@ -259,6 +286,12 @@ export async function renderHome({ isCurrent }) {
     }
   });
   app.addEventListener('click', async (e) => {
+    const del = e.target.closest('[data-delete]');
+    if (del) {
+      const p = projects.find((x) => x.id === del.closest('[data-id]').dataset.id);
+      if (p) removeProject(p);
+      return;
+    }
     const edit = e.target.closest('[data-edit]');
     if (edit) {
       const p = projects.find((x) => x.id === edit.closest('[data-id]').dataset.id);

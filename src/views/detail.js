@@ -24,6 +24,14 @@ const TABS = [
 ];
 const lastTab = new Map();
 
+// "Next step" button at the bottom of each tab, so the flow continues without the bottom nav.
+const NEXT_STEP = {
+  plan: { tab: 'route', label: '동선 짜러 가기' },
+  route: { tab: 'shots', label: '촬영 준비하러 가기', when: (p) => p.places.length > 0 },
+  shots: { tab: 'field', label: '현장 기록 남기러 가기', when: (p) => p.places.length > 0 },
+  field: { tab: 'edit', label: '영상으로 엮으러 가기', when: (_, sub) => !sub },
+};
+
 const SAVE_TEXT = { idle: '', pending: '입력 중', saving: '저장 중…', saved: '저장됨', error: '저장 실패' };
 
 export async function renderDetail([id, tab, sub], { isCurrent, previous }) {
@@ -94,7 +102,17 @@ export async function renderDetail([id, tab, sub], { isCurrent, previous }) {
     lastTab.set(id, def.id);
     const pane = document.createElement('div');
     pane.className = keepScroll ? 'pane' : 'pane pane-enter';
-    host.replaceChildren(pane);
+    const next = NEXT_STEP[def.id];
+    if (next && (next.when?.(project, subId) ?? true)) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-secondary w-full mt-5';
+      btn.innerHTML = `${esc(next.label)} ${icon('chevronRight', 'size-4')}`;
+      btn.addEventListener('click', () => ctx.go(next.tab));
+      host.replaceChildren(pane, btn);
+    } else {
+      host.replaceChildren(pane);
+    }
     bindInputs(pane, ctx);
     current = { tab: def.id, sub: subId, cleanup: def.mod.render(ctx, pane, subId) ?? null };
     autoGrowAll(pane);

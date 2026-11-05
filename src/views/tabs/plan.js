@@ -114,8 +114,7 @@ export function render(ctx, pane) {
             </div>
           </details>`;
       }).join('')}
-    </div>
-    <button type="button" class="btn btn-secondary w-full mt-5" data-go="route">동선 짜러 가기 ${icon('chevronRight', 'size-4')}</button>`;
+    </div>`;
 
   pane.addEventListener('toggle', (e) => {
     const d = e.target.closest?.('details[data-key]');
@@ -159,7 +158,5 @@ export function render(ctx, pane) {
       ctx.commit();
       return;
     }
-    const go = e.target.closest('[data-go]');
-    if (go) ctx.go(go.dataset.go);
   });
 }
