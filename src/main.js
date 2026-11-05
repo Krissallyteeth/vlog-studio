@@ -1,4 +1,5 @@
 import './styles.css';
+import { initSync } from './data/sync.js';
 import { setupPWA } from './pwa.js';
 import { route, startRouter } from './router.js';
 import { toast } from './ui/dom.js';
@@ -23,5 +24,17 @@ window.addEventListener('unhandledrejection', (e) => {
   toast(`문제가 생겼어요: ${e.reason?.message ?? e.reason}`, { tone: 'error' });
 });
 
-startRouter();
+// The sign-up confirmation link lands here with tokens in the hash (#access_token=…), which the hash
+// router would read as a page path. Let the sync client consume it first, then start at home.
+const authRedirect = /(^#|&)(access_token|error_description)=/.test(location.hash);
+const syncReady = initSync().catch((err) => console.error('sync init failed', err));
+if (authRedirect) {
+  syncReady.finally(() => {
+    if (/error_description=/.test(location.hash)) toast('이메일 인증에 실패했어요. 링크가 만료됐을 수 있어요.', { tone: 'error' });
+    history.replaceState(null, '', location.pathname + location.search);
+    startRouter();
+  });
+} else {
+  startRouter();
+}
 setupPWA();

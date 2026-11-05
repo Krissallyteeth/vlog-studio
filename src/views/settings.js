@@ -1,6 +1,7 @@
 import { flushAll } from '../data/autosave.js';
+import { getSyncState, onSyncState, signIn, signOut, signUp, syncNow } from '../data/sync.js';
 import { exportBackup, getLastBackupAt, importProjects, listProjects } from '../data/repo.js';
-import { formatTimestamp, todayString } from '../lib/dates.js';
+import { formatRelative, formatTimestamp, todayString } from '../lib/dates.js';
 import { SCHEMA_VERSION, parseBackup } from '../lib/schema.js';
 import { $, actionSheet, confirmDialog, downloadFile, esc, toast } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -12,6 +13,61 @@ const THEMES = [
   { id: 'light', label: '라이트' },
   { id: 'dark', label: '다크' },
 ];
+
+function syncStatusLine(st) {
+  if (st.status === 'syncing') return '동기화 중…';
+  if (st.status === 'offline') return '오프라인이에요. 연결되면 자동으로 맞춰요.';
+  if (st.status === 'error') return `동기화하지 못했어요: ${st.error}`;
+  if (st.lastSyncedAt) return `마지막 동기화 ${formatRelative(st.lastSyncedAt)}`;
+  return '';
+}
+
+/** Sync account card + the storage notice above it, both depend on the sign-in state. */
+function syncSection(st) {
+  const signedIn = st.email && st.status !== 'signed-out';
+  const notice = signedIn
+    ? `<section class="notice">
+        ${icon('check', 'size-5 mt-0.5')}
+        <div class="flex-1 text-[14px] leading-relaxed">
+          <b class="font-semibold">기록이 로그인한 모든 기기와 자동으로 맞춰져요.</b>
+          <p class="mt-1 text-muted">이 기기에도 저장돼서 오프라인에서도 쓸 수 있고, 연결되면 알아서 올라가요.</p>
+        </div>
+      </section>`
+    : `<section class="notice notice-strong">
+        ${icon('info', 'size-5 mt-0.5')}
+        <div class="flex-1 text-[14px] leading-relaxed">
+          <b class="font-semibold">지금 기록은 이 기기의 브라우저에만 저장돼요.</b>
+          <p class="mt-1 text-muted">${st.status === 'off' ? '' : '아래에서 로그인하면 컴퓨터·폰 어디서든 같은 기록을 이어서 쓸 수 있어요. '}브라우저 데이터를 지우거나 앱을 삭제하면 기록이 사라질 수 있으니 백업 파일도 저장해 두세요.</p>
+        </div>
+      </section>`;
+  if (st.status === 'off') return notice;
+  if (signedIn) {
+    return `${notice}
+      <section class="card">
+        <h2 class="text-[16px] font-semibold">기기 간 동기화</h2>
+        <p class="mt-1 text-[14px]">${esc(st.email)}</p>
+        <p class="mt-0.5 text-[13px] ${st.status === 'error' ? 'text-danger' : 'text-muted'}" aria-live="polite">${esc(syncStatusLine(st))}</p>
+        <div class="mt-3 grid grid-cols-2 gap-2">
+          <button type="button" class="btn btn-secondary" id="sync-now" ${st.status === 'syncing' ? 'disabled' : ''}>지금 동기화</button>
+          <button type="button" class="btn btn-ghost" id="sign-out">로그아웃</button>
+        </div>
+      </section>`;
+  }
+  return `${notice}
+    <section class="card">
+      <h2 class="text-[16px] font-semibold">기기 간 동기화</h2>
+      <p class="mt-1 text-[14px] text-muted">컴퓨터와 폰에서 같은 계정으로 로그인하세요. 이 기기에 있던 기록도 계정으로 함께 올라가요.</p>
+      <form id="auth-form" class="mt-3 flex flex-col gap-2" novalidate>
+        <input name="email" type="email" class="input" autocomplete="email" placeholder="이메일" aria-label="이메일" required />
+        <input name="password" type="password" class="input" autocomplete="current-password" placeholder="비밀번호 (6자 이상)" aria-label="비밀번호" minlength="6" required />
+        <p class="form-error hidden" id="auth-error" role="alert"></p>
+        <div class="grid grid-cols-[2fr_1fr] gap-2">
+          <button type="submit" class="btn btn-primary" data-auth="in">로그인</button>
+          <button type="submit" class="btn btn-secondary" data-auth="up">회원가입</button>
+        </div>
+      </form>
+    </section>`;
+}
 
 async function storageInfo() {
   const s = navigator.storage;
@@ -34,13 +90,7 @@ export async function renderSettings({ isCurrent }) {
         <h1 class="page-title">백업 · 설정</h1>
       </header>
       <main class="page-main flex flex-col gap-4">
-        <section class="notice notice-strong">
-          ${icon('info', 'size-5 mt-0.5')}
-          <div class="flex-1 text-[14px] leading-relaxed">
-            <b class="font-semibold">모든 기록은 이 기기의 브라우저에만 저장돼요.</b>
-            <p class="mt-1 text-muted">서버에 업로드되거나 다른 기기와 동기화되지 않아요. 브라우저 데이터를 지우거나 앱을 삭제하면 기록이 사라질 수 있으니 JSON 백업 파일을 정기적으로 저장해 두세요.</p>
-          </div>
-        </section>
+        <div id="sync-area" class="flex flex-col gap-4"></div>
 
         <section class="card">
           <h2 class="text-[16px] font-semibold">전체 백업 <span class="zh">JSON</span></h2>
@@ -86,6 +136,70 @@ export async function renderSettings({ isCurrent }) {
       </main>
       ${bottomNav(HOME_NAV, 'settings')}
     </div>`);
+
+  // Re-render the sync card on state changes, but never while the user is typing into it.
+  const syncArea = $('#sync-area', root);
+  let busy = false;
+  const unsubscribe = onSyncState((st) => {
+    if (busy || (syncArea.contains(document.activeElement) && document.activeElement.matches('input'))) return;
+    syncArea.innerHTML = syncSection(st);
+  });
+
+  syncArea.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const error = $('#auth-error', form);
+    const email = form.email.value.trim();
+    const password = form.password.value;
+    const mode = e.submitter?.dataset.auth ?? 'in';
+    const fail = (msg, el) => {
+      error.textContent = msg;
+      error.classList.remove('hidden');
+      el?.focus();
+    };
+    if (!/^\S+@\S+\.\S+$/.test(email)) return fail('이메일을 확인해 주세요.', form.email);
+    if (password.length < 6) return fail('비밀번호는 6자 이상이어야 해요.', form.password);
+    busy = true;
+    form.querySelectorAll('button').forEach((b) => (b.disabled = true));
+    try {
+      if (mode === 'up') {
+        const { needsConfirm } = await signUp(email, password);
+        if (needsConfirm) {
+          busy = false;
+          form.querySelectorAll('button').forEach((b) => (b.disabled = false));
+          fail(`${email}로 인증 메일을 보냈어요. 메일의 링크를 누른 뒤 여기서 로그인하세요.`);
+          error.classList.remove('form-error');
+          error.classList.add('text-[14px]');
+          return;
+        }
+        toast('가입했어요. 동기화를 시작해요.');
+      } else {
+        await signIn(email, password);
+        toast('로그인했어요. 동기화를 시작해요.');
+      }
+    } catch (err) {
+      busy = false;
+      form.querySelectorAll('button').forEach((b) => (b.disabled = false));
+      return fail(err.message);
+    }
+    busy = false;
+    document.activeElement?.blur();
+    syncArea.innerHTML = syncSection(getSyncState());
+  });
+
+  syncArea.addEventListener('click', async (e) => {
+    if (e.target.closest('#sync-now')) syncNow();
+    if (e.target.closest('#sign-out')) {
+      const ok = await confirmDialog({
+        title: '로그아웃할까요?',
+        message: '이 기기의 기록은 그대로 남지만, 다른 기기와 더 이상 맞춰지지 않아요.',
+        confirmText: '로그아웃',
+      });
+      if (!ok) return;
+      await signOut();
+      toast('로그아웃했어요.');
+    }
+  });
 
   $('#backup', root).addEventListener('click', async () => {
     await flushAll().catch(() => {});
@@ -153,5 +267,5 @@ export async function renderSettings({ isCurrent }) {
   });
 
   window.scrollTo(0, 0);
-  return { kind: 'settings' };
+  return { kind: 'settings', destroy: unsubscribe };
 }

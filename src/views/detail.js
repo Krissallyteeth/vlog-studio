@@ -1,4 +1,5 @@
-import { flushAll, onSaveStatus, saveNow, scheduleSave } from '../data/autosave.js';
+import { flushAll, hasPendingSaves, onSaveStatus, saveNow, scheduleSave } from '../data/autosave.js';
+import { onRemoteChange } from '../data/sync.js';
 import { deleteProject, duplicateProject, getProject } from '../data/repo.js';
 import { STATUSES } from '../lib/constants.js';
 import { formatRange } from '../lib/dates.js';
@@ -185,6 +186,26 @@ export async function renderDetail([id, tab, sub], { isCurrent, previous }) {
     saveState.innerHTML = s === 'saved' ? `${icon('check', 'size-3.5')}${SAVE_TEXT[s]}` : esc(SAVE_TEXT[s] ?? '');
   });
 
+  // Another device edited this project: show its version, unless there are unsaved edits here or the user
+  // is typing (then this device's next save is newer and wins anyway).
+  const offRemote = onRemoteChange(async (ids) => {
+    if (!ids.includes(id) || hasPendingSaves()) return;
+    const el = document.activeElement;
+    if (el && root.contains(el) && el.matches('input, textarea, select')) return;
+    if (document.querySelector('.overlay')) return;
+    const fresh = await getProject(id);
+    if (!fresh) {
+      toast('다른 기기에서 이 프로젝트를 삭제했어요.');
+      navigate('/', { replace: true });
+      return;
+    }
+    if (fresh.updatedAt <= project.updatedAt) return;
+    Object.assign(project, fresh);
+    refreshHeader();
+    ctx.rerender();
+    toast('다른 기기에서 수정한 내용을 불러왔어요.');
+  });
+
   refreshHeader();
   show(tab, sub);
 
@@ -195,6 +216,7 @@ export async function renderDetail([id, tab, sub], { isCurrent, previous }) {
     destroy() {
       current.cleanup?.();
       unsubscribe();
+      offRemote();
       document.title = 'Vlog Studio';
     },
   };

@@ -8,6 +8,7 @@ import { icon } from '../ui/icons.js';
 import { HOME_NAV, bottomNav, mount, offlineBadge } from '../ui/layout.js';
 import { swipeRows } from '../ui/swipe.js';
 import { navigate } from '../router.js';
+import { getSyncState, onRemoteChange, onSyncState } from '../data/sync.js';
 
 const PREFS_KEY = 'vs-home-prefs';
 const DEFAULT_PREFS = { query: '', status: 'all', type: 'all', sort: 'shootDesc' };
@@ -159,14 +160,15 @@ export async function renderHome({ isCurrent }) {
   const prefs = loadPrefs();
   const typeOpts = typeOptions(projects);
   if (!typeOpts.some((o) => o.id === prefs.type)) prefs.type = 'all';
-  const needsBackup = projects.length > 0 && (!lastBackupAt || Date.now() - lastBackupAt > BACKUP_NUDGE_MS);
+  const synced = Boolean(getSyncState().email);
+  const needsBackup = !synced && projects.length > 0 && (!lastBackupAt || Date.now() - lastBackupAt > BACKUP_NUDGE_MS);
 
   const app = mount(`
     <div class="view">
       <header class="page-header">
         <div class="flex items-start justify-between gap-3">
           <div>
-            <p class="eyebrow">Vlog Studio ${offlineBadge()}</p>
+            <p class="eyebrow">Vlog Studio ${offlineBadge()} <span id="sync-badge"></span></p>
             <h1 class="page-title">나의 Vlog</h1>
             <p class="mt-1 text-[14px] text-muted">촬영 프로젝트를 한곳에서 관리해요.</p>
           </div>
@@ -328,11 +330,28 @@ export async function renderHome({ isCurrent }) {
     }
   });
 
+  const badge = $('#sync-badge', app);
+  const SYNC_BADGE = { syncing: '동기화 중', synced: '동기화됨', offline: '', error: '동기화 오류' };
+  const offSync = onSyncState((st) => {
+    const text = st.email ? (SYNC_BADGE[st.status] ?? '') : '';
+    badge.className = text ? `pill ${st.status === 'error' ? 'pill-warm' : 'pill-muted'}` : '';
+    badge.textContent = text;
+  });
+  // Another device changed something: reload the list, unless the user is in the middle of something here.
+  const offRemote = onRemoteChange(() => {
+    const busy = document.querySelector('.overlay') || app.querySelector('.swipe-row.is-open, .swipe-row.is-dragging') || document.activeElement?.id === 'q';
+    if (!busy) navigate('/', { replace: true });
+  });
+
   requestAnimationFrame(() => window.scrollTo(0, savedScroll));
   return {
     kind: 'home',
     leave() {
       savedScroll = window.scrollY;
+    },
+    destroy() {
+      offSync();
+      offRemote();
     },
   };
 }

@@ -3,7 +3,22 @@
 촬영 전 기획(前期策划)부터 동선(行程)·촬영 체크리스트(必拍镜头), 현장 기록(现场记录), 촬영 후 이야기(故事感)·편집 구성(剪辑)까지 한 프로젝트 안에서 관리하는 모바일 우선 PWA입니다.
 
 - Vanilla JavaScript (ES Modules) · Vite · Tailwind CSS v4 (공식 Vite 플러그인) · IndexedDB · vite-plugin-pwa
-- 백엔드 없음. **모든 데이터는 사용 중인 기기의 브라우저(IndexedDB)에만 저장**되며, 서버 업로드나 기기 간 동기화는 없습니다. 정기적으로 `백업·설정 → 백업 파일 저장`으로 JSON을 보관하세요.
+- 데이터는 사용 중인 기기의 브라우저(IndexedDB)에 저장되어 오프라인에서도 동작합니다. Supabase를 연결하면 같은 계정으로 로그인한 모든 기기와 자동으로 동기화됩니다 (아래 참고). 연결하지 않으면 기기에만 저장되니 `백업·설정 → 백업 파일 저장`으로 JSON을 보관하세요.
+
+## 기기 간 동기화 (Supabase)
+
+1. [supabase.com](https://supabase.com)에서 새 프로젝트를 만듭니다.
+2. **SQL Editor**에 `supabase/schema.sql` 내용을 붙여 넣고 실행합니다 (여러 번 실행해도 안전).
+3. **Project Settings → API**의 Project URL과 anon(publishable) key를 `.env.production`에 넣습니다.
+   ```
+   VITE_SUPABASE_URL=https://xxxx.supabase.co
+   VITE_SUPABASE_ANON_KEY=eyJ...
+   ```
+   anon key는 공개용 키입니다. 행 수준 보안(RLS) 때문에 각 사용자는 자기 기록만 읽고 쓸 수 있습니다.
+4. **Authentication → URL Configuration**의 Site URL을 배포 주소(`https://<사용자명>.github.io/vlog-studio/`)로 설정합니다.
+5. 앱의 `백업·설정`에서 회원가입 후, 다른 기기에서도 같은 계정으로 로그인합니다.
+
+동작 방식: 기기 저장이 기본이고, 로그인 상태에서 변경분을 올리고(편집 1.5초 후, 앱이 백그라운드로 갈 때) 다른 기기 변경분을 받아옵니다(앱을 열 때, 다시 볼 때, 온라인 복귀 시, 30초마다). 같은 프로젝트를 두 기기에서 고치면 **나중에 수정한 쪽**이 남습니다.
 
 ## 로컬 실행
 
