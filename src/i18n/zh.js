@@ -1087,4 +1087,9 @@ export default {
   "menu.xhs": "查看发布表现",
   "menu.xhsHint": "与此策划关联的小红书笔记的统计和分析",
   "menu.xhsNone": "没有关联的笔记。请在内容列表中打开笔记，并关联此策划。",
+
+  "data.ocr": "用截图录入",
+  "data.deleteRow": "删除选中行",
+  "data.selectRowFirst": "请先点击要删除的那一行中的任意单元格。",
+  "data.newRowRemoved": "已删除未保存的新行。",
 };

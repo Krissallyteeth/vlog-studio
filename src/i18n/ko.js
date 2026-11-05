@@ -1087,4 +1087,9 @@ export default {
   "menu.xhs": "배포 성과 보기",
   "menu.xhsHint": "이 기획과 연결된 小红书 게시물의 통계·분석",
   "menu.xhsNone": "연결된 게시물이 없어요. 콘텐츠 목록에서 게시물을 열고 이 기획을 연결하세요.",
+
+  "data.ocr": "캡처로 입력",
+  "data.deleteRow": "선택한 행 삭제",
+  "data.selectRowFirst": "표에서 지울 행의 칸을 먼저 하나 눌러 선택하세요.",
+  "data.newRowRemoved": "저장하지 않은 새 행을 지웠어요.",
 };

@@ -381,6 +381,13 @@ export function createGrid(host, opts) {
     },
     redraw: draw,
     hasPending: () => pending.size > 0,
+    /** The row of the selected cell (or null). */
+    selectedRow: () => (sel ? rows[sel.r] ?? null : null),
+    /** Forgets unsaved edits of a row that is being removed. */
+    dropRow(key) {
+      for (const k2 of [...pending.keys()]) if (k2.startsWith(`${key}\u0000`)) pending.delete(k2);
+      for (const batch of undo) for (let i = batch.length - 1; i >= 0; i--) if (batch[i].key.startsWith(`${key}\u0000`)) batch.splice(i, 1);
+    },
     focusRow(key) {
       const r = rows.findIndex((x) => x.key === key);
       if (r < 0) return;

@@ -1087,4 +1087,9 @@ export default {
   "menu.xhs": "View publishing results",
   "menu.xhsHint": "Stats and analysis of 小红书 posts linked to this plan",
   "menu.xhsNone": "No linked posts. Open a post from Contents and link it to this plan.",
+
+  "data.ocr": "Enter from screenshot",
+  "data.deleteRow": "Delete selected row",
+  "data.selectRowFirst": "Click a cell in the row you want to delete first.",
+  "data.newRowRemoved": "Removed the unsaved new row.",
 };

@@ -1,12 +1,13 @@
 import { getLang, t } from '../../i18n/index.js';
 import { navigate } from '../../router.js';
-import { $, esc, openSheet, toast } from '../../ui/dom.js';
+import { $, confirmDialog, esc, openSheet, toast } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { fmt, signedPct, won } from '../../xhs/format.js';
 import { METRIC } from '../../xhs/metrics.js';
 import { criteria, ordered, validSeq } from '../../xhs/stats.js';
 import {
   activeBaseline,
+  deletePost,
   getBaselines,
   getDocs,
   getSettings,
@@ -107,6 +108,8 @@ function renderPosts(body, ctx, focus) {
         <button type="button" class="seg px-3 ${prefs.view === 'table' ? 'is-active' : ''}" data-view="table">${icon('table', 'size-4')}</button>
         <button type="button" class="seg px-3 ${prefs.view === 'cards' ? 'is-active' : ''}" data-view="cards">${icon('grid', 'size-4')}</button>
       </div>
+      <button type="button" class="btn btn-secondary btn-sm" id="d-ocr">${icon('scan', 'size-4')}${esc(t('data.ocr'))}</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="d-del">${icon('trash', 'size-4')}${esc(t('data.deleteRow'))}</button>
       <button type="button" class="btn btn-primary btn-sm" id="d-add">${icon('plus', 'size-4')}${esc(t('data.addPost'))}</button>
     </div>
     <div class="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
@@ -210,9 +213,32 @@ function renderPosts(body, ctx, focus) {
       $('#d-q', body).value = '';
       $('#d-validity', body).value = '';
       $('#d-type', body).value = '';
-      draw();
+      if (grid) grid.setRows((current = rows())); // keeps unsaved edits of other rows
+      else draw();
       grid?.focusRow(p.id);
       return toast(t('data.added'));
+    }
+    if (e.target.closest('#d-ocr')) {
+      const p = grid?.selectedRow();
+      return navigate(p && !p.isNew ? `/ocr/${encodeURIComponent(p.id)}` : '/ocr');
+    }
+    if (e.target.closest('#d-del')) {
+      const p = grid?.selectedRow();
+      if (!p) return toast(t('data.selectRowFirst'));
+      if (p.isNew) {
+        // Never saved: just drop it (and its unsaved edits).
+        grid.dropRow(p.id);
+        added = added.filter((x) => x !== p);
+        grid.setRows((current = rows())); // keeps unsaved edits of other rows
+        return toast(t('data.newRowRemoved'));
+      }
+      const ok = await confirmDialog({ title: t('post.deleteTitle'), message: t('post.deleteBody', { name: p.title || t('xg.untitled') }), confirmText: t('common.delete'), danger: true });
+      if (!ok) return;
+      grid.dropRow(p.id);
+      ctx.posts = ctx.posts.filter((x) => x.id !== p.id);
+      grid.setRows((current = rows()));
+      await deletePost(p.id);
+      return toast(t('post.deleted'));
     }
     if (e.target.closest('#d-cols')) return columnsSheet(allCols, prefs, () => draw());
     if (e.target.closest('#d-types')) return typesSheet(ctx.settings);
