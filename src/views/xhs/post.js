@@ -75,7 +75,7 @@ export async function renderPost([id], { isCurrent }) {
     else if (report.better.length) parts.push(`<p class="text-[15px] leading-relaxed">${esc(t('ana.summaryGood', { list: report.better.slice(0, 3).map(line).join(', ') }))}</p>`);
     else if (report.worse.length) parts.push(`<p class="text-[15px] leading-relaxed">${esc(t('ana.summaryBad', { list: report.worse.slice(0, 3).map(line).join(', ') }))}</p>`);
     else parts.push(`<p class="text-[15px] leading-relaxed">${esc(t('ana.summaryFlat'))}</p>`);
-    parts.push(`<div class="table-scroll mt-3"><table class="xtable"><thead><tr><th>${esc(t('crit.metric'))}</th><th class="num">${esc(t('ana.this'))}</th><th class="num">${esc(t('ana.vsBase'))}</th><th class="num">${esc(t('ana.vsPrev'))}</th><th class="num">${esc(t('ana.vsRecent'))}</th></tr></thead><tbody>
+    parts.push(`<div class="table-scroll mt-3"><table class="xtable"><thead><tr><th>${esc(t('crit.metric'))}</th><th class="num" data-m="key">${esc(t('ana.this'))}</th><th class="num" data-m="inline">${esc(t('ana.vsBase'))}</th><th class="num" data-m="inline">${esc(t('ana.vsPrev'))}</th><th class="num">${esc(t('ana.vsRecent'))}</th></tr></thead><tbody>
       ${report.rows.map((r) => `<tr><td>${esc(METRIC[r.key].zh)}</td><td class="num">${esc(fmt(r.key, r.value))}</td><td class="num ${r.state === 'better' ? 'cf-good' : r.state === 'worse' ? 'cf-bad' : r.state ? 'cf-mid' : ''}">${esc(r.baseZero ? t('crit.zeroBase') : signedPct(r.vsBase))}</td><td class="num">${esc(signedPct(r.vsPrev))}</td><td class="num">${esc(report.recentCount >= 5 ? signedPct(r.vsRecent) : t('ana.na'))}</td></tr>`).join('')}
       </tbody></table></div>
       <p class="mt-1 text-[12px] text-muted">${esc(t('ana.tableNote', { prev: report.prev?.title ?? '–' }))}</p>`);
@@ -124,7 +124,7 @@ export async function renderPost([id], { isCurrent }) {
         ${post.source ? `<p class="mt-2 text-[12px] text-muted">${esc(t('post.source', { file: post.source.file, sheet: post.source.sheet, row: post.source.row }))}</p>` : ''}
       </section>
       <section class="card mt-3"><h2 class="section-step">3 · ${esc(t('post.s.stats'))}</h2>
-        <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t('crit.metric'))}</th><th class="num">D+1</th><th class="num">${esc(t('crit.fixed'))} V${baseline?.version ?? ''}</th><th class="num">D+2</th></tr></thead><tbody>${metricRows}</tbody></table></div>
+        <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t('crit.metric'))}</th><th class="num" data-m="key">D+1</th><th class="num" data-m="inline">${esc(t('crit.fixed'))} V${baseline?.version ?? ''}</th><th class="num" data-m="inline">D+2</th></tr></thead><tbody>${metricRows}</tbody></table></div>
         <div class="mt-2">${relativeNote()}</div>
         ${post.screenshots.length ? `<p class="mt-2 text-[13px]"><a class="link-btn" href="#/ocr/${encodeURIComponent(post.id)}">${esc(t('post.shots', { n: post.screenshots.length }))}</a></p>` : ''}
         <a class="btn btn-secondary btn-sm mt-3" href="#/ocr/${encodeURIComponent(post.id)}">${icon('scan', 'size-4')}${esc(t('post.fromShot'))}</a>

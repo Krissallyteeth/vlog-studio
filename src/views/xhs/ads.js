@@ -42,12 +42,12 @@ export async function renderAds({ isCurrent }) {
   const periods = periodRows(orders, prefs.unit, income, settings.cnyKrw);
   const rows = ordered(posts).flatMap((p) => p.ads.map((a, i) => ({ p, a, i }))).reverse();
   const toneCls = { good: 'cf-good', warn: 'cf-mid', info: 'bg-surface-2' };
-  const costHead = `<th class="num">${esc(t('ads.perRead'))}</th><th class="num">${esc(t('ads.perLikeFav'))}</th><th class="num">${esc(t('ads.perFollow'))}</th>`;
+  const costHead = `<th class="num" data-m="inline">${esc(t('ads.perRead'))}</th><th class="num">${esc(t('ads.perLikeFav'))}</th><th class="num">${esc(t('ads.perFollow'))}</th>`;
   const costCells = (r) => `<td class="num">${esc(cost(r.perRead))}</td><td class="num">${esc(cost(r.perLikeFav))}</td><td class="num">${esc(cost(r.perFollow))}</td>`;
   const groupTable = (title, label, list, name) =>
     list.length
       ? `<section class="card mt-3"><h2 class="text-[16px] font-semibold">${esc(title)}</h2>
-        <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(label)}</th><th class="num">${esc(t('adr.orders'))}</th><th class="num">${esc(t('ads.spendYuan'))}</th><th class="num">阅读量</th><th class="num">点赞+收藏</th><th class="num">新增关注</th>${costHead}</tr></thead>
+        <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(label)}</th><th class="num" data-m="inline">${esc(t('adr.orders'))}</th><th class="num" data-m="key">${esc(t('ads.spendYuan'))}</th><th class="num">阅读量</th><th class="num">点赞+收藏</th><th class="num">新增关注</th>${costHead}</tr></thead>
         <tbody>${list.map((r) => `<tr><td>${esc(name(r))}</td><td class="num">${r.count}</td><td class="num">${esc(yuan(r.spend))}</td><td class="num">${n0(r.reads)}</td><td class="num">${n0(r.likeFav)}</td><td class="num">${n0(r.follows)}</td>${costCells(r)}</tr>`).join('')}</tbody></table></div></section>`
       : '';
 
@@ -77,14 +77,14 @@ export async function renderAds({ isCurrent }) {
       <section class="card mt-3">
         <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="text-[16px] font-semibold">${esc(t('adr.byPeriod'))}</h2>
           <div class="segmented segmented-2 !w-auto"><button type="button" class="seg px-3 ${prefs.unit === 'month' ? 'is-active' : ''}" data-unit="month">${esc(t('adr.month'))}</button><button type="button" class="seg px-3 ${prefs.unit === 'year' ? 'is-active' : ''}" data-unit="year">${esc(t('adr.year'))}</button></div></div>
-        <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t(prefs.unit === 'year' ? 'adr.year' : 'adr.month'))}</th><th class="num">${esc(t('adr.orders'))}</th><th class="num">${esc(t('ads.spendYuan'))}</th><th class="num">${esc(t('adr.creditCol'))}</th><th class="num">曝光量</th><th class="num">阅读量</th><th class="num">点赞+收藏</th><th class="num">新增关注</th>${costHead}<th class="num">${esc(t('adr.spendKRW'))}</th><th class="num">${esc(t('inc.cash'))}</th><th class="num">${esc(t('inc.inKind'))}</th><th class="num">${esc(t('adr.net'))}</th></tr></thead>
+        <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t(prefs.unit === 'year' ? 'adr.year' : 'adr.month'))}</th><th class="num" data-m="inline">${esc(t('adr.orders'))}</th><th class="num" data-m="key">${esc(t('ads.spendYuan'))}</th><th class="num">${esc(t('adr.creditCol'))}</th><th class="num">曝光量</th><th class="num">阅读量</th><th class="num">点赞+收藏</th><th class="num">新增关注</th>${costHead}<th class="num">${esc(t('adr.spendKRW'))}</th><th class="num">${esc(t('inc.cash'))}</th><th class="num">${esc(t('inc.inKind'))}</th><th class="num">${esc(t('adr.net'))}</th></tr></thead>
         <tbody>${periods.map((r) => `<tr><td>${esc(r.period)}${r.estimatedDates ? ` <span class="badge cf-mid" title="${esc(t('adr.estDate'))}">${esc(t('adr.estShort'))}</span>` : ''}</td><td class="num">${r.count}</td><td class="num">${esc(yuan(r.spend))}</td><td class="num">${esc(r.credit ? yuan(r.credit) : '')}</td><td class="num">${n0(r.exposure)}</td><td class="num">${n0(r.reads)}</td><td class="num">${n0(r.likeFav)}</td><td class="num">${n0(r.follows)}</td>${costCells(r)}<td class="num">${esc(r.spendKRW == null ? '–' : won(r.spendKRW))}</td><td class="num">${esc(won(r.cash) || '–')}</td><td class="num">${esc(won(r.inKind) || '–')}</td><td class="num ${r.net == null ? '' : r.net >= 0 ? 'cf-good' : 'cf-bad'}">${esc(r.net == null ? '–' : won(r.net))}</td></tr>`).join('') || `<tr><td colspan="16" class="text-muted">${esc(t('ads.none'))}</td></tr>`}</tbody></table></div>
         <div class="mt-2 flex flex-wrap items-center gap-2 text-[13px]"><label for="adr-rate">${esc(t('adr.rate'))}</label><input id="adr-rate" class="input !h-9 !w-28 tabular-nums" inputmode="decimal" value="${settings.cnyKrw ?? ''}" placeholder="${esc(t('adr.ratePh'))}" /><span class="text-muted">${esc(t('adr.rateHelp'))}</span></div>
         <p class="mt-1 text-[12px] text-muted">${esc(t('adr.netNote'))}</p>
       </section>
 
       <section class="card mt-3"><h2 class="text-[16px] font-semibold">${esc(t('adr.byPost'))}</h2>
-        <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th class="col-title">${esc(t('xg.title'))}</th><th class="num">${esc(t('adr.orders'))}</th><th>${esc(t('ads.stage'))}</th><th class="num">${esc(t('ads.spendYuan'))}</th><th class="num">D+1 ${esc(t('m.views'))}</th><th class="num">D+2 ${esc(t('m.views'))}</th><th class="num">${esc(t('ads.betweenSpend'))}</th><th class="num">${esc(t('ads.perView'))}</th></tr></thead>
+        <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th class="col-title">${esc(t('xg.title'))}</th><th class="num" data-m="inline">${esc(t('adr.orders'))}</th><th data-m="inline">${esc(t('ads.stage'))}</th><th class="num" data-m="key">${esc(t('ads.spendYuan'))}</th><th class="num">D+1 ${esc(t('m.views'))}</th><th class="num">D+2 ${esc(t('m.views'))}</th><th class="num">${esc(t('ads.betweenSpend'))}</th><th class="num">${esc(t('ads.perView'))}</th></tr></thead>
         <tbody>${postRows(posts).map((r) => {
           const e = adEffect(r.post);
           return `<tr><td class="col-title"><a class="link-btn" href="#/c/${encodeURIComponent(r.post.id)}">${esc(r.post.title)}</a><span class="block text-[11px] text-muted">${esc(r.post.date)}</span></td><td class="num">${r.count}</td><td>${esc(r.stages.join(', '))}</td><td class="num">${esc(yuan(r.spend))}${r.estimatedShare ? ` <span class="badge cf-mid" title="${esc(t('adr.shareHelp'))}">${esc(t('adr.estShort'))}</span>` : ''}</td><td class="num">${esc(fmt('views', r.d1Views))}</td><td class="num">${esc(fmt('views', r.d2Views))}</td><td class="num">${esc(e.betweenSpend ? yuan(e.betweenSpend) : '')}</td><td class="num">${esc(e.perView == null ? '' : yuan(e.perView))}</td></tr>`;
@@ -96,7 +96,7 @@ export async function renderAds({ isCurrent }) {
 
       <section class="card mt-3">
         <h2 class="text-[16px] font-semibold">${esc(t('ads.history'))}</h2>
-        <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th class="col-title">${esc(t('xg.title'))}</th><th>${esc(t('adr.start'))}</th><th>${esc(t('ads.stage'))}</th><th>${esc(t('ads.goal'))}</th><th class="num">${esc(t('ads.spendYuan'))}</th><th class="num">${esc(t('adr.creditCol'))}</th><th class="num">阅读量</th><th class="num">点赞+收藏</th><th class="num">新增关注</th>${costHead}<th>${esc(t('adr.orderNo'))}</th><th></th></tr></thead>
+        <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th class="col-title">${esc(t('xg.title'))}</th><th>${esc(t('adr.start'))}</th><th data-m="inline">${esc(t('ads.stage'))}</th><th data-m="inline">${esc(t('ads.goal'))}</th><th class="num" data-m="key">${esc(t('ads.spendYuan'))}</th><th class="num">${esc(t('adr.creditCol'))}</th><th class="num">阅读量</th><th class="num">点赞+收藏</th><th class="num">新增关注</th>${costHead}<th>${esc(t('adr.orderNo'))}</th><th data-m="inline"></th></tr></thead>
         <tbody>${rows
           .map(({ p, a, i }) => {
             const e = orderEfficiency(a);

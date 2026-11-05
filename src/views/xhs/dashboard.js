@@ -69,7 +69,7 @@ export async function renderDashboard({ isCurrent }) {
         <aside class="flex min-w-0 flex-col gap-4">
           <section class="card">
             <div class="flex items-center justify-between"><h3 class="text-[15px] font-semibold">${esc(t('dash.recent5'))}</h3><a class="link-btn text-[13px]" href="#/data/posts">${esc(t('dash.all'))}</a></div>
-            <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th class="col-title">${esc(t('xg.title'))}</th>${['views', 'ctr', 'exit2s', 'retain5s', 'completion'].map((k) => `<th class="num">${esc(METRIC[k].zh)}</th>`).join('')}</tr></thead>
+            <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th class="col-title">${esc(t('xg.title'))}</th>${['views', 'ctr', 'exit2s', 'retain5s', 'completion'].map((k) => `<th class="num" data-m="${k === 'views' ? 'key' : 'inline'}">${esc(METRIC[k].zh)}</th>`).join('')}</tr></thead>
             <tbody>${list
               .slice(-5)
               .reverse()
