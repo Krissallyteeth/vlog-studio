@@ -74,6 +74,18 @@ describe('saving orders', () => {
     expect(sameOrder(normalizeAd({ start: '2026-01-01T10:00', spend: 5, order: { exposure: 9 } }), normalizeAd({ start: '2026-01-01T10:00', spend: 5, order: { exposure: 9 } }))).toBe(true);
   });
 
+  it('replaces the record imported from the workbook memo instead of adding the amount twice', () => {
+    const ps = [normalizePost({ id: 'm', title: 'M1', date: '2026-03-01', ads: [{ stage: 'D+1', spend: 60, sourceText: '진행(60元)', needsReview: true }] })];
+    const memoId = ps[0].ads[0].id;
+    placeOrder(ps, orderAds({ values: { spend: 60, startedAt: '2026-03-02T09:00', orderNo: 'x1', reads: 100 }, postIds: ['m'], posts: ps }));
+    expect(ps[0].ads).toHaveLength(1);
+    expect(ps[0].ads[0]).toMatchObject({ id: memoId, orderNo: 'x1', needsReview: false, sourceText: '진행(60元)' });
+    expect(adTotals(ps).spend).toBe(60);
+    // A different amount is a different ad: kept.
+    placeOrder(ps, orderAds({ values: { spend: 30, startedAt: '2026-03-02T20:00', orderNo: 'x2' }, postIds: ['m'], posts: ps }));
+    expect(ps[0].ads).toHaveLength(2);
+  });
+
   it('remembers the screenshot title so the next order matches by title alone', () => {
     const ps = posts();
     expect(matchPost(ps, null, '完全不同的名字')).toBeNull();

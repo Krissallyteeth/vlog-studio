@@ -88,10 +88,20 @@ export function placeOrder(posts, entries) {
   for (const { postId, ad } of entries) {
     const p = posts.find((x) => x.id === postId);
     if (!p) continue;
-    p.ads.push(ad);
+    // A record typed or imported from the workbook memo ("진행(60元)") for the same D+n and amount
+    // is this order without its report: the screenshot data takes its place.
+    const memo = p.ads.findIndex((a) => isMemoOf(a, ad));
+    if (memo >= 0) p.ads[memo] = { ...ad, id: p.ads[memo].id, sourceText: p.ads[memo].sourceText, memo: p.ads[memo].memo || ad.memo };
+    else p.ads.push(ad);
     changed.add(p);
   }
   return [...changed];
+}
+
+/** A record without order number or report numbers, same D+n and same amount as the order. */
+function isMemoOf(a, ad) {
+  const noReport = !a.orderNo && !Object.values(a.order ?? {}).some((v) => typeof v === 'number');
+  return noReport && a.executed !== false && !!a.stage && a.stage === ad.stage && a.spend === ad.spend;
 }
 
 /** Remembers the title a post had in a screenshot so the next order matches by itself. */
