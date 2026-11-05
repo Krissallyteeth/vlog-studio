@@ -25,7 +25,7 @@ create policy "own projects" on public.projects
   with check (user_id = auth.uid());
 
 create or replace function public.projects_touch() returns trigger
-language plpgsql as $$
+language plpgsql set search_path = '' as $$
 begin
   new.server_updated_at := clock_timestamp();
   return new;
@@ -37,7 +37,7 @@ create trigger projects_touch before insert or update on public.projects
 
 -- Upload from a device: insert, or overwrite only when the device's copy is newer.
 create or replace function public.push_projects(rows jsonb) returns void
-language sql security invoker as $$
+language sql security invoker set search_path = '' as $$
   insert into public.projects as p (user_id, id, data, updated_at, deleted)
   select auth.uid(),
          r ->> 'id',
