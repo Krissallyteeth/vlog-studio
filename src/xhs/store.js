@@ -14,6 +14,8 @@ export function onXhsChange(fn) {
   return () => listeners.delete(fn);
 }
 const changed = () => listeners.forEach((fn) => fn());
+/** Called by the sync engine after it applied changes from another device. */
+export const notifyChanged = changed;
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 const str = (v) => (v == null ? '' : String(v));

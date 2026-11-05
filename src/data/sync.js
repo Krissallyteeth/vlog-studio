@@ -96,6 +96,9 @@ async function round() {
   }
 
   await syncMedia();
+  // 小红书 performance data (posts, income, settings) — same account, same round.
+  const { xhsRound } = await import('../xhs/sync-xhs.js');
+  await xhsRound(client, user);
 }
 
 // ── Photos (storage bucket "media", one folder per user) ──
@@ -237,6 +240,7 @@ export async function initSync() {
   if (data.session?.user) await onSignedIn(data.session.user);
 
   onLocalChange(schedulePush);
+  import('../xhs/store.js').then((m) => m.onXhsChange(schedulePush));
   setMediaRemote({ download: downloadMedia, changed: schedulePush });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') syncNow();

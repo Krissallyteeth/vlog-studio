@@ -1,3 +1,4 @@
+import { getSyncState } from '../../data/sync.js';
 import { t } from '../../i18n/index.js';
 import { esc } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
@@ -9,7 +10,7 @@ export function xhsPage({ nav, title, sub = '', back = '', actions = '', body, w
     <div class="view ${wide ? 'view-wide' : ''}">
       <header class="page-header flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0 flex-1 basis-[260px]">
-          ${back ? `<a href="${back}" class="link-btn inline-flex items-center gap-1 text-[13px]">${icon('chevronLeft', 'size-4')}${esc(t('common.back'))}</a>` : `<p class="eyebrow">小红书 · ${esc(t('xhs.deviceOnly'))}</p>`}
+          ${back ? `<a href="${back}" class="link-btn inline-flex items-center gap-1 text-[13px]">${icon('chevronLeft', 'size-4')}${esc(t('common.back'))}</a>` : `<p class="eyebrow">小红书 · ${esc(getSyncState().email ? t('xhs.synced') : t('xhs.deviceOnly'))}</p>`}
           <h1 class="page-title mt-1">${esc(title)}</h1>
           ${sub ? `<p class="mt-1 text-[14px] text-muted">${esc(sub)}</p>` : ''}
         </div>

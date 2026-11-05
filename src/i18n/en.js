@@ -594,7 +594,7 @@ export default {
   "nav.data": "Data",
   "nav.more": "More",
 
-  "xhs.deviceOnly": "Saved on this device only",
+  "xhs.deviceOnly": "This device only · sign in to sync",
   "xhs.relativeNote": "Colours compare against your own past records (the fixed median). They do not mean the post is strong on the platform as a whole.",
 
   "imp.title": "Import Excel",
@@ -816,7 +816,7 @@ export default {
   "inc.count": "Sponsorship records",
   "inc.inKind": "In-kind value total",
   "inc.cash": "Cash income total",
-  "inc.unitNote": "The original workbook uses units of 10,000 KRW (만 원). The app stores whole won (89 → 890,000 KRW). In-kind value and cash income are kept separate.",
+  "inc.unitNote": "The original workbook uses units of 10,000 KRW (만 원). The app stores whole won (5 → 50,000 KRW). In-kind value and cash income are kept separate.",
   "inc.add": "Add record",
   "inc.orig": "Original Excel: {v} × 10,000 KRW",
 
@@ -1002,7 +1002,7 @@ export default {
 
   "exp.sub": "Keep performance data in a file and move it between devices.",
   "exp.localTitle": "Performance data is stored only in this browser.",
-  "exp.localBody": "Unlike planning data, performance, ad and income data do not sync between devices. Your computer and phone keep separate copies; use the backup file below to move data.",
+  "exp.localBody": "Without signing in, performance data is stored only on this device. Sign in under Backup & settings and it syncs across devices like planning data. To move it without signing in, use the backup file below.",
   "exp.now": "Backup · export",
   "exp.counts": "{posts} posts · {income} income records · {shots} screenshots ({mb} MB)",
   "exp.json": "Save JSON backup",
@@ -1152,4 +1152,9 @@ export default {
   "oad.stageNeedStart": "Enter the ad start time and it is calculated automatically (e.g. 2026-11-04 10:30).",
 
   "ads.stageAutoPh": "Leave empty to calculate from start time",
+
+  "xhs.synced": "Synced with signed-in devices",
+
+  "exp.syncTitle": "Performance data syncs across your signed-in devices.",
+  "exp.syncBody": "Posts, ads, income and baselines stay the same on your computer and phone. Original screenshot images stay on each device because of their size. Keep an occasional backup file too.",
 };

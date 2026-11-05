@@ -594,7 +594,7 @@ export default {
   "nav.data": "数据",
   "nav.more": "更多",
 
-  "xhs.deviceOnly": "仅保存在本设备",
+  "xhs.deviceOnly": "仅本设备 · 登录后同步",
   "xhs.relativeNote": "颜色是与你自己过去记录（固定中位数）的相对比较，不代表在整个平台上表现优秀。",
 
   "imp.title": "导入 Excel",
@@ -816,7 +816,7 @@ export default {
   "inc.count": "合作·收益记录",
   "inc.inKind": "实物赞助价值合计",
   "inc.cash": "现金收益合计",
-  "inc.unitNote": "原 Excel 的单位是“万韩元”。应用中按韩元保存（89 → 890,000 韩元）。实物价值与现金收益分开计算。",
+  "inc.unitNote": "原 Excel 的单位是“万韩元”。应用中按韩元保存（5 → 50,000 韩元）。实物价值与现金收益分开计算。",
   "inc.add": "添加记录",
   "inc.orig": "原 Excel：{v} 万韩元",
 
@@ -1002,7 +1002,7 @@ export default {
 
   "exp.sub": "把表现数据保存成文件，并在设备之间转移。",
   "exp.localTitle": "表现数据只保存在本设备的浏览器里。",
-  "exp.localBody": "与策划数据不同，表现、推广和收益数据不会在设备间自动同步。电脑和手机分别保存，转移时请使用下面的备份文件。",
+  "exp.localBody": "未登录时，表现数据只保存在本设备。在“备份·设置”中登录后，会像策划数据一样在设备间自动同步。不登录也想转移时，请使用下面的备份文件。",
   "exp.now": "备份 · 导出",
   "exp.counts": "笔记 {posts} 篇 · 收益记录 {income} 条 · 截图 {shots} 张（{mb}MB）",
   "exp.json": "保存 JSON 备份",
@@ -1152,4 +1152,9 @@ export default {
   "oad.stageNeedStart": "填写推广开始时间后会自动计算（例：2026-11-04 10:30）。",
 
   "ads.stageAutoPh": "留空则按开始时间自动计算",
+
+  "xhs.synced": "与已登录设备同步",
+
+  "exp.syncTitle": "表现数据会在已登录的设备间同步。",
+  "exp.syncBody": "笔记、推广、收益和基准线会在同一账号的电脑和手机上自动保持一致。原始截图图片因体积原因只保存在各自设备上。也请不时保存备份文件。",
 };

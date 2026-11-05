@@ -7,6 +7,7 @@ import { buildWorkbook, postsCsv } from '../../xhs/excel-export.js';
 import { activeBaseline, deleteAll, exportAll, getDocs, getSettings, importAll, listIncome, listPosts } from '../../xhs/store.js';
 import { getAll } from '../../xhs/db.js';
 import { xhsPage } from './shell.js';
+import { getSyncState } from '../../data/sync.js';
 
 async function gather() {
   const [posts, income, baseline, settings, docs] = await Promise.all([listPosts(), listIncome(), activeBaseline(), getSettings(), getDocs()]);
@@ -61,7 +62,7 @@ export async function renderBackup({ isCurrent }) {
     title: t('more.xhsBackup'),
     sub: t('exp.sub'),
     body: `
-      <section class="notice notice-strong">${icon('info', 'size-5 mt-0.5')}<div class="text-[14px] leading-relaxed"><b>${esc(t('exp.localTitle'))}</b><p class="mt-1 text-muted">${esc(t('exp.localBody'))}</p></div></section>
+      <section class="notice notice-strong">${icon('info', 'size-5 mt-0.5')}<div class="text-[14px] leading-relaxed"><b>${esc(getSyncState().email ? t('exp.syncTitle') : t('exp.localTitle'))}</b><p class="mt-1 text-muted">${esc(getSyncState().email ? t('exp.syncBody') : t('exp.localBody'))}</p></div></section>
       <section class="card mt-3"><h2 class="text-[16px] font-semibold">${esc(t('exp.now'))}</h2>
         <p class="mt-1 text-[14px] text-muted">${esc(t('exp.counts', { posts: posts.length, income: income.length, shots: shots.length, mb: (shotBytes / 1048576).toFixed(1) }))}</p>
         <div class="mt-3 grid gap-2 sm:grid-cols-3">
