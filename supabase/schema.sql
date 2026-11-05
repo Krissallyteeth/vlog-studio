@@ -27,8 +27,8 @@ alter table public.projects enable row level security;
 drop policy if exists "own projects" on public.projects;
 create policy "own projects" on public.projects
   for all to authenticated
-  using (user_id = auth.uid())
-  with check (user_id = auth.uid());
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
 
 create or replace function public.projects_touch() returns trigger
 language plpgsql set search_path = '' as $$
