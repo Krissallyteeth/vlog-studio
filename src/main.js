@@ -40,3 +40,5 @@ if (authRedirect) {
   startRouter();
 }
 setupPWA();
+// Drop photos nothing refers to any more (the sync engine does this too while signed in).
+setTimeout(() => import('./data/media.js').then((m) => m.collectUnusedMedia()).catch(() => {}), 5000);

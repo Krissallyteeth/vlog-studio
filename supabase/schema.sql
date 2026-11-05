@@ -77,3 +77,26 @@ end $$;
 
 revoke all on function public.push_projects(jsonb) from public, anon;
 grant execute on function public.push_projects(jsonb) to authenticated;
+
+-- ── Shot-list photos ────────────────────────────────────────────────
+-- Private bucket; files live at <user id>/<media id>. The app shrinks photos to ~1024 px WebP/JPEG
+-- (usually 40–120 KB) before upload, so 1 MB per file is a generous ceiling.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('media', 'media', false, 1048576, array['image/webp', 'image/jpeg'])
+on conflict (id) do update
+  set public = false, file_size_limit = 1048576, allowed_mime_types = array['image/webp', 'image/jpeg'];
+
+drop policy if exists "media: read own" on storage.objects;
+drop policy if exists "media: add own" on storage.objects;
+drop policy if exists "media: update own" on storage.objects;
+drop policy if exists "media: delete own" on storage.objects;
+
+create policy "media: read own" on storage.objects for select to authenticated
+  using (bucket_id = 'media' and (storage.foldername(name))[1] = (select auth.uid())::text);
+create policy "media: add own" on storage.objects for insert to authenticated
+  with check (bucket_id = 'media' and (storage.foldername(name))[1] = (select auth.uid())::text);
+create policy "media: update own" on storage.objects for update to authenticated
+  using (bucket_id = 'media' and (storage.foldername(name))[1] = (select auth.uid())::text)
+  with check (bucket_id = 'media' and (storage.foldername(name))[1] = (select auth.uid())::text);
+create policy "media: delete own" on storage.objects for delete to authenticated
+  using (bucket_id = 'media' and (storage.foldername(name))[1] = (select auth.uid())::text);

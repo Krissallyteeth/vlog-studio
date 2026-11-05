@@ -568,4 +568,23 @@ export default {
   "md.aiTip2": "最好补充一句：不要添加没有真实经历过的情绪或事件，只使用记录里的内容。",
 
   "project.sourceMissing": "找不到原项目。",
+
+  "photos.view": "查看照片",
+  "photos.addToShot": "给这个镜头添加照片",
+
+  "shots.changeType": "更改镜头类型",
+
+  "photos.dropHere": "松开即可添加照片",
+  "photos.dropHint": "也可以把照片拖到这里或直接粘贴。",
+  "photos.add": "添加照片",
+  "photos.hint": "每张照片都会成为上方所选类型的镜头。类型可以在镜头上修改。",
+  "photos.adding": "正在添加照片…",
+  "photos.max": "每个镜头最多 {n} 张照片。",
+  "photos.failed": "有 {n} 张照片无法读取，请转换成 JPG 或 PNG 后再试。",
+  "photos.added": "已添加 {n} 张照片。",
+  "photos.album": "从相册选择",
+  "photos.camera": "拍照",
+  "photos.missing": "无法加载照片，请检查网络或登录状态。",
+  "photos.remove": "移除照片",
+  "photos.removed": "已移除照片。",
 };

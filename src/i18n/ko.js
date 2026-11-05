@@ -568,4 +568,23 @@ export default {
   "md.aiTip2": "실제로 경험하지 않은 감정이나 사건은 추가하지 말고, 기록된 내용만 사용해 달라고 덧붙이면 좋아요.",
 
   "project.sourceMissing": "원본 프로젝트를 찾을 수 없어요.",
+
+  "photos.view": "사진 보기",
+  "photos.addToShot": "이 항목에 사진 추가",
+
+  "shots.changeType": "촬영 유형 바꾸기",
+
+  "photos.dropHere": "여기에 놓으면 사진이 추가돼요",
+  "photos.dropHint": "사진을 여기로 끌어다 놓거나 붙여 넣어도 돼요.",
+  "photos.add": "사진 추가",
+  "photos.hint": "사진을 넣으면 위에서 고른 유형의 촬영 항목이 돼요. 유형은 항목에서 바꿀 수 있어요.",
+  "photos.adding": "사진을 넣는 중…",
+  "photos.max": "한 항목에 사진은 {n}장까지예요.",
+  "photos.failed": "사진 {n}장은 읽지 못했어요. JPG나 PNG로 바꿔서 넣어 보세요.",
+  "photos.added": "사진 {n}장을 넣었어요.",
+  "photos.album": "앨범에서 고르기",
+  "photos.camera": "사진 찍기",
+  "photos.missing": "사진을 불러올 수 없어요. 인터넷 연결이나 로그인을 확인해 주세요.",
+  "photos.remove": "사진 빼기",
+  "photos.removed": "사진을 뺐어요.",
 };

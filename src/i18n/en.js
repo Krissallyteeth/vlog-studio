@@ -568,4 +568,23 @@ export default {
   "md.aiTip2": "It helps to add: don't invent feelings or events that didn't happen; use only what's written here.",
 
   "project.sourceMissing": "Couldn't find the original project.",
+
+  "photos.view": "View photo",
+  "photos.addToShot": "Add photo to this shot",
+
+  "shots.changeType": "Change shot type",
+
+  "photos.dropHere": "Drop to add photos",
+  "photos.dropHint": "You can also drag photos here or paste them.",
+  "photos.add": "Add photos",
+  "photos.hint": "Each photo becomes a shot of the type chosen above. You can change the type on the shot.",
+  "photos.adding": "Adding photos…",
+  "photos.max": "Up to {n} photos per shot.",
+  "photos.failed": "Couldn't read {n} photo(s). Try converting them to JPG or PNG.",
+  "photos.added": "Added {n} photo(s).",
+  "photos.album": "Choose from album",
+  "photos.camera": "Take a photo",
+  "photos.missing": "Couldn't load the photo. Check your connection or sign-in.",
+  "photos.remove": "Remove photo",
+  "photos.removed": "Photo removed.",
 };

@@ -120,6 +120,12 @@ export const ackOutbox = (entries) =>
     });
   });
 
+// ── Photos ── { id, blob, type, createdAt, uploaded, deleted }. Blobs never go into project JSON.
+export const getMedia = (id) => run('media', 'readonly', (s) => s.get(id));
+export const getAllMedia = () => run('media', 'readonly', (s) => s.getAll());
+export const putMedia = (m) => run('media', 'readwrite', (s) => void s.put(m));
+export const deleteMediaRecord = (id) => run('media', 'readwrite', (s) => void s.delete(id));
+
 export async function getMeta(key) {
   const row = await run('meta', 'readonly', (s) => s.get(key));
   return row?.value;

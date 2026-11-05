@@ -1,6 +1,7 @@
 import { SUPABASE_ANON_KEY, SUPABASE_URL, syncConfigured } from '../config.js';
 import { buildPush, planPull } from '../lib/syncMerge.js';
-import { ackOutbox, applyRemote, getAllProjects, getMeta, getOutbox, getProjectRecord, putProject, queueAll, setMeta } from './db.js';
+import { ackOutbox, applyRemote, deleteMediaRecord, getAllMedia, getAllProjects, getMeta, getOutbox, getProjectRecord, putMedia, putProject, queueAll, setMeta } from './db.js';
+import { collectUnusedMedia, setMediaRemote } from './media.js';
 import { onLocalChange } from './repo.js';
 import { t } from '../i18n/index.js';
 
@@ -93,6 +94,34 @@ async function round() {
     await setMeta(cursorKey, rows.at(-1).server_updated_at);
     if (changedIds.length) remoteListeners.forEach((fn) => fn(changedIds));
   }
+
+  await syncMedia();
+}
+
+// ── Photos (storage bucket "media", one folder per user) ──
+const mediaPath = (id) => `${user.id}/${id}`;
+
+async function syncMedia() {
+  await collectUnusedMedia();
+  for (const m of await getAllMedia()) {
+    if (m.deleted) {
+      const { error } = await client.storage.from('media').remove([mediaPath(m.id)]);
+      if (error) throw error;
+      await deleteMediaRecord(m.id);
+    } else if (!m.uploaded && m.blob) {
+      const { error } = await client.storage.from('media').upload(mediaPath(m.id), m.blob, { contentType: m.type, upsert: true });
+      if (error) throw error;
+      // Re-read: the record may have changed while uploading.
+      const cur = (await getAllMedia()).find((x) => x.id === m.id);
+      if (cur && !cur.deleted) await putMedia({ ...cur, uploaded: true });
+    }
+  }
+}
+
+async function downloadMedia(id) {
+  if (!user) return null;
+  const { data, error } = await client.storage.from('media').download(mediaPath(id));
+  return error ? null : data;
 }
 
 export function syncNow() {
@@ -137,6 +166,8 @@ async function onSignedIn(nextUser) {
   // First sign-in on this device (or a different account): upload everything that is here.
   if ((await getMeta('sync:userId')) !== user.id) {
     await queueAll();
+    // Photos uploaded under another account must be uploaded again into this one.
+    for (const m of await getAllMedia()) if (m.uploaded && m.blob) await putMedia({ ...m, uploaded: false });
     await setMeta('sync:userId', user.id);
   }
   syncNow();
@@ -206,6 +237,7 @@ export async function initSync() {
   if (data.session?.user) await onSignedIn(data.session.user);
 
   onLocalChange(schedulePush);
+  setMediaRemote({ download: downloadMedia, changed: schedulePush });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') syncNow();
     else if (user) syncNow(); // upload before the app goes to the background

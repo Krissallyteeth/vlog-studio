@@ -17,6 +17,7 @@ const seconds = (v) => {
 };
 const time = (v) => (typeof v === 'string' && /^\d{2}:\d{2}$/.test(v) ? v : '');
 const MAX_CUSTOM_TYPES = 10;
+export const MAX_PHOTOS = 12; // per shot
 
 /** Built-in type ids, in display order. Accepts the v1 single `type` string too ("other" had no meaning, so it is dropped). */
 function normalizeTypes(raw) {
@@ -65,6 +66,8 @@ export function normalizeShot(raw = {}) {
     desc: str(s.desc),
     done: s.done === true,
     memo: str(s.memo),
+    // Ids of compressed photos in the "media" store (and the synced storage bucket).
+    photos: arr(s.photos).filter((x) => typeof x === 'string' && /^[\w-]{8,64}$/.test(x)).slice(0, MAX_PHOTOS),
   };
 }
 
