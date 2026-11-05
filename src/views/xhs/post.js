@@ -3,11 +3,12 @@ import { t } from '../../i18n/index.js';
 import { navigate } from '../../router.js';
 import { $, confirmDialog, esc, openSheet, toast } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { adEffect, analysePost } from '../../xhs/analysis.js';
+import { adEffect, analysePost, orderEfficiency } from '../../xhs/analysis.js';
 import { fmt, signedPct, yuan } from '../../xhs/format.js';
 import { METRICS, METRIC, VALIDITY } from '../../xhs/metrics.js';
 import { judge, ordered, stage } from '../../xhs/stats.js';
-import { activeBaseline, deletePost, getPost, getSettings, listPosts, normalizeAd, onXhsChange, savePosts } from '../../xhs/store.js';
+import { activeBaseline, deletePost, getPost, getSettings, listPosts, normalizeAd, normalizeStage, onXhsChange, savePosts } from '../../xhs/store.js';
+import { AD_METRICS } from '../../xhs/ocr-ad-parse.js';
 import { relativeNote, xhsPage } from './shell.js';
 
 const CF = { good: 'cf-good', mid: 'cf-mid', bad: 'cf-bad' };
@@ -92,9 +93,11 @@ export async function renderPost([id], { isCurrent }) {
       <div class="flex items-start justify-between gap-2"><div><b>${esc(a.stage || '–')}</b> · ${esc(a.executed ? t('ads.executed') : t('ads.notExecuted'))} · ${esc(yuan(a.spend) || '–')}${a.credit ? ` + ${esc(t('ads.credit'))} ${esc(yuan(a.credit))}` : ''}${a.needsReview ? ` <span class="badge cf-mid">${esc(t('ads.review'))}</span>` : ''}</div>
       <button type="button" class="link-btn" data-edit-ad="${i}">${esc(t('ads.edit'))}</button></div>
       <p class="mt-1 text-muted">${esc([a.goal, a.hours ? t('ads.hoursN', { n: a.hours }) : '', a.start, a.result, a.memo].filter(Boolean).join(' · '))}</p>
-      ${a.sourceText ? `<p class="mt-1 text-[12px] text-muted">${esc(t('ads.from', { text: a.sourceText }))}</p>` : ''}</li>`).join('')}</ul>` : `<p class="text-[14px] text-muted">${esc(t('ads.none'))}</p>`}
-    <button type="button" class="btn btn-secondary btn-sm mt-3" data-edit-ad="new">${icon('plus', 'size-4')}${esc(t('ads.add'))}</button>
-    ${eff.spend ? `<div class="mt-3 kpi-grid"><div class="kpi"><p class="kpi-label">${esc(t('ads.spend'))}</p><p class="kpi-value">${esc(yuan(eff.spend))}</p></div><div class="kpi"><p class="kpi-label">${esc(t('ads.viewsDelta'))}</p><p class="kpi-value">${eff.viewsDelta ?? '–'}</p></div><div class="kpi"><p class="kpi-label">${esc(t('ads.perView'))}</p><p class="kpi-value">${eff.perView == null ? '–' : yuan(eff.perView)}</p></div><div class="kpi"><p class="kpi-label">${esc(t('ads.perFollower'))}</p><p class="kpi-value">${eff.perFollower == null ? '–' : yuan(eff.perFollower)}</p></div></div>
+      ${a.sourceText ? `<p class="mt-1 text-[12px] text-muted">${esc(t('ads.from', { text: a.sourceText }))}</p>` : ''}
+      ${orderHtml(a)}</li>`).join('')}</ul>` : `<p class="text-[14px] text-muted">${esc(t('ads.none'))}</p>`}
+    <div class="mt-3 flex flex-wrap gap-2"><button type="button" class="btn btn-secondary btn-sm" data-edit-ad="new">${icon('plus', 'size-4')}${esc(t('ads.add'))}</button><a class="btn btn-secondary btn-sm" href="#/ocr-ad/${encodeURIComponent(post.id)}">${icon('scan', 'size-4')}${esc(t('oad.fromShots'))}</a></div>
+    ${eff.unknownStage ? `<p class="mt-2 text-[12px] cf-mid rounded-[8px] px-2 py-1">${esc(t('ads.unknownStage', { n: eff.unknownStage }))}</p>` : ''}
+    ${eff.spend ? `<div class="mt-3 kpi-grid"><div class="kpi"><p class="kpi-label">${esc(t('ads.spend'))}</p><p class="kpi-value">${esc(yuan(eff.spend))}</p></div><div class="kpi"><p class="kpi-label">${esc(t('ads.betweenSpend'))}</p><p class="kpi-value">${esc(yuan(eff.betweenSpend) || '0元')}</p></div><div class="kpi"><p class="kpi-label">${esc(t('ads.viewsDelta'))}</p><p class="kpi-value">${eff.viewsDelta ?? '–'}</p></div><div class="kpi"><p class="kpi-label">${esc(t('ads.perView'))}</p><p class="kpi-value">${eff.perView == null ? '–' : yuan(eff.perView)}</p></div><div class="kpi"><p class="kpi-label">${esc(t('ads.perFollower'))}</p><p class="kpi-value">${eff.perFollower == null ? '–' : yuan(eff.perFollower)}</p></div></div>
       <p class="mt-2 text-[12px] text-muted">${esc(t('ads.effectNote'))}</p>` : ''}`;
 
   const root = xhsPage({
@@ -172,7 +175,7 @@ export function adSheet(ad) {
     title: t('ads.formTitle'),
     body: `<form class="flex max-h-[70vh] flex-col gap-3 overflow-y-auto" id="ad-form">
       <div class="grid grid-cols-2 gap-3">
-        <label class="field"><span class="field-label">${esc(t('ads.stage'))}</span><select class="input" name="stage">${['', 'D', 'D+1', 'D+2', 'D+3+'].map((s) => `<option ${s === ad.stage ? 'selected' : ''}>${s}</option>`).join('')}</select></label>
+        <label class="field"><span class="field-label">${esc(t('ads.stage'))}</span><input class="input" name="stage" list="ad-stages" value="${esc(ad.stage)}" placeholder="D+1" /><datalist id="ad-stages">${['D', 'D+1', 'D+2', 'D+3', 'D+4', 'D+5', 'D+6', 'D+7'].map((x) => `<option>${x}</option>`).join('')}</datalist></label>
         <label class="field"><span class="field-label">${esc(t('ads.executedQ'))}</span><select class="input" name="executed"><option value="1" ${ad.executed ? 'selected' : ''}>${esc(t('ads.executed'))}</option><option value="0" ${ad.executed ? '' : 'selected'}>${esc(t('ads.notExecuted'))}</option></select></label>
         <label class="field"><span class="field-label">${esc(t('ads.start'))}</span><input class="input" type="datetime-local" name="start" value="${esc(ad.start)}" /></label>
         <label class="field"><span class="field-label">${esc(t('ads.end'))}</span><input class="input" type="datetime-local" name="end" value="${esc(ad.end)}" /></label>
@@ -181,9 +184,13 @@ export function adSheet(ad) {
         <label class="field"><span class="field-label">${esc(t('ads.goal'))}</span><input class="input" name="goal" list="ad-goals" value="${esc(ad.goal)}" /><datalist id="ad-goals"><option>关注</option><option>阅读</option><option>点赞收藏</option></datalist></label>
         <label class="field"><span class="field-label">${esc(t('ads.spendYuan'))}</span><input class="input" inputmode="decimal" name="spend" value="${ad.spend ?? ''}" /></label>
         <label class="field"><span class="field-label">${esc(t('ads.creditYuan'))}</span><input class="input" inputmode="decimal" name="credit" value="${ad.credit ?? ''}" /></label>
+        <label class="field"><span class="field-label">${esc(t('ads.budget'))}</span><input class="input" inputmode="decimal" name="budget" value="${ad.budget ?? ''}" /></label>
         <label class="field"><span class="field-label">${esc(t('ads.expected'))}</span><input class="input" inputmode="numeric" name="expectedFollowers" value="${ad.expectedFollowers ?? ''}" /></label>
         <label class="field"><span class="field-label">${esc(t('ads.actual'))}</span><input class="input" inputmode="numeric" name="actualFollowers" value="${ad.actualFollowers ?? ''}" /></label>
       </div>
+      <fieldset class="rounded-[12px] border border-line p-3"><legend class="px-1 text-[13px] font-semibold">${esc(t('ads.orderReport'))}</legend>
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">${AD_METRICS.map(([k, names]) => `<label class="field"><span class="field-label">${esc(names[0])}</span><input class="input" inputmode="numeric" name="order.${k}" value="${ad.order?.[k] ?? ''}" /></label>`).join('')}</div>
+      </fieldset>
       <label class="field"><span class="field-label">${esc(t('ads.result'))}</span><input class="input" name="result" value="${esc(ad.result)}" /></label>
       <label class="field"><span class="field-label">${esc(t('ads.memo'))}</span><textarea class="textarea" rows="2" name="memo">${esc(ad.memo)}</textarea></label>
       ${ad.sourceText ? `<p class="text-[12px] text-muted">${esc(t('ads.from', { text: ad.sourceText }))}</p>` : ''}
@@ -199,8 +206,22 @@ export function adSheet(ad) {
         e.preventDefault();
         const f = Object.fromEntries(new FormData(form));
         const n = (v) => (String(v).trim() === '' ? null : Number(v));
-        close(normalizeAd({ ...ad, ...f, executed: f.executed === '1', hours: n(f.hours) ?? n(f.hoursPreset), spend: n(f.spend), credit: n(f.credit), expectedFollowers: n(f.expectedFollowers), actualFollowers: n(f.actualFollowers), needsReview: false }));
+        const order = Object.fromEntries(AD_METRICS.map(([k]) => [k, n(f[`order.${k}`] ?? '')]));
+        close(normalizeAd({ ...ad, ...f, stage: normalizeStage(f.stage), executed: f.executed === '1', hours: n(f.hours) ?? n(f.hoursPreset), spend: n(f.spend), budget: n(f.budget), credit: n(f.credit), expectedFollowers: n(f.expectedFollowers), actualFollowers: n(f.actualFollowers), order, needsReview: false }));
       });
     },
   });
+}
+
+/** The 薯条 report numbers of an ad, its cost per result, and the audience summary. */
+export function orderHtml(a) {
+  const e = orderEfficiency(a);
+  if (!e.hasReport) return '';
+  const o = a.order;
+  const cell = (label, v) => `<div><p class="text-[11px] text-muted">${esc(label)}</p><p class="font-semibold tabular-nums">${v ?? '–'}</p></div>`;
+  const pct = (v) => (typeof v === 'number' ? `${(v * 100).toFixed(1)}%` : '?');
+  const aud = a.audience;
+  return `<div class="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-8">${AD_METRICS.map(([k, names]) => cell(names[0], o[k])).join('')}</div>
+    <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px]"><span>${esc(t('ads.perRead'))} <b>${esc(e.perRead == null ? '–' : yuan(e.perRead))}</b></span><span>${esc(t('ads.perLikeFav'))} <b>${esc(e.perLikeFav == null ? '–' : yuan(e.perLikeFav))}</b></span><span>${esc(t('ads.perFollow'))} <b>${esc(e.perFollow == null ? '–' : yuan(e.perFollow))}</b></span>${a.goalResult != null ? `<span>${esc(t('ads.goalResult', { goal: a.goal || '', v: a.goalResult, lo: a.estimate?.[0] ?? '?', hi: a.estimate?.[1] ?? '?' }))}</span>` : ''}${a.beatPct != null ? `<span>${esc(t('ads.beat', { v: Math.round(a.beatPct * 100) }))}</span>` : ''}${a.coupon ? `<span>${esc(t('ads.coupon', { a: a.coupon.threshold, b: a.coupon.bonus, until: a.coupon.expires || '' }))}</span>` : ''}</div>
+    ${aud?.gender?.male != null ? `<p class="mt-1 text-[12px] text-muted">${esc(t('ads.audience'))}: ♂ ${pct(aud.gender.male)} · ♀ ${pct(aud.gender.female)}${aud.age ? ` · ${Object.entries(aud.age).map(([k, v]) => `${k} ${pct(v)}`).join(', ')}` : ''}</p>` : ''}`;
 }

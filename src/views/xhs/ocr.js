@@ -45,6 +45,7 @@ export async function renderOcr([postId], { isCurrent }) {
     title: t('ocr.title'),
     sub: t('ocr.sub'),
     body: `
+      <div class="segmented segmented-2 mb-3"><a class="seg is-active" href="#/ocr">${esc(t('oad.tabStats'))}</a><a class="seg" href="#/ocr-ad${postId ? `/${encodeURIComponent(postId)}` : ''}">${esc(t('oad.tabAd'))}</a></div>
       <section class="card">
         <div class="grid gap-3 sm:grid-cols-[2fr_1fr]">
           <label class="field"><span class="field-label">${esc(t('ocr.post'))}</span>

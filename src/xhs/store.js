@@ -26,21 +26,47 @@ function normStage(raw) {
   return out;
 }
 
+const ORDER_KEYS = ['exposure', 'reads', 'likes', 'favorites', 'comments', 'follows', 'profileViews', 'dmOpens'];
+
+/** "D" = publishing day, "D+1", "D+2", … any day after; "" = unknown. */
+export function normalizeStage(v) {
+  const s = String(v ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  if (s === 'D' || s === 'D+0') return 'D';
+  const m = /^D\+(\d{1,3})\+?$/.exec(s);
+  return m ? `D+${Number(m[1])}` : '';
+}
+/** Days after publishing for a stage ("D" → 0, "D+3" → 3, unknown → null). */
+export const stageDay = (stage) => (stage === 'D' ? 0 : /^D\+(\d+)$/.test(stage) ? Number(stage.slice(2)) : null);
+
 export function normalizeAd(raw = {}) {
+  const order = raw.order && typeof raw.order === 'object' ? raw.order : {};
+  const coupon = raw.coupon && typeof raw.coupon === 'object' ? raw.coupon : null;
   return {
     id: raw.id || uid(),
-    stage: str(raw.stage), // 'D' | 'D+1' | 'D+2' | ''
+    stage: normalizeStage(raw.stage),
     executed: raw.executed !== false,
     start: str(raw.start), // 'YYYY-MM-DDTHH:MM'
     end: str(raw.end),
     hours: num(raw.hours),
-    goal: str(raw.goal), // 关注 | 阅读 | 点赞收藏 | free text
-    spend: num(raw.spend), // 元, real money
-    credit: num(raw.credit), // 元, free/bonus credit
+    goal: str(raw.goal), // 关注 | 阅读 | 点赞收藏量 | free text
+    spend: num(raw.spend), // 元, real money actually used
+    budget: num(raw.budget), // 元, order budget
+    credit: num(raw.credit), // 元, free/bonus credit used for this order
     expectedFollowers: num(raw.expectedFollowers),
     actualFollowers: num(raw.actualFollowers),
     result: str(raw.result),
     memo: str(raw.memo),
+    // From the 薯条 order report (screenshot OCR or typed): what the paid traffic itself produced.
+    order: Object.fromEntries(ORDER_KEYS.map((k) => [k, num(order[k])])),
+    goalResult: num(raw.goalResult),
+    estimate: Array.isArray(raw.estimate) && raw.estimate.length === 2 ? raw.estimate.map(num) : null,
+    beatPct: num(raw.beatPct),
+    status: str(raw.status),
+    coupon: coupon ? { threshold: num(coupon.threshold), bonus: num(coupon.bonus), expires: str(coupon.expires) } : null,
+    audience: raw.audience && typeof raw.audience === 'object' ? raw.audience : null,
+    noteTitle: str(raw.noteTitle),
+    notePublishedAt: str(raw.notePublishedAt),
+    screenshots: Array.isArray(raw.screenshots) ? raw.screenshots.filter((x) => typeof x === 'string') : [],
     sourceText: str(raw.sourceText), // original Excel note it was read from
     needsReview: raw.needsReview === true,
   };

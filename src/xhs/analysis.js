@@ -82,21 +82,48 @@ export function analysePost(post, posts, baseline) {
   return { rows, better, worse, advice, caveats, reserved, adOpinion, prev, recentCount: recent.length };
 }
 
-/** Ad cost view. The change from D+1 to D+2 mixes natural and paid growth, so it is labelled "change during the ad", never "ad effect". */
+/**
+ * Ad cost view.
+ *  - D+1→D+2 change: only ads run on D+1 (between the two snapshots) are set against it, so later
+ *    ads (D+3, D+5 …) never inflate or distort it. It mixes natural and paid growth — "change
+ *    during the ad", never "ad effect".
+ *  - Per order: when the 薯条 report numbers are recorded, cost per read / follower / like+save
+ *    comes straight from what the paid traffic produced.
+ */
 export function adEffect(post) {
   const d1 = stage(post, 'd1');
   const d2 = stage(post, 'd2');
-  const spend = (post.ads ?? []).filter((a) => a.executed !== false).reduce((s, a) => s + (a.spend ?? 0), 0);
-  const credit = (post.ads ?? []).filter((a) => a.executed !== false).reduce((s, a) => s + (a.credit ?? 0), 0);
+  const ran = (post.ads ?? []).filter((a) => a.executed !== false);
+  const sum = (list, k) => list.reduce((s, a) => s + (a[k] ?? 0), 0);
+  const between = ran.filter((a) => a.stage === 'D+1');
   const delta = (k) => (isNum(d1[k]) && isNum(d2[k]) ? d2[k] - d1[k] : null);
   const views = delta('views');
   const followers = delta('newFollowers');
+  const betweenSpend = sum(between, 'spend');
   return {
-    spend,
-    credit,
+    spend: sum(ran, 'spend'),
+    credit: sum(ran, 'credit'),
+    betweenSpend,
     viewsDelta: views,
     followersDelta: followers,
-    perView: spend && isNum(views) && views > 0 ? spend / views : null,
-    perFollower: spend && isNum(followers) && followers > 0 ? spend / followers : null,
+    perView: betweenSpend && isNum(views) && views > 0 ? betweenSpend / views : null,
+    perFollower: betweenSpend && isNum(followers) && followers > 0 ? betweenSpend / followers : null,
+    unknownStage: ran.filter((a) => !a.stage).length,
+  };
+}
+
+/** Efficiency of one 薯条 order from its own report (null when the report numbers are missing). */
+export function orderEfficiency(ad) {
+  const o = ad.order ?? {};
+  const per = (n) => (isNum(ad.spend) && ad.spend > 0 && isNum(n) && n > 0 ? ad.spend / n : null);
+  const likeFav = isNum(o.likes) || isNum(o.favorites) ? (o.likes ?? 0) + (o.favorites ?? 0) : null;
+  return {
+    perRead: per(o.reads),
+    perFollow: per(o.follows),
+    perLikeFav: per(likeFav),
+    perProfile: per(o.profileViews),
+    likeFav,
+    engagement: isNum(o.exposure) && o.exposure > 0 && isNum(likeFav) ? likeFav / o.exposure : null,
+    hasReport: Object.values(o).some(isNum),
   };
 }
