@@ -142,6 +142,7 @@ export async function renderDetail([id, tab, sub], { isCurrent, previous }) {
       title: project.name,
       actions: [
         { id: 'info', label: t('form.editTitle'), icon: 'edit', hint: t('menu.infoHint') },
+        { id: 'xhs', label: t('menu.xhs'), icon: 'chart', hint: t('menu.xhsHint') },
         { id: 'status', label: t('detail.changeStatus'), icon: 'flag' },
         { id: 'md', label: t('menu.md'), icon: 'download', hint: t('menu.mdHint') },
         { id: 'copy', label: t('menu.copy'), icon: 'doc', hint: t('menu.copyHint') },
@@ -152,6 +153,13 @@ export async function renderDetail([id, tab, sub], { isCurrent, previous }) {
     if (!choice) return;
     await flushAll().catch(() => {});
     if (choice === 'info') navigate(`/p/${encodeURIComponent(id)}/info`);
+    if (choice === 'xhs') {
+      const { listPosts } = await import('../xhs/store.js');
+      const linked = (await listPosts()).filter((p) => p.projectId === id);
+      if (linked.length === 1) navigate(`/c/${encodeURIComponent(linked[0].id)}`);
+      else if (linked.length > 1) navigate('/contents');
+      else toast(t('menu.xhsNone'));
+    }
     if (choice === 'status') changeStatus();
     if (choice === 'md') {
       downloadFile(`${safeFileName(project.name)}_${project.startDate}.md`, projectToMarkdown(project), 'text/markdown');

@@ -1,0 +1,240 @@
+import { uid } from '../lib/ids.js';
+import { DEFAULT_CONTENT_TYPES, INPUT_METRICS, VALIDITY } from './metrics.js';
+import { buildBaseline } from './stats.js';
+import { deleteOne, getAll, getMetaValue, getOne, putMany, replaceStores, setMetaValue } from './db.js';
+
+/*
+ * Repository for 小红书 records. Device-only: nothing here is uploaded or synced.
+ * Every write notifies listeners so dashboards, tables and colours recalculate.
+ */
+
+const listeners = new Set();
+export function onXhsChange(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+const changed = () => listeners.forEach((fn) => fn());
+
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const str = (v) => (v == null ? '' : String(v));
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^\d{2}:\d{2}(:\d{2})?$/;
+
+function normStage(raw) {
+  const out = {};
+  for (const m of INPUT_METRICS) out[m.key] = num(raw?.[m.key]);
+  return out;
+}
+
+export function normalizeAd(raw = {}) {
+  return {
+    id: raw.id || uid(),
+    stage: str(raw.stage), // 'D' | 'D+1' | 'D+2' | ''
+    executed: raw.executed !== false,
+    start: str(raw.start), // 'YYYY-MM-DDTHH:MM'
+    end: str(raw.end),
+    hours: num(raw.hours),
+    goal: str(raw.goal), // 关注 | 阅读 | 点赞收藏 | free text
+    spend: num(raw.spend), // 元, real money
+    credit: num(raw.credit), // 元, free/bonus credit
+    expectedFollowers: num(raw.expectedFollowers),
+    actualFollowers: num(raw.actualFollowers),
+    result: str(raw.result),
+    memo: str(raw.memo),
+    sourceText: str(raw.sourceText), // original Excel note it was read from
+    needsReview: raw.needsReview === true,
+  };
+}
+
+export function normalizePost(raw = {}, now = Date.now()) {
+  return {
+    id: raw.id || uid(),
+    no: num(raw.no),
+    followers: num(raw.followers),
+    title: str(raw.title).trim(),
+    date: DATE_RE.test(raw.date) ? raw.date : '',
+    time: TIME_RE.test(raw.time) ? raw.time.slice(0, 5) : '',
+    contentType: str(raw.contentType),
+    projectId: str(raw.projectId),
+    validity: VALIDITY.includes(raw.validity) ? raw.validity : '미확인',
+    d1: normStage(raw.d1),
+    d2: normStage(raw.d2),
+    adDecisionD1: str(raw.adDecisionD1),
+    adAux: str(raw.adAux),
+    adDecisionD2: str(raw.adDecisionD2),
+    expectedFollowersD1: num(raw.expectedFollowersD1),
+    expectedFollowersD2: num(raw.expectedFollowersD2),
+    memo: str(raw.memo),
+    ads: (Array.isArray(raw.ads) ? raw.ads : []).map(normalizeAd),
+    extra: raw.extra && typeof raw.extra === 'object' ? { ...raw.extra } : {},
+    source: raw.source ?? null, // { file, sheet, row, importedAt, cells: { col: { v, f, w } } }
+    screenshots: Array.isArray(raw.screenshots) ? raw.screenshots.filter((x) => typeof x === 'string') : [],
+    createdAt: num(raw.createdAt) ?? now,
+    updatedAt: num(raw.updatedAt) ?? now,
+  };
+}
+
+export function normalizeIncome(raw = {}, now = Date.now()) {
+  return {
+    id: raw.id || uid(),
+    no: num(raw.no),
+    platform: str(raw.platform),
+    brand: str(raw.brand),
+    collabType: str(raw.collabType), // 현물협찬 | 유료협업 | 혼합협업
+    content: str(raw.content),
+    product: str(raw.product),
+    inKindKRW: num(raw.inKindKRW), // stored in won; the sheet used 만 원
+    cashKRW: num(raw.cashKRW),
+    date: DATE_RE.test(raw.date) ? raw.date : '',
+    note: str(raw.note),
+    postId: str(raw.postId),
+    extra: raw.extra && typeof raw.extra === 'object' ? { ...raw.extra } : {},
+    source: raw.source ?? null,
+    createdAt: num(raw.createdAt) ?? now,
+    updatedAt: num(raw.updatedAt) ?? now,
+  };
+}
+
+// ── Reads ─────────────────────────────────────────────
+export const listPosts = async () => (await getAll('posts')).map((p) => normalizePost(p));
+export const getPost = async (id) => {
+  const p = await getOne('posts', id);
+  return p ? normalizePost(p) : null;
+};
+export const listIncome = async () => (await getAll('income')).map((x) => normalizeIncome(x));
+
+export async function getSettings() {
+  const s = (await getMetaValue('settings')) ?? {};
+  return {
+    core: s.core ?? {},
+    contentTypes: Array.isArray(s.contentTypes) && s.contentTypes.length ? s.contentTypes : [...DEFAULT_CONTENT_TYPES],
+    currentRules: typeof s.currentRules === 'string' ? s.currentRules : '',
+  };
+}
+export const saveSettings = async (s) => {
+  await setMetaValue('settings', s);
+  changed();
+};
+
+/** All baseline versions, oldest first. Version 1 is the fixed initial baseline. */
+export const getBaselines = async () => (await getMetaValue('baselines')) ?? [];
+export async function activeBaseline() {
+  const list = await getBaselines();
+  const activeVersion = (await getMetaValue('activeBaseline')) ?? list.at(-1)?.version;
+  return list.find((b) => b.version === activeVersion) ?? list.at(-1) ?? null;
+}
+/** Adds a new baseline version (only ever on explicit user approval). Old versions are kept. */
+export async function addBaseline(baseline, { activate = true } = {}) {
+  const list = await getBaselines();
+  const version = (list.at(-1)?.version ?? 0) + 1;
+  const b = { ...baseline, version };
+  await setMetaValue('baselines', [...list, b]);
+  if (activate) await setMetaValue('activeBaseline', version);
+  changed();
+  return b;
+}
+export async function setActiveBaseline(version) {
+  await setMetaValue('activeBaseline', version);
+  changed();
+}
+
+export const getDocs = async () => (await getMetaValue('docs')) ?? { rules: [], criteriaNotes: null };
+export const saveDocs = async (docs) => {
+  await setMetaValue('docs', docs);
+  changed();
+};
+export const getImports = async () => (await getMetaValue('imports')) ?? [];
+
+// ── Writes ────────────────────────────────────────────
+/** Saves posts; creates Version 1 automatically the first time 11 valid posts exist. */
+export async function savePosts(list, { touch = true } = {}) {
+  const now = Date.now();
+  const out = list.map((p) => normalizePost({ ...p, updatedAt: touch ? now : p.updatedAt }));
+  await putMany('posts', out);
+  await ensureInitialBaseline();
+  changed();
+  return out;
+}
+
+export async function ensureInitialBaseline() {
+  if ((await getBaselines()).length) return null;
+  const b = buildBaseline(await listPosts(), { version: 1, note: 'initial-11' });
+  if (!b) return null;
+  await setMetaValue('baselines', [b]);
+  await setMetaValue('activeBaseline', 1);
+  return b;
+}
+
+export async function deletePost(id) {
+  await deleteOne('posts', id);
+  changed();
+}
+
+export async function saveIncome(list) {
+  const now = Date.now();
+  await putMany('income', list.map((x) => normalizeIncome({ ...x, updatedAt: now })));
+  changed();
+}
+export async function deleteIncome(id) {
+  await deleteOne('income', id);
+  changed();
+}
+
+export async function recordImport(entry) {
+  await setMetaValue('imports', [...(await getImports()), entry]);
+}
+
+// ── Backup ────────────────────────────────────────────
+export const XHS_BACKUP_APP = 'vlog-studio-xhs';
+
+export async function exportAll({ withScreenshots = false } = {}) {
+  const meta = await getAll('meta');
+  const shots = withScreenshots ? await getAll('shots') : [];
+  return {
+    app: XHS_BACKUP_APP,
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    posts: await getAll('posts'),
+    income: await getAll('income'),
+    meta,
+    // Blobs are written as data URLs so the file is plain JSON.
+    shots: await Promise.all(shots.map(async (s) => ({ ...s, blob: s.blob ? await blobToDataUrl(s.blob) : null }))),
+  };
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.readAsDataURL(blob);
+  });
+}
+
+/** mode 'merge' keeps what is here and adds/overwrites by id; 'replace' wipes first. */
+export async function importAll(data, mode = 'merge') {
+  if (data?.app !== XHS_BACKUP_APP || !Array.isArray(data.posts)) throw new Error('not-xhs-backup');
+  const posts = data.posts.map((p) => normalizePost(p));
+  const income = (data.income ?? []).map((x) => normalizeIncome(x));
+  const meta = Array.isArray(data.meta) ? data.meta.filter((m) => m && typeof m.key === 'string') : [];
+  const shots = await Promise.all(
+    (data.shots ?? []).map(async (s) => ({ ...s, blob: typeof s.blob === 'string' ? await (await fetch(s.blob)).blob() : null })),
+  );
+  if (mode === 'replace') {
+    await replaceStores({ posts, income, meta, shots });
+  } else {
+    await putMany('posts', posts);
+    await putMany('income', income);
+    // Never overwrite existing baselines on merge: they are versioned and user-approved.
+    const keep = new Set(['baselines', 'activeBaseline']);
+    const hasBaselines = (await getBaselines()).length > 0;
+    await putMany('meta', meta.filter((m) => !(hasBaselines && keep.has(m.key))));
+    if (shots.length) await putMany('shots', shots);
+  }
+  changed();
+  return { posts: posts.length, income: income.length };
+}
+
+export async function deleteAll() {
+  await replaceStores({ posts: [], income: [], meta: [], shots: [] });
+  changed();
+}

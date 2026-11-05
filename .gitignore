@@ -4,3 +4,6 @@ dev-dist
 .DS_Store
 *.log
 .claude/
+
+# Personal data (original Excel, screenshots, exports). Never commit or deploy.
+private-data/

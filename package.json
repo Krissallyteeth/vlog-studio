@@ -23,6 +23,11 @@
     "node": ">=20.19"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.119.0"
+    "@supabase/supabase-js": "^2.119.0",
+    "@tesseract.js-data/chi_sim": "^1.0.0",
+    "@tesseract.js-data/eng": "^1.0.0",
+    "exceljs": "^4.4.0",
+    "jszip": "^3.10.2",
+    "tesseract.js": "^5.1.1"
   }
 }

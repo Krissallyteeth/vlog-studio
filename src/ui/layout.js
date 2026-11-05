@@ -28,10 +28,13 @@ export function bottomNav(items, activeId) {
     </nav>`;
 }
 
+/** App-level menu: planning, content list, 小红书 dashboard, Excel-style data, more (OCR, ads, backup). */
 export const HOME_NAV = [
-  { id: 'home', get label() { return t('nav.projects'); }, icon: 'home', href: '#/' },
-  { id: 'new', get label() { return t('nav.new'); }, icon: 'plus', href: '#/new' },
-  { id: 'settings', get label() { return t('nav.settings'); }, icon: 'archive', href: '#/settings' },
+  { id: 'home', get label() { return t('nav.plan'); }, icon: 'idea', href: '#/' },
+  { id: 'contents', get label() { return t('nav.contents'); }, icon: 'list', href: '#/contents' },
+  { id: 'xhs', get label() { return t('nav.dashboard'); }, icon: 'chart', href: '#/xhs' },
+  { id: 'data', get label() { return t('nav.data'); }, icon: 'table', href: '#/data' },
+  { id: 'more', get label() { return t('nav.more'); }, icon: 'more', href: '#/more' },
 ];
 
 

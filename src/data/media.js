@@ -28,13 +28,13 @@ function loadImage(file) {
   });
 }
 
-const toBlob = (canvas, type) => new Promise((r) => canvas.toBlob((b) => r(b), type, QUALITY));
+const toBlob = (canvas, type, q = QUALITY) => new Promise((r) => canvas.toBlob((b) => r(b), type, q));
 
 /** File -> compressed Blob (image/webp or image/jpeg). EXIF orientation is applied by the browser. */
-export async function compressImage(file) {
+export async function compressImage(file, { maxSide = MAX_SIDE, quality = QUALITY } = {}) {
   const { img, url } = await loadImage(file);
   try {
-    const scale = Math.min(1, MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
     const w = Math.max(1, Math.round(img.naturalWidth * scale));
     const h = Math.max(1, Math.round(img.naturalHeight * scale));
     const canvas = document.createElement('canvas');
@@ -44,8 +44,8 @@ export async function compressImage(file) {
     g.fillStyle = '#fff'; // transparent PNGs become white, not black, in JPEG
     g.fillRect(0, 0, w, h);
     g.drawImage(img, 0, 0, w, h);
-    let blob = await toBlob(canvas, 'image/webp');
-    if (!blob || blob.type !== 'image/webp') blob = await toBlob(canvas, 'image/jpeg');
+    let blob = await toBlob(canvas, 'image/webp', quality);
+    if (!blob || blob.type !== 'image/webp') blob = await toBlob(canvas, 'image/jpeg', quality);
     if (!blob) throw new Error('encode');
     return blob;
   } finally {

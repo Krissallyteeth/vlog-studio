@@ -144,7 +144,7 @@ export async function renderSettings({ isCurrent }) {
           <p class="mt-1">${esc(t('settings.installOffline'))}</p>
         </section>
       </main>
-      ${bottomNav(HOME_NAV, 'settings')}
+      ${bottomNav(HOME_NAV, 'more')}
     </div>`);
 
   // Re-render the sync card on state changes, but never while the user is typing into it.
