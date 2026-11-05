@@ -35,6 +35,19 @@ export function normalizeStage(v) {
   const m = /^D\+(\d{1,3})\+?$/.exec(s);
   return m ? `D+${Number(m[1])}` : '';
 }
+/**
+ * D+n from the post's publish date and the ad's start time: calendar days between the two dates
+ * (same day → "D", next day → "D+1"). Returns '' when either date is missing or the ad started first.
+ */
+export function stageFromDates(postDate, adStart) {
+  const d = (s) => (/^\d{4}-\d{2}-\d{2}/.test(s ?? '') ? Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) : null);
+  const a = d(postDate);
+  const b = d(adStart);
+  if (a == null || b == null || b < a) return '';
+  const n = Math.round((b - a) / 86400000);
+  return n === 0 ? 'D' : `D+${n}`;
+}
+
 /** Days after publishing for a stage ("D" → 0, "D+3" → 3, unknown → null). */
 export const stageDay = (stage) => (stage === 'D' ? 0 : /^D\+(\d+)$/.test(stage) ? Number(stage.slice(2)) : null);
 
@@ -91,7 +104,12 @@ export function normalizePost(raw = {}, now = Date.now()) {
     expectedFollowersD1: num(raw.expectedFollowersD1),
     expectedFollowersD2: num(raw.expectedFollowersD2),
     memo: str(raw.memo),
-    ads: (Array.isArray(raw.ads) ? raw.ads : []).map(normalizeAd),
+    ads: (Array.isArray(raw.ads) ? raw.ads : []).map((a) => {
+      const ad = normalizeAd(a);
+      // No D+n typed but the start time is known: calculate it from the publish date.
+      if (!ad.stage && ad.start) ad.stage = stageFromDates(raw.date, ad.start);
+      return ad;
+    }),
     extra: raw.extra && typeof raw.extra === 'object' ? { ...raw.extra } : {},
     source: raw.source ?? null, // { file, sheet, row, importedAt, cells: { col: { v, f, w } } }
     screenshots: Array.isArray(raw.screenshots) ? raw.screenshots.filter((x) => typeof x === 'string') : [],

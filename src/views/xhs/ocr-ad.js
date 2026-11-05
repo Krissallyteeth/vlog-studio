@@ -7,7 +7,7 @@ import { icon } from '../../ui/icons.js';
 import { putMany } from '../../xhs/db.js';
 import { AD_FIELDS, AD_METRICS, parseAdOrder } from '../../xhs/ocr-ad-parse.js';
 import { ordered } from '../../xhs/stats.js';
-import { listPosts, normalizeAd, normalizeStage, savePosts } from '../../xhs/store.js';
+import { listPosts, normalizeAd, normalizeStage, savePosts, stageFromDates } from '../../xhs/store.js';
 import { xhsPage } from './shell.js';
 
 /*
@@ -119,6 +119,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
     if (k === 'beatPct') return `${Math.round(v * 100)}`;
     if (k === 'estimate') return `${v[0]}~${v[1]}`;
     if (k === 'coupon') return `${v.threshold}/${v.bonus}`;
+    if (k === 'startedAt' || k === 'publishedAt') return String(v).replace('T', ' ');
     return String(v);
   };
   const parseField = (k, s) => {
@@ -134,7 +135,29 @@ export async function renderOcrAd([postId], { isCurrent }) {
       return m ? { threshold: Number(m[1]), bonus: Number(m[2]) } : undefined;
     }
     if (NUMERIC.has(k)) return Number.isFinite(Number(x)) ? Number(x) : undefined;
+    if (k === 'startedAt' || k === 'publishedAt') {
+      const m = /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/.exec(x);
+      return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}T${(m[4] ?? '00').padStart(2, '0')}:${m[5] ?? '00'}` : undefined;
+    }
     return x;
+  };
+  /** D+n of an order: typed value wins, otherwise publish date of the chosen post vs ad start time. */
+  const autoStage = (o) => {
+    const p = posts.find((x) => x.id === o.postId);
+    return stageFromDates(p?.date, o.values.startedAt);
+  };
+
+  function stageNote(o) {
+    if (o.stage) return t('oad.stageTyped');
+    const auto = autoStage(o);
+    return auto ? t('oad.stageAuto', { stage: auto }) : t('oad.stageNeedStart');
+  }
+  const refreshStage = (oi) => {
+    const o = state.orders[oi];
+    const inp = result.querySelector(`[data-stage="${oi}"]`);
+    if (inp) inp.placeholder = autoStage(o) || 'D+n';
+    const note = result.querySelector(`[data-stage-note="${oi}"]`);
+    if (note) note.textContent = stageNote(o);
   };
 
   function drawOrders() {
@@ -163,7 +186,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
             <div class="mt-2 grid gap-3 sm:grid-cols-[2fr_1fr]">
               <label class="field"><span class="field-label">${esc(t('ocr.post'))}</span><select class="input" data-post="${oi}"><option value="">${esc(t('oad.choosePost'))}</option>${posts.map((p) => `<option value="${esc(p.id)}" ${p.id === o.postId ? 'selected' : ''}>${esc(`${p.date} · ${p.title}`)}</option>`).join('')}</select>
                 <span class="text-[12px] text-muted">${esc(o.match ? t(o.match.sameDay ? 'oad.matched' : 'oad.matchedNear', { title: o.match.post.title, date: o.match.post.date }) : t('oad.noMatch'))} · ${esc(t('oad.read', { title: f.title?.value ?? f.title?.candidate ?? '?', at: (f.publishedAt?.value ?? f.publishedAt?.candidate ?? '?').replace('T', ' ') }))}</span></label>
-              <label class="field"><span class="field-label">${esc(t('ads.stage'))} <span class="req">${esc(t('common.required'))}</span></span><input class="input" data-stage="${oi}" list="oad-stages" value="${esc(o.stage)}" placeholder="D+1" /><span class="text-[12px] text-muted">${esc(t('oad.stageHelp'))}</span></label>
+              <label class="field"><span class="field-label">${esc(t('ads.stage'))}</span><input class="input" data-stage="${oi}" list="oad-stages" value="${esc(o.stage)}" placeholder="${esc(autoStage(o) || 'D+n')}" /><span class="text-[12px] text-muted" data-stage-note="${oi}">${esc(stageNote(o))}</span></label>
             </div>
             <div class="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
               <div class="table-scroll"><table class="xtable"><thead><tr><th>${esc(t('crit.metric'))}</th><th>${esc(t('oad.readText'))}</th><th>${esc(t('ocr.recognised'))}</th><th>${esc(t('ocr.toSave'))}</th><th>${esc(t('imp.th.status'))}</th></tr></thead><tbody>${AD_FIELDS.map(row).join('')}</tbody></table></div>
@@ -189,7 +212,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
       if (v === null) delete o.values[inp.dataset.k];
       else o.values[inp.dataset.k] = v;
     }
-    const problems = chosen.filter((o) => !o.postId || !normalizeStage(o.stage) || o.values.spend == null);
+    const problems = chosen.filter((o) => !o.postId || !(normalizeStage(o.stage) || autoStage(o)) || o.values.spend == null);
     if (problems.length) return toast(t('oad.missingRequired', { n: problems.length }), { tone: 'error' });
     const list = chosen.map((o) => {
       const v = o.values;
@@ -202,7 +225,8 @@ export async function renderOcrAd([postId], { isCurrent }) {
       return {
         o,
         ad: normalizeAd({
-          stage: o.stage,
+          stage: normalizeStage(o.stage) || autoStage(o),
+          start: v.startedAt ?? '',
           executed: true,
           spend: v.spend,
           budget: v.budget,
@@ -258,11 +282,24 @@ export async function renderOcrAd([postId], { isCurrent }) {
       add(e.target.files);
       e.target.value = '';
     }
-    if (e.target.dataset.post) state.orders[Number(e.target.dataset.post)].postId = e.target.value;
+    if (e.target.dataset.post) {
+      state.orders[Number(e.target.dataset.post)].postId = e.target.value;
+      refreshStage(Number(e.target.dataset.post));
+    }
     if (e.target.dataset.save) state.orders[Number(e.target.dataset.save)].save = e.target.checked;
   });
   root.addEventListener('input', (e) => {
-    if (e.target.dataset.stage) state.orders[Number(e.target.dataset.stage)].stage = e.target.value;
+    if (e.target.dataset.stage) {
+      state.orders[Number(e.target.dataset.stage)].stage = e.target.value;
+      refreshStage(Number(e.target.dataset.stage));
+    }
+    if (e.target.dataset.k === 'startedAt') {
+      const o = state.orders[Number(e.target.dataset.o)];
+      const v = parseField('startedAt', e.target.value);
+      if (v) o.values.startedAt = v;
+      else delete o.values.startedAt;
+      refreshStage(Number(e.target.dataset.o));
+    }
   });
   root.addEventListener('click', (e) => {
     const rm = e.target.closest('[data-rm]');

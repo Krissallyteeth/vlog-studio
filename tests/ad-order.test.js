@@ -58,3 +58,16 @@ describe('ad statistics', () => {
     expect(matchPost(posts, '2026-01-06T10:00', '').post.id).toBe('b'); // one day apart
   });
 });
+
+describe('D+n from dates', () => {
+  it('counts calendar days between publishing and the ad start', async () => {
+    const { stageFromDates, normalizePost } = await import('../src/xhs/store.js');
+    expect(stageFromDates('2026-11-02', '2026-11-02T21:00')).toBe('D');
+    expect(stageFromDates('2026-11-02', '2026-11-03T09:00')).toBe('D+1');
+    expect(stageFromDates('2026-11-02', '2026-11-07T00:10')).toBe('D+5');
+    expect(stageFromDates('2026-11-02', '2026-11-01T10:00')).toBe(''); // before publishing: not guessed
+    expect(stageFromDates('', '2026-11-03T09:00')).toBe('');
+    const p = normalizePost({ date: '2026-11-02', ads: [{ start: '2026-11-04T10:30', spend: 60 }, { stage: 'D+1', start: '2026-11-04T10:30' }] });
+    expect(p.ads.map((a) => a.stage)).toEqual(['D+2', 'D+1']); // typed value wins
+  });
+});

@@ -175,7 +175,7 @@ export function adSheet(ad) {
     title: t('ads.formTitle'),
     body: `<form class="flex max-h-[70vh] flex-col gap-3 overflow-y-auto" id="ad-form">
       <div class="grid grid-cols-2 gap-3">
-        <label class="field"><span class="field-label">${esc(t('ads.stage'))}</span><input class="input" name="stage" list="ad-stages" value="${esc(ad.stage)}" placeholder="D+1" /><datalist id="ad-stages">${['D', 'D+1', 'D+2', 'D+3', 'D+4', 'D+5', 'D+6', 'D+7'].map((x) => `<option>${x}</option>`).join('')}</datalist></label>
+        <label class="field"><span class="field-label">${esc(t('ads.stage'))}</span><input class="input" name="stage" list="ad-stages" value="${esc(ad.stage)}" placeholder="${esc(t('ads.stageAutoPh'))}" /><datalist id="ad-stages">${['D', 'D+1', 'D+2', 'D+3', 'D+4', 'D+5', 'D+6', 'D+7'].map((x) => `<option>${x}</option>`).join('')}</datalist></label>
         <label class="field"><span class="field-label">${esc(t('ads.executedQ'))}</span><select class="input" name="executed"><option value="1" ${ad.executed ? 'selected' : ''}>${esc(t('ads.executed'))}</option><option value="0" ${ad.executed ? '' : 'selected'}>${esc(t('ads.notExecuted'))}</option></select></label>
         <label class="field"><span class="field-label">${esc(t('ads.start'))}</span><input class="input" type="datetime-local" name="start" value="${esc(ad.start)}" /></label>
         <label class="field"><span class="field-label">${esc(t('ads.end'))}</span><input class="input" type="datetime-local" name="end" value="${esc(ad.end)}" /></label>

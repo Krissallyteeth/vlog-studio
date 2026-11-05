@@ -67,6 +67,8 @@ export function parseAdOrder(linesPerImage) {
       if (/推广完成|推广结束/.test(text)) set('status', ok('done', text, 100));
       else if (/推广中/.test(text)) set('status', ok('running', text, 100));
       if ((m = /发布时间:?(\d{4}-\d{2}-\d{2})(\d{2}:\d{2})(?::\d{2})?/.exec(text))) set('publishedAt', judge(`${m[1]}T${m[2]}`, m[0], Math.max(c, 80)));
+      // Order / delivery start time (shown in 订单管理 and the expanded order details).
+      if ((m = /(?:下单时间|创建时间|投放时间|开始时间|推广时间|订单时间):?(\d{4}-\d{2}-\d{2})(\d{2}:\d{2})/.exec(text))) set('startedAt', judge(`${m[1]}T${m[2]}`, m[0], Math.max(c, 80)));
       if (/vlog|Vlog|VLOG|\|/.test(text) && !/作者|发布|互动/.test(text) && text.length > 6 && !f.title) {
         set('title', check(line.words.map((w) => w.text).join('').replace(/^[^A-Za-z一-鿿]+/, '').replace(/^[全:o\s]+/, ''), text, c, 'text'));
       }
@@ -125,4 +127,4 @@ export function parseAdOrder(linesPerImage) {
 }
 
 /** Field list shown in the review table (order matters). */
-export const AD_FIELDS = ['spend', 'budget', 'goal', 'status', ...AD_METRICS.map(([k]) => k), 'result', 'estimate', 'beatPct', 'coupon', 'couponExpires', 'title', 'publishedAt'];
+export const AD_FIELDS = ['startedAt', 'spend', 'budget', 'goal', 'status', ...AD_METRICS.map(([k]) => k), 'result', 'estimate', 'beatPct', 'coupon', 'couponExpires', 'title', 'publishedAt'];
