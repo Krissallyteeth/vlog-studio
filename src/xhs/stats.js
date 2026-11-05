@@ -161,11 +161,18 @@ export function adTotals(posts) {
   let credit = 0;
   let count = 0;
   let unconfirmed = 0;
+  const seen = new Set();
   for (const p of posts) {
     for (const a of p.ads ?? []) {
       if (a.executed === false) continue;
+      // A multi-note order is stored on each of its posts: count it (and its money) once.
+      if (a.groupKey) {
+        if (seen.has(a.groupKey)) continue;
+        seen.add(a.groupKey);
+      }
       count++;
-      if (isNum(a.spend)) spend += a.spend;
+      const s = a.groupKey && isNum(a.orderSpend) ? a.orderSpend : a.spend;
+      if (isNum(s)) spend += s;
       if (isNum(a.credit)) credit += a.credit;
       if (a.needsReview) unconfirmed++;
     }

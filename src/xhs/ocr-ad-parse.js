@@ -55,39 +55,55 @@ export function parseAdOrder(linesPerImage) {
     else if (prev.status !== 'ok' && r.status === 'ok') f[key] = r;
   };
   const audience = { gender: {}, age: {}, city: {}, interest: {} };
+  const spendTexts = [];
+  let budgetUsedUp = false;
+  const noteCountSeen = () => f.noteCount?.value ?? 1;
+  const noteText = []; // text under the thumbnails of a multi-note order (titles, often garbled)
   for (const lines of linesPerImage) {
     let section = '';
+    let inNotes = false;
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       if (!line?.words?.length) continue;
       const text = squeeze(line.words.map((w) => w.text).join(''));
       const c = conf(line);
       let m;
+      if (/展开详情|收起详情|已消耗金额|订单信息/.test(text)) inNotes = false;
+      if (inNotes) noteText.push(line.words.map((w) => w.text).join(''));
+      if (/本订单共推广/.test(text)) inNotes = true;
       // Status / title / publish time
       if (/推广完成|推广结束/.test(text)) set('status', ok('done', text, 100));
       else if (/推广中/.test(text)) set('status', ok('running', text, 100));
       if ((m = /发布时间:?(\d{4}-\d{2}-\d{2})(\d{2}:\d{2})(?::\d{2})?/.exec(text))) set('publishedAt', judge(`${m[1]}T${m[2]}`, m[0], Math.max(c, 80)));
       // Order / delivery start time (shown in 订单管理 and the expanded order details).
       if ((m = /(?:下单时间|创建时间|投放时间|开始时间|推广时间|订单时间):?(\d{4}-\d{2}-\d{2})(\d{2}:\d{2})/.exec(text))) set('startedAt', judge(`${m[1]}T${m[2]}`, m[0], Math.max(c, 80)));
-      if (/vlog|Vlog|VLOG|\|/.test(text) && !/作者|发布|互动/.test(text) && text.length > 6 && !f.title) {
+      if (/vlog|Vlog|VLOG|viog|\|/.test(text) && !/作者|发布|互动|订单|消耗|保障/.test(text) && text.length > 6 && !f.title && noteCountSeen() <= 1) {
         set('title', check(line.words.map((w) => w.text).join('').replace(/^[^A-Za-z一-鿿]+/, '').replace(/^[全:o\s]+/, ''), text, c, 'text'));
       }
-      // Result vs estimate: "点赞收藏量 27 / 预估转化 16 ~ 71"
-      if ((m = /^(点赞收藏量|关注量|阅读量|主页浏览量|新增关注)(\d+)\/预估转化(\d+)~(\d+)/.exec(text))) {
-        set('goal', ok(m[1].replace(/量$/, '量'), m[1], 100));
-        set('result', judge(Number(m[2]), m[2], c));
-        set('estimate', judge([Number(m[3]), Number(m[4])], `${m[3]}~${m[4]}`, c));
-      }
+      // Result vs estimate: "点赞收藏量 27 / 预估转化 16 ~ 71", "点赞收藏量 60 效果极好 / 预估转化 11 ~ 53",
+      // "赞藏量 61 / 目标区间 16~63" (the label is often misread, the numbers around "/" are what count).
+      if ((m = /(\d+)(?:效果[极很]?[好佳一般差]+)?\/(?:预估转化|目标区间)(\d+)~(\d+)/.exec(text))) {
+        set('result', judge(Number(m[1]), m[1], c));
+        set('estimate', judge([Number(m[2]), Number(m[3])], `${m[2]}~${m[3]}`, c));
+        const g = /^(点赞收藏量|关注量|阅读量|主页浏览量|新增关注)\d/.exec(text);
+        if (g) set('goal', ok(g[1], g[1], 100));
+      } else if ((m = /^预估转化(\d+)~(\d+)个?/.exec(text))) set('estimate', judge([Number(m[1]), Number(m[2])], `${m[1]}~${m[2]}`, Math.max(c, 80)));
+      // Order header and order info (the expanded "订单信息" / "金额信息" part).
+      if ((m = /本订单共推广(\d+)篇笔记/.exec(text))) set('noteCount', ok(Number(m[1]), m[0], 100));
+      if ((m = /订单编号:?([0-9a-f]{8}(?:-[0-9a-f]{1,4}){0,3})/i.exec(text))) set('orderNo', judge(m[1].toLowerCase(), m[1], Math.max(c, 80)));
+      if ((m = /订单金额:?(\d+(?:\.\d+)?)元/.exec(text))) set('orderAmount', judge(Number(m[1]), m[0], c));
+      if ((m = /实付金额:?(\d+(?:\.\d+)?)元/.exec(text))) set('paid', judge(Number(m[1]), m[0], c));
+      if ((m = /支付方式:?(\S+)$/.exec(text))) set('payMethod', judge(m[1].replace(/^薯[币市]/, '薯币'), m[0], c));
+      if ((m = /预计推广时长:?(\d+(?:\.\d+)?)(天|小时|h)/.exec(text))) set('duration', judge(m[2] === '天' ? Number(m[1]) * 24 : Number(m[1]), m[0], Math.max(c, 80)));
+      if ((m = /目标人群:?(\S+)$/.exec(text))) set('targeting', judge(m[1], m[0], c));
+      if ((m = /超额获赠(\d+)/.exec(text))) set('bonus', check(Number(m[1]), m[0], c, c < MIN_CONF ? 'confidence' : ''));
+      if ((m = /投放成本在(\d+(?:\.\d+)?)元/.exec(text))) set('costPerResult', judge(Number(m[1]), m[0], Math.max(c, 80)));
+      if ((m = /(?:效果)?高于(\d+(?:\.\d+)?)%同质订单/.exec(text))) set('beatPct', judge(Number(m[1]) / 100, `${m[1]}%`, Math.max(c, 70)));
+      if (/已完成全部预算消耗/.test(text)) budgetUsedUp = true;
       if ((m = /推广目标:?(点赞收藏量|关注|阅读量|主页浏览|私信开口)/.exec(text))) set('goal', ok(m[1], m[1], c));
       if ((m = /(?:互动率)?超(?:过|越)(\d+(?:\.\d+)?)%的同类笔记/.exec(text))) set('beatPct', judge(Number(m[1]) / 100, `${m[1]}%`, Math.max(c, 70)));
       // Spend: "当前已消耗金额 100/100 元"
-      if ((m = /已消耗金额[^\d]*([\d./|lI]+)元/.exec(text))) {
-        const sp = splitSpent(m[1]);
-        if (sp) {
-          set('spend', sp.sure ? judge(sp.spend, m[1], c) : check(sp.spend, m[1], c, 'format'));
-          set('budget', sp.sure ? judge(sp.budget, m[1], c) : check(sp.budget, m[1], c, 'format'));
-        }
-      }
+      if ((m = /已消耗金额[^\d]*([\d./|lI]+)元/.exec(text))) spendTexts.push({ raw: m[1], c });
       // Coupon: "满 100.0 元 赠 40.0 元", expiry on the line before
       if ((m = /满(\d+(?:\.\d+)?)元赠(\d+(?:\.\d+)?)元/.exec(text))) set('coupon', judge({ threshold: Number(m[1]), bonus: Number(m[2]) }, m[0], Math.max(c, 70)));
       if ((m = /^(\d{4}-\d{2}-\d{2})\d{2}:\d{2}:\d{2},?快去/.exec(text))) set('couponExpires', judge(m[1], m[1], 80));
@@ -105,9 +121,10 @@ export function parseAdOrder(linesPerImage) {
       else if (/兴趣分布/.test(text)) section = 'interest';
       if (section === 'gender') {
         const g = /男性(\d+(?:\.\d+)?)%.*女性(\d+(?:\.\d+)?)%/.exec(text);
-        if (g) {
-          const male = Number(g[1]) / 100;
-          const female = Number(g[2]) / 100;
+        if (g && !(audience.gender.male?.status === 'ok')) {
+          // Shares are always shown with one decimal; "172%" is "17.2%" with the dot lost.
+          const male = pctOf(g[1]);
+          const female = pctOf(g[2]);
           const sumOk = Math.abs(male + female - 1) < 0.011;
           // Two shares that add up to exactly 100% confirm each other.
           audience.gender = sumOk ? { male: ok(male, `${g[1]}%`, c), female: ok(female, `${g[2]}%`, c) } : { male: check(male, `${g[1]}%`, c, 'sum'), female: check(female, `${g[2]}%`, c, 'sum') };
@@ -118,13 +135,67 @@ export function parseAdOrder(linesPerImage) {
         const bad = pct > 1 || !/\./.test(m[2]);
         const list = audience[section];
         let key = label || `#${Object.keys(list).length + 1}`;
-        if (section === 'age') key = AGE_LABELS[Object.keys(list).length] ?? key;
-        if (!list[key]) list[key] = bad ? check(null, text, c, 'format') : judge(pct, `${m[2]}%`, c);
+        if (section === 'age') key = ageLabel(text) ?? AGE_LABELS[Object.keys(list).length] ?? key;
+        const guess = bad && /^\d{2,3}$/.test(m[2]) ? pctOf(m[2]) : null;
+        const r = bad ? check(guess != null && guess <= 1 ? guess : null, text, c, 'format') : judge(pct, `${m[2]}%`, c);
+        // The same section often appears on two screenshots: keep the clearer reading.
+        if (!list[key] || (list[key].status !== 'ok' && (r.status === 'ok' || list[key].candidate == null))) list[key] = r;
       }
     }
   }
-  return { fields: f, audience };
+  // Spend "50/50 元": the slash is often read as "1" ("50150") or as "/1" ("50/150").
+  for (const { raw, c } of spendTexts) {
+    const sp = splitSpent(raw);
+    if (!sp) continue;
+    let { spend, budget, sure } = sp;
+    const amount = f.orderAmount?.value ?? f.paid?.value;
+    if (sure && budgetUsedUp && spend !== budget && String(budget) === `1${spend}`) {
+      budget = spend; // "已完成全部预算消耗": spent == budget, the extra "1" was the slash
+      sure = false;
+    }
+    if (amount != null && spend === amount && budget === amount) {
+      // Confirmed by 订单金额 / 实付金额 on the same order.
+      set('spend', { ...ok(spend, raw, c), confirmedBy: 'orderAmount' });
+      set('budget', { ...ok(budget, raw, c), confirmedBy: 'orderAmount' });
+      continue;
+    }
+    set('spend', sure ? judge(spend, raw, c) : check(spend, raw, c, 'format'));
+    set('budget', sure ? judge(budget, raw, c) : check(budget, raw, c, 'format'));
+  }
+  // Values that confirm each other: cost per result × result ≈ spend; result − top of the estimate = bonus.
+  const val = (k) => f[k]?.value ?? f[k]?.candidate;
+  const confirm = (k, why) => {
+    if (f[k] && f[k].status === 'check' && f[k].candidate != null) f[k] = { ...ok(f[k].candidate, f[k].text, f[k].conf), confirmedBy: why };
+  };
+  if (val('result') != null && val('spend') != null && val('costPerResult') != null && Math.abs(val('spend') / val('result') - val('costPerResult')) < 0.01) {
+    confirm('result', 'costPerResult');
+    confirm('spend', 'costPerResult');
+    if (budgetUsedUp && val('budget') === val('spend')) confirm('budget', 'spend'); // "已完成全部预算消耗"
+  }
+  if (val('bonus') != null && val('result') != null && Array.isArray(val('estimate')) && val('result') - val('estimate')[1] === val('bonus')) {
+    confirm('result', 'bonus');
+    confirm('bonus', 'result');
+  }
+  if (f.paid?.status === 'check' && f.orderAmount?.status === 'ok' && f.paid.candidate === f.orderAmount.value) confirm('paid', 'orderAmount');
+  return { fields: f, audience, noteText: noteText.join(' ') };
+}
+
+/** Age bucket from the start of an OCR line ("18X下", "s1~20" …); null when unclear. */
+function ageLabel(text) {
+  if (/^18(以|X|U|下)/.test(text)) return '18以下';
+  if (/^18~/.test(text)) return '18~23';
+  if (/^2\d~(30|3\d)/.test(text)) return '24~30';
+  if (/^[3s]1~[24]0/.test(text)) return '31~40';
+  if (/^41~/.test(text)) return '41~50';
+  if (/^50(以|上)/.test(text)) return '50以上';
+  return null;
+}
+
+/** "17.2" → 0.172; "172" (dot lost) → 0.172; "31" → 0.031 — shares are shown with one decimal. */
+function pctOf(s) {
+  if (/\./.test(s)) return Number(s) / 100;
+  return Number(s) / 1000;
 }
 
 /** Field list shown in the review table (order matters). */
-export const AD_FIELDS = ['startedAt', 'spend', 'budget', 'goal', 'status', ...AD_METRICS.map(([k]) => k), 'result', 'estimate', 'beatPct', 'coupon', 'couponExpires', 'title', 'publishedAt'];
+export const AD_FIELDS = ['startedAt', 'orderNo', 'noteCount', 'spend', 'budget', 'orderAmount', 'paid', 'goal', 'status', ...AD_METRICS.map(([k]) => k), 'result', 'estimate', 'bonus', 'costPerResult', 'beatPct', 'duration', 'targeting', 'payMethod', 'coupon', 'couponExpires', 'title', 'publishedAt'];

@@ -7,7 +7,8 @@ import { icon } from '../../ui/icons.js';
 import { putMany } from '../../xhs/db.js';
 import { AD_FIELDS, AD_METRICS, parseAdOrder } from '../../xhs/ocr-ad-parse.js';
 import { ordered } from '../../xhs/stats.js';
-import { listPosts, normalizeAd, normalizeStage, savePosts, stageFromDates } from '../../xhs/store.js';
+import { orderAds, placeOrder, rememberTitle } from '../../xhs/ad-orders.js';
+import { listPosts, savePosts, stageFromDates } from '../../xhs/store.js';
 import { xhsPage } from './shell.js';
 
 /*
@@ -16,7 +17,26 @@ import { xhsPage } from './shell.js';
  * each order is matched to a post by publish time and title, and nothing is saved before review.
  */
 
-const NUMERIC = new Set(['spend', 'budget', 'result', 'beatPct', ...AD_METRICS.map(([k]) => k)]);
+const NUMERIC = new Set(['spend', 'budget', 'result', 'beatPct', 'orderAmount', 'paid', 'bonus', 'costPerResult', 'duration', 'noteCount', ...AD_METRICS.map(([k]) => k)]);
+
+/** Two-character pieces of a title (CJK / letters / digits only): robust against OCR noise. */
+const pieces = (s) => {
+  const t = String(s ?? '').toLowerCase().replace(/v[il1]og/g, 'vlog').replace(/[^\p{L}\p{N}]+/gu, '');
+  const out = new Set();
+  for (let i = 0; i < t.length - 1; i++) out.add(t.slice(i, i + 2));
+  return out;
+};
+const COMMON = new Set(['vl', 'lo', 'og', '的一', '一天']);
+/** How well an OCR'd title fits a post (its workbook title or a title remembered from earlier screenshots). */
+export function titleScore(post, text) {
+  const got = pieces(text);
+  let best = 0;
+  for (const name of [post.title, ...(post.adTitles ?? [])]) {
+    const n = [...pieces(name)].filter((x) => got.has(x) && !COMMON.has(x)).length;
+    best = Math.max(best, n);
+  }
+  return best;
+}
 
 /** Best matching post: same publish date (±1 day) first, then title overlap. */
 export function matchPost(posts, publishedAt, title) {
@@ -28,10 +48,20 @@ export function matchPost(posts, publishedAt, title) {
     const pd = day(p.date);
     const dateScore = d != null && pd != null ? Math.max(0, 2 - Math.abs(pd - d)) : 0; // 2 same day, 1 = ±1 day
     const overlap = [...new Set(p.title.replace(/\s/g, ''))].filter((c) => chars.has(c)).length;
-    const score = dateScore * 10 + overlap;
+    const score = dateScore * 10 + overlap + titleScore(p, title) * 2;
     if (score > 0 && (!best || score > best.score)) best = { post: p, score, sameDay: dateScore === 2 };
   }
   return best;
+}
+
+/** Posts that may be the notes of a multi-note order: title pieces found in the thumbnails' text. */
+export function suggestPosts(posts, text, startedAt) {
+  return posts
+    .filter((p) => !startedAt || !p.date || p.date <= startedAt.slice(0, 10))
+    .map((p) => ({ post: p, score: titleScore(p, text) }))
+    .filter((x) => x.score >= 2)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6);
 }
 
 export async function renderOcrAd([postId], { isCurrent }) {
@@ -109,7 +139,11 @@ export async function renderOcrAd([postId], { isCurrent }) {
       const match = matchPost(posts, f.publishedAt?.value ?? f.publishedAt?.candidate, f.title?.value ?? f.title?.candidate);
       const values = {};
       for (const [k, v] of Object.entries(f)) if (v.status === 'ok') values[k] = v.value;
-      return { imgs, parsed, values, postId: postId || match?.post.id || '', match, stage: '', save: true };
+      const n = Math.min(Math.max(f.noteCount?.value ?? 1, 1), 20);
+      // One note: match by publish time + title. Several: suggest, never pick silently.
+      const postIds = n === 1 ? [postId || match?.post.id || ''] : Array(n).fill('');
+      const suggestions = n > 1 ? suggestPosts(posts, parsed.noteText, values.startedAt) : [];
+      return { imgs, parsed, values, postIds, match: n === 1 ? match : null, suggestions, stage: '', save: true };
     });
     drawOrders();
   }
@@ -142,10 +176,19 @@ export async function renderOcrAd([postId], { isCurrent }) {
     return x;
   };
   /** D+n of an order: typed value wins, otherwise publish date of the chosen post vs ad start time. */
-  const autoStage = (o) => {
-    const p = posts.find((x) => x.id === o.postId);
+  const autoStage = (o, id = o.postIds[0]) => {
+    const p = posts.find((x) => x.id === id);
     return stageFromDates(p?.date, o.values.startedAt);
   };
+  /** Copies what was typed into the boxes of an order before it is redrawn. */
+  const keepEdits = (oi) => {
+    const o = state.orders[oi];
+    for (const inp of result.querySelectorAll(`[data-o="${oi}"]`)) {
+      const v = parseField(inp.dataset.k, inp.value);
+      if (v != null) o.values[inp.dataset.k] = v;
+    }
+  };
+  const savedOrder = (o) => o.values.orderNo && posts.some((p) => p.ads.some((a) => a.orderNo === o.values.orderNo));
 
   function stageNote(o) {
     if (o.stage) return t('oad.stageTyped');
@@ -183,11 +226,21 @@ export async function renderOcrAd([postId], { isCurrent }) {
           return `<section class="card">
             <div class="flex flex-wrap items-start justify-between gap-2"><h2 class="text-[16px] font-semibold">${esc(t('oad.order', { n: oi + 1 }))} <span class="text-[13px] font-normal text-muted">${esc(t('oad.images', { n: o.imgs.length }))}</span></h2>
               <label class="flex items-center gap-2 text-[13px]"><input type="checkbox" data-save="${oi}" ${o.save ? 'checked' : ''} /> ${esc(t('oad.include'))}</label></div>
-            <div class="mt-2 grid gap-3 sm:grid-cols-[2fr_1fr]">
-              <label class="field"><span class="field-label">${esc(t('ocr.post'))}</span><select class="input" data-post="${oi}"><option value="">${esc(t('oad.choosePost'))}</option>${posts.map((p) => `<option value="${esc(p.id)}" ${p.id === o.postId ? 'selected' : ''}>${esc(`${p.date} · ${p.title}`)}</option>`).join('')}</select>
+            ${savedOrder(o) ? `<p class="notice mt-2 text-[13px]">${esc(t('oad.alreadySaved', { no: o.values.orderNo }))}</p>` : ''}
+            ${
+              o.postIds.length > 1
+                ? `<div class="mt-2"><p class="text-[14px] font-semibold">${esc(t('oad.multi', { n: o.postIds.length }))}</p>
+                <p class="text-[12px] text-muted">${esc(t('oad.multiHelp'))}</p>
+                <div class="mt-2 grid gap-2 sm:grid-cols-2">${o.postIds.map((id, k) => `<label class="field"><span class="field-label">${esc(t('oad.noteN', { n: k + 1 }))}${id && autoStage(o, id) ? ` · ${esc(autoStage(o, id))}` : ''}</span><select class="input" data-post="${oi}" data-slot="${k}"><option value="">${esc(t('oad.choosePost'))}</option>${posts.map((p) => `<option value="${esc(p.id)}" ${p.id === id ? 'selected' : ''}>${esc(`${p.date} · ${p.title}`)}</option>`).join('')}</select></label>`).join('')}</div>
+                ${o.suggestions.length ? `<div class="mt-2 flex flex-wrap items-center gap-1.5 text-[12px]"><span class="text-muted">${esc(t('oad.suggest'))}</span>${o.suggestions.map((x) => `<button type="button" class="chip" data-suggest="${oi}" data-id="${esc(x.post.id)}" ${o.postIds.includes(x.post.id) ? 'disabled' : ''}>${esc(`${x.post.date} · ${x.post.title}`)}</button>`).join('')}</div>` : ''}
+                <p class="mt-1 text-[12px] text-muted">${esc(t('oad.readNotes', { text: o.parsed.noteText || '?' }))}</p>
+                <p class="mt-1 text-[12px] text-muted">${esc(t(o.values.startedAt ? 'oad.multiStage' : 'oad.stageNeedStart'))}</p></div>`
+                : `<div class="mt-2 grid gap-3 sm:grid-cols-[2fr_1fr]">
+              <label class="field"><span class="field-label">${esc(t('ocr.post'))}</span><select class="input" data-post="${oi}" data-slot="0"><option value="">${esc(t('oad.choosePost'))}</option>${posts.map((p) => `<option value="${esc(p.id)}" ${p.id === o.postIds[0] ? 'selected' : ''}>${esc(`${p.date} · ${p.title}`)}</option>`).join('')}</select>
                 <span class="text-[12px] text-muted">${esc(o.match ? t(o.match.sameDay ? 'oad.matched' : 'oad.matchedNear', { title: o.match.post.title, date: o.match.post.date }) : t('oad.noMatch'))} · ${esc(t('oad.read', { title: f.title?.value ?? f.title?.candidate ?? '?', at: (f.publishedAt?.value ?? f.publishedAt?.candidate ?? '?').replace('T', ' ') }))}</span></label>
               <label class="field"><span class="field-label">${esc(t('ads.stage'))}</span><input class="input" data-stage="${oi}" list="oad-stages" value="${esc(o.stage)}" placeholder="${esc(autoStage(o) || 'D+n')}" /><span class="text-[12px] text-muted" data-stage-note="${oi}">${esc(stageNote(o))}</span></label>
-            </div>
+            </div>`
+            }
             <div class="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
               <div class="table-scroll"><table class="xtable"><thead><tr><th>${esc(t('crit.metric'))}</th><th>${esc(t('oad.readText'))}</th><th>${esc(t('ocr.recognised'))}</th><th>${esc(t('ocr.toSave'))}</th><th>${esc(t('imp.th.status'))}</th></tr></thead><tbody>${AD_FIELDS.map(row).join('')}</tbody></table></div>
               <div class="flex max-h-[60vh] flex-col gap-2 overflow-y-auto">${o.imgs.map((im) => `<img src="${im.url}" alt="" class="w-full rounded-[10px] border border-line" />`).join('')}</div>
@@ -212,40 +265,27 @@ export async function renderOcrAd([postId], { isCurrent }) {
       if (v === null) delete o.values[inp.dataset.k];
       else o.values[inp.dataset.k] = v;
     }
-    const problems = chosen.filter((o) => !o.postId || !(normalizeStage(o.stage) || autoStage(o)) || o.values.spend == null);
+    const problems = chosen.filter((o) => o.postIds.some((id) => !id) || new Set(o.postIds).size !== o.postIds.length || o.values.spend == null);
     if (problems.length) return toast(t('oad.missingRequired', { n: problems.length }), { tone: 'error' });
     const list = chosen.map((o) => {
-      const v = o.values;
       const audience = { gender: {}, age: {}, city: {}, interest: {} };
       for (const inp of result.querySelectorAll(`[data-aud^="${state.orders.indexOf(o)}|"]`)) {
         const [, sec, label] = inp.dataset.aud.split('|');
         const n = Number(inp.value);
         if (inp.value.trim() && Number.isFinite(n)) audience[sec][label] = n / 100;
       }
-      return {
-        o,
-        ad: normalizeAd({
-          stage: normalizeStage(o.stage) || autoStage(o),
-          start: v.startedAt ?? '',
-          executed: true,
-          spend: v.spend,
-          budget: v.budget,
-          goal: v.goal ?? '',
-          status: v.status ?? '',
-          goalResult: v.result,
-          estimate: v.estimate,
-          beatPct: v.beatPct,
-          coupon: v.coupon ? { ...v.coupon, expires: v.couponExpires ?? '' } : null,
-          order: Object.fromEntries(AD_METRICS.map(([k]) => [k, v[k] ?? null])),
-          audience,
-          noteTitle: v.title ?? '',
-          notePublishedAt: v.publishedAt ?? '',
-        }),
-      };
+      return { o, entries: orderAds({ values: o.values, postIds: o.postIds, posts, stage: o.stage, audience }) };
     });
+    const titleOf = (id) => posts.find((p) => p.id === id)?.title ?? '';
     const ok = await openSheet({
       title: t('oad.confirmTitle', { n: list.length }),
-      body: `<ul class="flex flex-col gap-1.5 text-[14px]">${list.map(({ o, ad }) => `<li><b>${esc(posts.find((p) => p.id === o.postId)?.title ?? '')}</b> · ${esc(ad.stage)} · ${ad.spend}元 · ${esc(AD_METRICS.map(([k, n]) => `${n[0]} ${ad.order[k] ?? '–'}`).join(', '))}</li>`).join('')}</ul>
+      body: `<ul class="flex flex-col gap-2 text-[14px]">${list
+        .map(({ o, entries }) => {
+          const ad = entries[0].ad;
+          const total = ad.orderSpend ?? ad.spend;
+          return `<li><b>${esc(entries.map((x) => `${titleOf(x.postId)} (${x.ad.stage || '?'})`).join(' + '))}</b> · ${total}元${entries.length > 1 ? ` · ${esc(t('oad.splitNote', { n: entries.length, each: ad.spend }))}` : ''}${savedOrder(o) ? ` · ${esc(t('oad.replaces'))}` : ''}<br/><span class="text-[12px] text-muted">${esc(AD_METRICS.map(([k, n]) => `${n[0]} ${ad.order[k] ?? '–'}`).join(', '))}</span></li>`;
+        })
+        .join('')}</ul>
         <p class="mt-2 text-[12px] text-muted">${esc(t('oad.confirmNote'))}</p>
         <div class="mt-3 grid grid-cols-[1fr_2fr] gap-2"><button type="button" class="btn btn-secondary" data-v="">${esc(t('common.cancel'))}</button><button type="button" class="btn btn-primary" data-v="1">${esc(t('oad.save'))}</button></div>`,
       onMount(el, close) {
@@ -257,22 +297,23 @@ export async function renderOcrAd([postId], { isCurrent }) {
     });
     if (!ok) return;
     const fresh = await listPosts();
-    const byId = new Map(fresh.map((p) => [p.id, p]));
-    for (const { o, ad } of list) {
+    const changed = new Set();
+    for (const { o, entries } of list) {
       const shots = [];
       for (const im of o.imgs) {
         const blob = await compressImage(im.file, { maxSide: 1600, quality: 0.8 }).catch(() => null);
-        if (blob) shots.push({ id: uid(), postId: o.postId, stage: 'ad', name: im.file.name, blob, createdAt: Date.now(), text: im.text ?? '' });
+        if (blob) shots.push({ id: uid(), postId: o.postIds[0], stage: 'ad', name: im.file.name, blob, createdAt: Date.now(), text: im.text ?? '' });
       }
       await putMany('shots', shots);
-      ad.screenshots = shots.map((x) => x.id);
-      const p = byId.get(o.postId);
-      // Same order captured again (same stage, spend and report numbers): replace instead of duplicating.
-      const same = p.ads.findIndex((a) => a.stage === ad.stage && a.spend === ad.spend && a.order?.exposure === ad.order.exposure);
-      if (same >= 0) p.ads[same] = { ...ad, id: p.ads[same].id };
-      else p.ads.push(ad);
+      for (const x of entries) x.ad.screenshots = shots.map((sh) => sh.id);
+      for (const p of placeOrder(fresh, entries)) changed.add(p);
+      // Single-note order: remember the title it had in the screenshot for next time.
+      // An unconfirmed reading is fine here: it is only used to recognise the post next time.
+      const title = o.values.title ?? o.parsed.fields.title?.candidate;
+      const p = o.postIds.length === 1 && fresh.find((x) => x.id === o.postIds[0]);
+      if (p && title && rememberTitle(p, title)) changed.add(p);
     }
-    await savePosts([...new Set(list.map(({ o }) => byId.get(o.postId)))]);
+    await savePosts([...changed]);
     toast(t('oad.saved', { n: list.length }));
     navigate('/ads');
   }
@@ -283,10 +324,26 @@ export async function renderOcrAd([postId], { isCurrent }) {
       e.target.value = '';
     }
     if (e.target.dataset.post) {
-      state.orders[Number(e.target.dataset.post)].postId = e.target.value;
-      refreshStage(Number(e.target.dataset.post));
+      const o = state.orders[Number(e.target.dataset.post)];
+      o.postIds[Number(e.target.dataset.slot ?? 0)] = e.target.value;
+      if (o.postIds.length > 1) {
+        keepEdits(Number(e.target.dataset.post));
+        drawOrders();
+      }
+      else refreshStage(Number(e.target.dataset.post));
     }
     if (e.target.dataset.save) state.orders[Number(e.target.dataset.save)].save = e.target.checked;
+    if (e.target.dataset.k === 'noteCount') {
+      // Corrected number of notes: one post choice per note.
+      const oi = Number(e.target.dataset.o);
+      const o = state.orders[oi];
+      const n = Math.min(Math.max(Math.round(Number(e.target.value)) || 1, 1), 20);
+      keepEdits(oi);
+      o.values.noteCount = n;
+      o.postIds = Array.from({ length: n }, (_, k) => o.postIds[k] ?? '');
+      if (n > 1 && !o.suggestions.length) o.suggestions = suggestPosts(posts, o.parsed.noteText, o.values.startedAt);
+      drawOrders();
+    }
   });
   root.addEventListener('input', (e) => {
     if (e.target.dataset.stage) {
@@ -306,6 +363,14 @@ export async function renderOcrAd([postId], { isCurrent }) {
     if (rm) {
       state.images.splice(Number(rm.dataset.rm), 1);
       return drawThumbs();
+    }
+    const sug = e.target.closest('[data-suggest]');
+    if (sug) {
+      const o = state.orders[Number(sug.dataset.suggest)];
+      const free = o.postIds.indexOf('');
+      if (free >= 0) o.postIds[free] = sug.dataset.id;
+      keepEdits(Number(sug.dataset.suggest));
+      return drawOrders();
     }
     const use = e.target.closest('[data-use]');
     if (use) {

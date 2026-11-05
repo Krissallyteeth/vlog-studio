@@ -81,6 +81,20 @@ export function normalizeAd(raw = {}) {
     audience: raw.audience && typeof raw.audience === 'object' ? raw.audience : null,
     noteTitle: str(raw.noteTitle),
     notePublishedAt: str(raw.notePublishedAt),
+    // Order identity and money (from the expanded 订单信息 / 金额信息).
+    orderNo: str(raw.orderNo), // first part of 订单编号: the same order is never stored twice
+    orderAmount: num(raw.orderAmount),
+    paid: num(raw.paid),
+    payMethod: str(raw.payMethod),
+    targeting: str(raw.targeting),
+    bonus: num(raw.bonus), // 超额获赠
+    costPerResult: num(raw.costPerResult), // 投放成本 (元 per goal result)
+    // One order can promote several notes: each linked post keeps a copy with its share.
+    groupKey: str(raw.groupKey), // same value on every post of a multi-note order
+    noteCount: num(raw.noteCount) ?? 1,
+    orderSpend: num(raw.orderSpend), // the whole order's spend (spend = this post's share)
+    share: num(raw.share) ?? 1,
+    allocation: ['single', 'equal', 'exact'].includes(raw.allocation) ? raw.allocation : 'single',
     screenshots: Array.isArray(raw.screenshots) ? raw.screenshots.filter((x) => typeof x === 'string') : [],
     sourceText: str(raw.sourceText), // original Excel note it was read from
     needsReview: raw.needsReview === true,
@@ -112,6 +126,8 @@ export function normalizePost(raw = {}, now = Date.now()) {
       if (!ad.stage && ad.start) ad.stage = stageFromDates(raw.date, ad.start);
       return ad;
     }),
+    // Titles this post had in 薯条 screenshots (they can differ from the workbook title).
+    adTitles: Array.isArray(raw.adTitles) ? raw.adTitles.filter((x) => typeof x === 'string' && x).slice(-10) : [],
     extra: raw.extra && typeof raw.extra === 'object' ? { ...raw.extra } : {},
     source: raw.source ?? null, // { file, sheet, row, importedAt, cells: { col: { v, f, w } } }
     screenshots: Array.isArray(raw.screenshots) ? raw.screenshots.filter((x) => typeof x === 'string') : [],
@@ -134,6 +150,8 @@ export function normalizeIncome(raw = {}, now = Date.now()) {
     date: DATE_RE.test(raw.date) ? raw.date : '',
     note: str(raw.note),
     postId: str(raw.postId),
+    // Titles this post had in 薯条 screenshots (they can differ from the workbook title).
+    adTitles: Array.isArray(raw.adTitles) ? raw.adTitles.filter((x) => typeof x === 'string' && x).slice(-10) : [],
     extra: raw.extra && typeof raw.extra === 'object' ? { ...raw.extra } : {},
     source: raw.source ?? null,
     createdAt: num(raw.createdAt) ?? now,
@@ -155,6 +173,8 @@ export async function getSettings() {
     core: s.core ?? {},
     contentTypes: Array.isArray(s.contentTypes) && s.contentTypes.length ? s.contentTypes : [...DEFAULT_CONTENT_TYPES],
     currentRules: typeof s.currentRules === 'string' ? s.currentRules : '',
+    // Won per 1 元, typed by the user (never guessed) — only used to compare ad spend with income.
+    cnyKrw: typeof s.cnyKrw === 'number' && s.cnyKrw > 0 ? s.cnyKrw : null,
   };
 }
 export const saveSettings = async (s) => {

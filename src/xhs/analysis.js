@@ -115,7 +115,9 @@ export function adEffect(post) {
 /** Efficiency of one 薯条 order from its own report (null when the report numbers are missing). */
 export function orderEfficiency(ad) {
   const o = ad.order ?? {};
-  const per = (n) => (isNum(ad.spend) && ad.spend > 0 && isNum(n) && n > 0 ? ad.spend / n : null);
+  // The report covers the whole order, so costs use the whole order's spend.
+  const spend = isNum(ad.orderSpend) ? ad.orderSpend : ad.spend;
+  const per = (n) => (isNum(spend) && spend > 0 && isNum(n) && n > 0 ? spend / n : null);
   const likeFav = isNum(o.likes) || isNum(o.favorites) ? (o.likes ?? 0) + (o.favorites ?? 0) : null;
   return {
     perRead: per(o.reads),

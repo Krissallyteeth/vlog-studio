@@ -96,8 +96,13 @@ export async function buildWorkbook({ posts, income, baseline, settings, docs })
 
   // 광고기록
   const as = wb.addWorksheet('광고기록');
-  as.addRow(['게시물', '단계', '집행', '시작', '종료', '기간(h)', '목표', '지출(元)', '증정 크레딧(元)', '예상 팔로워', '실제 팔로워', '결과', '메모', '원본 메모']);
-  for (const p of list) for (const a of p.ads) as.addRow([p.title, a.stage, a.executed ? 'Y' : 'N', a.start, a.end, a.hours, a.goal, a.spend, a.credit, a.expectedFollowers, a.actualFollowers, a.result, a.memo, a.sourceText]);
+  as.addRow(['게시물', '단계', '집행', '시작', '종료', '기간(h)', '목표', '지출(元)', '증정 크레딧(元)', '예상 팔로워', '실제 팔로워', '결과', '메모', '원본 메모', '주문 번호', '묶음 노트 수', '주문 전체 지출(元)', '배분', '曝光量', '阅读量', '点赞量', '收藏量', '评论量', '新增关注', '主页浏览', '私信开口', '목표 결과', '예상 범위', '목표 1건당 비용(元)']);
+  for (const p of list) {
+    for (const a of p.ads) {
+      const o = a.order ?? {};
+      as.addRow([p.title, a.stage, a.executed ? 'Y' : 'N', a.start, a.end, a.hours, a.goal, a.spend, a.credit, a.expectedFollowers, a.actualFollowers, a.result, a.memo, a.sourceText, a.orderNo, a.noteCount > 1 ? a.noteCount : null, a.orderSpend, a.allocation === 'equal' ? '균등 배분(추정)' : '', o.exposure, o.reads, o.likes, o.favorites, o.comments, o.follows, o.profileViews, o.dmOpens, a.goalResult, a.estimate ? `${a.estimate[0]}~${a.estimate[1]}` : '', a.costPerResult]);
+    }
+  }
 
   // 기준
   const rs = wb.addWorksheet('기준');
