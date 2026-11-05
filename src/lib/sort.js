@@ -1,3 +1,4 @@
+import { CUSTOM_TYPE_PREFIX } from './constants.js';
 import { dateKey } from './dates.js';
 
 const ts = (v) => (Number.isFinite(v) ? v : 0);
@@ -33,12 +34,19 @@ function haystack(p) {
   );
 }
 
+/** type: "all", a built-in id ("travel") or a user-written one ("custom:맛집"). */
+function hasType(p, type) {
+  if (type === 'all') return true;
+  if (type.startsWith(CUSTOM_TYPE_PREFIX)) return (p.customTypes ?? []).includes(type.slice(CUSTOM_TYPE_PREFIX.length));
+  return (p.types ?? []).includes(type);
+}
+
 /** Search (name + places, every word must match), status and type filters combine with AND. */
 export function filterProjects(list, { query = '', status = 'all', type = 'all' } = {}) {
   const terms = normalize(query).split(' ').filter(Boolean);
   return list.filter((p) => {
     if (status !== 'all' && p.status !== status) return false;
-    if (type !== 'all' && p.type !== type) return false;
+    if (!hasType(p, type)) return false;
     if (!terms.length) return true;
     const text = haystack(p);
     return terms.every((t) => text.includes(t));

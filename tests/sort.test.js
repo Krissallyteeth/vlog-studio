@@ -66,6 +66,15 @@ describe('search and filters', () => {
     expect(names(filterProjects(projects, { query: '서울 홍대' }))).toEqual(['홍대 호텔 Vlog']);
   });
 
+  it('matches a project by any of its types, including custom ones', () => {
+    const both = make('전주 미식 여행', '2026-11-04', 1, 1, { types: ['travel', 'lifestyle'], customTypes: ['맛집'] });
+    const list = [both, make('원룸', '2026-10-01', 1, 1, { types: ['interior'] })];
+    expect(names(filterProjects(list, { type: 'travel' }))).toEqual(['전주 미식 여행']);
+    expect(names(filterProjects(list, { type: 'lifestyle' }))).toEqual(['전주 미식 여행']);
+    expect(names(filterProjects(list, { type: 'custom:맛집' }))).toEqual(['전주 미식 여행']);
+    expect(names(filterProjects(list, { type: 'custom:캠핑' }))).toEqual([]);
+  });
+
   it('combines status, type and search', () => {
     expect(names(filterProjects(projects, { status: 'editing' }))).toHaveLength(2);
     expect(names(filterProjects(projects, { status: 'editing', type: 'interior' }))).toEqual(['원룸 인테리어']);

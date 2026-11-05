@@ -1,4 +1,4 @@
-import { SHOT_TYPES, STATUSES, TYPES, VALUES, labelOf } from './constants.js';
+import { SHOT_TYPES, STATUSES, VALUES, labelOf, typeLabels } from './constants.js';
 import { formatDate, formatRange, formatTimestamp } from './dates.js';
 import { formatDuration, shotStats, totalSeconds, logHasContent } from './progress.js';
 
@@ -32,7 +32,7 @@ export function projectToMarkdown(p, { now = Date.now() } = {}) {
   out.push(block([
     `- **촬영 날짜**: ${formatRange(p.startDate, p.endDate)}`,
     line('장소', p.location),
-    `- **영상 유형**: ${labelOf(TYPES, p.type)}`,
+    typeLabels(p).length ? `- **영상 유형**: ${typeLabels(p).join(', ')}` : null,
     `- **진행 상태**: ${labelOf(STATUSES, p.status)}`,
     `- **목표 영상 길이**: ${formatDuration(p.target.min)} ~ ${formatDuration(p.target.max)}`,
   ]), '');

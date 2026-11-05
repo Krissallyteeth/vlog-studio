@@ -3,7 +3,7 @@ import { isEndBeforeStart, isValidDate, todayString } from './dates.js';
 import { uid } from './ids.js';
 
 export const APP_ID = 'vlog-studio';
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 const str = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
 const arr = (v) => (Array.isArray(v) ? v : []);
@@ -15,6 +15,26 @@ const seconds = (v) => {
   return Number.isFinite(n) && n >= 0 ? Math.min(n, 36000) : 0;
 };
 const time = (v) => (typeof v === 'string' && /^\d{2}:\d{2}$/.test(v) ? v : '');
+const MAX_CUSTOM_TYPES = 10;
+
+/** Built-in type ids, in display order. Accepts the v1 single `type` string too ("other" had no meaning, so it is dropped). */
+function normalizeTypes(raw) {
+  const picked = Array.isArray(raw.types) ? raw.types : typeof raw.type === 'string' ? [raw.type] : [];
+  return TYPES.filter((t) => picked.includes(t.id)).map((t) => t.id);
+}
+
+/** Free-text types: trimmed, de-duplicated, no copies of built-in labels. Accepts an array or a comma-separated string. */
+export function normalizeCustomTypes(raw) {
+  const list = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(/[,，、]/) : [];
+  const out = [];
+  for (const v of list) {
+    const t = str(v).replace(/\s+/g, ' ').trim().slice(0, 20);
+    if (!t || out.includes(t) || TYPES.some((x) => x.label === t)) continue;
+    out.push(t);
+  }
+  return out.slice(0, MAX_CUSTOM_TYPES);
+}
+
 function stamp(v, fallback) {
   if (Number.isFinite(v) && v > 0) return v;
   const parsed = typeof v === 'string' ? Date.parse(v) : NaN;
@@ -104,7 +124,8 @@ export function normalizeProject(raw, now = Date.now()) {
     startDate,
     endDate,
     location: str(raw.location),
-    type: oneOf(raw.type, TYPES, 'travel'),
+    types: normalizeTypes(raw),
+    customTypes: normalizeCustomTypes(raw.customTypes),
     status: oneOf(raw.status, STATUSES, 'planning'),
     createdAt,
     updatedAt: stamp(raw.updatedAt, createdAt),
@@ -147,8 +168,8 @@ export function createProject(input = {}, now = Date.now()) {
 /** Upgrades a stored or imported record from an older schema version. */
 export function migrateProject(raw, fromVersion = raw?.schemaVersion ?? 1) {
   const p = { ...raw };
-  // v1 is the first schema. Future steps go here, e.g. `if (fromVersion < 2) { ... }`.
-  void fromVersion;
+  // v2: the single `type` became multi-select `types` (+ free-text `customTypes`); normalizeProject reads either shape.
+  if (fromVersion < 2) delete p.types;
   return normalizeProject(p);
 }
 

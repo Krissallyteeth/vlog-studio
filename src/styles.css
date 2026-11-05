@@ -183,7 +183,28 @@
   .log-card {
     @apply transition-transform duration-150;
   }
-  .project-card:active,
+  .project-card {
+    @apply relative;
+  }
+  /* Stretched link: the whole card opens the project, edit buttons sit above it. */
+  .card-link {
+    @apply absolute inset-0 rounded-[inherit];
+  }
+  .card-link:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .card-edit {
+    @apply relative z-[1] -mx-1.5 rounded-[8px] px-1.5 py-0.5 transition-colors;
+  }
+  .card-edit:hover,
+  .card-edit:active {
+    @apply bg-surface-2;
+  }
+  .card-edit:focus-visible {
+    outline: 2px solid var(--accent);
+  }
+  .project-card:has(.card-link:active),
   .log-card:active,
   .quick-place:active {
     transform: scale(0.985);

@@ -1,9 +1,9 @@
-import { listProjects, getLastBackupAt } from '../data/repo.js';
-import { SORT_OPTIONS, STATUSES, TYPES, labelOf } from '../lib/constants.js';
-import { formatRange, formatRelative } from '../lib/dates.js';
+import { listProjects, getLastBackupAt, saveProject } from '../data/repo.js';
+import { CUSTOM_TYPE_PREFIX, SORT_OPTIONS, STATUSES, TYPES, labelOf, typeLabels } from '../lib/constants.js';
+import { formatRange, formatRelative, isEndBeforeStart, isValidDate, isWithinRange } from '../lib/dates.js';
 import { projectProgress } from '../lib/progress.js';
 import { filterProjects, sortProjects } from '../lib/sort.js';
-import { $, esc } from '../ui/dom.js';
+import { $, actionSheet, esc, openSheet, toast } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { HOME_NAV, bottomNav, mount, offlineBadge } from '../ui/layout.js';
 
@@ -31,33 +31,128 @@ export const statusPill = (status) => `<span class="status status-${esc(status)}
 
 function card(p) {
   const pct = projectProgress(p);
+  const types = typeLabels(p);
+  // The whole card opens the project via a stretched link; date, status, name and place sit above it as edit buttons.
   return `
-    <li>
-      <a class="card project-card" href="#/p/${encodeURIComponent(p.id)}" data-id="${esc(p.id)}">
-        <div class="flex items-center justify-between gap-2 text-[13px] text-muted">
-          <span class="inline-flex items-center gap-1.5 tabular-nums">${icon('calendar', 'size-4')}${esc(formatRange(p.startDate, p.endDate))}</span>
-          ${statusPill(p.status)}
+    <li class="card project-card" data-id="${esc(p.id)}">
+      <a class="card-link" href="#/p/${encodeURIComponent(p.id)}" aria-label="${esc(p.name)} 열기"></a>
+      <div class="flex items-center justify-between gap-2 text-[13px] text-muted">
+        <button type="button" class="card-edit inline-flex items-center gap-1.5 tabular-nums" data-edit="dates" aria-label="촬영 날짜 수정: ${esc(formatRange(p.startDate, p.endDate))}">${icon('calendar', 'size-4')}${esc(formatRange(p.startDate, p.endDate))}</button>
+        <button type="button" class="card-edit" data-edit="status" aria-label="상태 변경: ${esc(labelOf(STATUSES, p.status))}">${statusPill(p.status)}</button>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="min-w-0 flex-1">
+          <h2 class="mt-1.5 text-[18px] font-semibold leading-snug tracking-tight"><button type="button" class="card-edit line-clamp-2 text-left" data-edit="name" aria-label="프로젝트명 수정: ${esc(p.name)}">${esc(p.name)}</button></h2>
+          <button type="button" class="card-edit mt-0.5 inline-flex max-w-full items-center gap-1.5 text-[14px] text-muted" data-edit="location" aria-label="촬영 지역 수정">${icon('pin', 'size-4 shrink-0')}<span class="line-clamp-1 text-left">${p.location ? esc(p.location) : '촬영 지역 추가'}</span></button>
         </div>
-        <div class="flex items-center gap-2">
-          <div class="min-w-0 flex-1">
-            <h2 class="mt-2 text-[18px] font-semibold leading-snug tracking-tight line-clamp-2">${esc(p.name)}</h2>
-            ${p.location ? `<p class="mt-1 inline-flex items-center gap-1.5 text-[14px] text-muted">${icon('pin', 'size-4')}<span class="line-clamp-1">${esc(p.location)}</span></p>` : ''}
-          </div>
-          ${icon('chevronRight', 'size-5 text-muted')}
-        </div>
-        <div class="mt-3.5 flex items-center gap-3">
-          <div class="progress flex-1" role="progressbar" aria-label="작성 진행률" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><span style="width:${pct}%"></span></div>
-          <span class="text-[12px] font-medium tabular-nums w-9 text-right">${pct}%</span>
-        </div>
-        <p class="mt-2 text-[12px] text-muted">${esc(labelOf(TYPES, p.type))} · 마지막 수정 ${esc(formatRelative(p.updatedAt))}</p>
-      </a>
+        ${icon('chevronRight', 'size-5 text-muted')}
+      </div>
+      <div class="mt-3 flex items-center gap-3">
+        <div class="progress flex-1" role="progressbar" aria-label="작성 진행률" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><span style="width:${pct}%"></span></div>
+        <span class="text-[12px] font-medium tabular-nums w-9 text-right">${pct}%</span>
+      </div>
+      <p class="mt-2 text-[12px] text-muted">${types.length ? `${esc(types.join(' · '))} · ` : ''}마지막 수정 ${esc(formatRelative(p.updatedAt))}</p>
     </li>`;
+}
+
+/** Small form in a bottom sheet. `read(form)` returns { value } to save, or { error, focus? } to keep it open. */
+function formSheet({ title, body, read }) {
+  return openSheet({
+    title,
+    body: `
+      <form class="flex flex-col gap-3" novalidate>
+        ${body}
+        <p class="form-error hidden" role="alert"></p>
+        <div class="mt-1 grid grid-cols-[1fr_2fr] gap-2">
+          <button type="button" class="btn btn-secondary" data-cancel>취소</button>
+          <button type="submit" class="btn btn-primary">저장</button>
+        </div>
+      </form>`,
+    onMount(el, close) {
+      const form = $('form', el);
+      const error = $('.form-error', el);
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const r = read(form);
+        if (!r.error) return close(r);
+        error.textContent = r.error;
+        error.classList.remove('hidden');
+        r.focus?.focus();
+      });
+      $('[data-cancel]', el).addEventListener('click', () => close(null));
+    },
+  });
+}
+
+/** Edits one card field in place. Resolves with a toast message, or null when nothing changed. */
+async function quickEdit(p, field) {
+  if (field === 'status') {
+    const next = await actionSheet({
+      title: '프로젝트 상태',
+      actions: STATUSES.map((st) => ({ id: st.id, label: st.label, active: st.id === p.status })),
+    });
+    if (!next || next === p.status) return null;
+    p.status = next;
+    return '상태를 바꿨어요.';
+  }
+
+  if (field === 'name' || field === 'location') {
+    const isName = field === 'name';
+    const r = await formSheet({
+      title: isName ? '프로젝트명' : '주요 촬영 지역 / 장소',
+      body: `<input name="v" class="input" maxlength="${isName ? 80 : 120}" value="${esc(p[field])}" placeholder="${isName ? '예: 전주 당일치기 Vlog' : '예: 전주 · 한옥마을'}" aria-label="${isName ? '프로젝트명' : '촬영 지역'}" enterkeyhint="done" autofocus />`,
+      read: (form) => {
+        const v = form.v.value.trim();
+        return isName && !v ? { error: '프로젝트명을 입력해 주세요.', focus: form.v } : { value: v };
+      },
+    });
+    if (!r || r.value === p[field]) return null;
+    p[field] = r.value;
+    return '저장했어요.';
+  }
+
+  if (field === 'dates') {
+    const r = await formSheet({
+      title: '촬영 날짜',
+      body: `
+        <div class="grid grid-cols-2 gap-3">
+          <label class="field"><span class="field-label">시작일 <span class="req">필수</span></span><input name="start" type="date" class="input" required value="${esc(p.startDate)}" /></label>
+          <label class="field"><span class="field-label">종료일 <span class="opt">선택</span></span><input name="end" type="date" class="input" min="${esc(p.startDate)}" value="${esc(p.endDate)}" /></label>
+        </div>
+        <p class="text-[13px] text-muted">하루 촬영이면 종료일은 비워 두세요.</p>`,
+      read: (form) => {
+        const start = form.start.value;
+        const end = form.end.value;
+        if (!isValidDate(start)) return { error: '촬영 시작일을 선택해 주세요.', focus: form.start };
+        if (end && isEndBeforeStart(start, end)) return { error: '종료일은 시작일 이후로 선택해 주세요.', focus: form.end };
+        return { value: { start, end: end && end !== start ? end : '' } };
+      },
+    });
+    if (!r || (r.value.start === p.startDate && r.value.end === p.endDate)) return null;
+    p.startDate = r.value.start;
+    p.endDate = r.value.end;
+    const outside = p.places.filter((pl) => pl.date && !isWithinRange(pl.date, p.startDate, p.endDate)).length;
+    return outside ? `저장했어요. 촬영 기간 밖 방문일이 ${outside}곳 있어요.` : '저장했어요.';
+  }
+  return null;
+}
+
+/** Filter options: built-in types, then any type the user wrote on a project. */
+function typeOptions(projects) {
+  const custom = [...new Set(projects.flatMap((p) => p.customTypes ?? []))].sort((a, b) => a.localeCompare(b, 'ko'));
+  return [
+    { id: 'all', label: '모든 유형' },
+    ...TYPES,
+    ...custom.map((c) => ({ id: `${CUSTOM_TYPE_PREFIX}${c}`, label: c })),
+  ];
 }
 
 export async function renderHome({ isCurrent }) {
   const [projects, lastBackupAt] = await Promise.all([listProjects(), getLastBackupAt().catch(() => undefined)]);
   if (!isCurrent()) return null;
   const prefs = loadPrefs();
+  const typeOpts = typeOptions(projects);
+  if (!typeOpts.some((o) => o.id === prefs.type)) prefs.type = 'all';
   const needsBackup = projects.length > 0 && (!lastBackupAt || Date.now() - lastBackupAt > BACKUP_NUDGE_MS);
 
   const app = mount(`
@@ -99,11 +194,8 @@ export async function renderHome({ isCurrent }) {
           <div class="flex items-center gap-1.5">
             <label class="select-pill">
               <span class="sr-only">영상 유형</span>
-              <span aria-hidden="true" data-label-for="type">${esc(prefs.type === 'all' ? '모든 유형' : labelOf(TYPES, prefs.type))}</span>
-              <select id="type">
-                <option value="all">모든 유형</option>
-                ${TYPES.map((t) => `<option value="${t.id}" ${prefs.type === t.id ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}
-              </select>
+              <span aria-hidden="true" data-label-for="type">${esc(labelOf(typeOpts, prefs.type))}</span>
+              <select id="type">${typeOptionsHtml()}</select>
               ${icon('chevronDown', 'size-4')}
             </label>
             <label class="select-pill">
@@ -130,6 +222,10 @@ export async function renderHome({ isCurrent }) {
       </main>
       ${bottomNav(HOME_NAV, 'home')}
     </div>`);
+
+  function typeOptionsHtml() {
+    return typeOpts.map((o) => `<option value="${esc(o.id)}" ${prefs.type === o.id ? 'selected' : ''}>${esc(o.label)}</option>`).join('');
+  }
 
   const list = $('#list', app);
   function renderList() {
@@ -162,7 +258,25 @@ export async function renderHome({ isCurrent }) {
       renderList();
     }
   });
-  app.addEventListener('click', (e) => {
+  app.addEventListener('click', async (e) => {
+    const edit = e.target.closest('[data-edit]');
+    if (edit) {
+      const p = projects.find((x) => x.id === edit.closest('[data-id]').dataset.id);
+      if (!p) return;
+      const before = structuredClone(p);
+      const message = await quickEdit(p, edit.dataset.edit);
+      if (!message) return;
+      try {
+        await saveProject(p);
+        toast(message);
+      } catch (err) {
+        Object.assign(p, before);
+        toast(`저장하지 못했어요: ${err.message}`, { tone: 'error' });
+      }
+      renderList();
+      app.querySelector(`[data-id="${CSS.escape(p.id)}"] [data-edit="${edit.dataset.edit}"]`)?.focus({ preventScroll: true });
+      return;
+    }
     const chip = e.target.closest('[data-status]');
     if (chip) {
       prefs.status = chip.dataset.status;

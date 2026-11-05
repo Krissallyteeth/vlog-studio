@@ -10,7 +10,6 @@ export const TYPES = [
   { id: 'daily', label: '일상' },
   { id: 'interior', label: '인테리어' },
   { id: 'lifestyle', label: '라이프스타일' },
-  { id: 'other', label: '기타' },
 ];
 
 export const VALUES = [
@@ -42,4 +41,10 @@ export const SORT_OPTIONS = [
 
 export const DEFAULT_TARGET = { min: 120, max: 180 };
 
+/** Filter value prefix for user-written video types ("custom:맛집"), so they never collide with built-in ids. */
+export const CUSTOM_TYPE_PREFIX = 'custom:';
+
 export const labelOf = (list, id) => list.find((x) => x.id === id)?.label ?? '';
+
+/** Every video type of a project as display labels: built-in ones first, then the user's own. */
+export const typeLabels = (p) => [...(p.types ?? []).map((id) => labelOf(TYPES, id)).filter(Boolean), ...(p.customTypes ?? [])];

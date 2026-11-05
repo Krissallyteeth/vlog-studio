@@ -136,3 +136,25 @@ describe('markdown export', () => {
     }
   });
 });
+
+describe('video types (multi-select)', () => {
+  it('migrates the v1 single type and drops "other"', () => {
+    const v1 = (type) => parseBackup(JSON.stringify({ app: 'vlog-studio', schemaVersion: 1, projects: [{ id: 'a', name: 'x', startDate: '2026-01-01', type }] })).projects[0];
+    expect(v1('lifestyle')).toMatchObject({ types: ['lifestyle'], customTypes: [] });
+    expect(v1('other').types).toEqual([]);
+    expect(v1('other')).not.toHaveProperty('type');
+  });
+
+  it('keeps several types in display order, allows none, and cleans custom ones', () => {
+    const p = createProject({ name: 'x', startDate: '2026-01-01', types: ['lifestyle', 'travel', 'nope'], customTypes: ' 맛집 , 캠핑,맛집, 여행,' });
+    expect(p.types).toEqual(['travel', 'lifestyle']);
+    expect(p.customTypes).toEqual(['맛집', '캠핑']);
+    expect(createProject({ name: 'y', startDate: '2026-01-01' }).types).toEqual([]);
+  });
+
+  it('exports every type to markdown and omits the line when there are none', () => {
+    const p = createProject({ name: 'x', startDate: '2026-01-01', types: ['travel', 'lifestyle'], customTypes: ['맛집'] });
+    expect(projectToMarkdown(p)).toContain('- **영상 유형**: 여행, 라이프스타일, 맛집');
+    expect(projectToMarkdown(createProject({ name: 'y', startDate: '2026-01-01' }))).not.toContain('영상 유형');
+  });
+});

@@ -1,17 +1,18 @@
 import { createNewProject, getProject, saveProject } from '../data/repo.js';
 import { STATUSES, TYPES } from '../lib/constants.js';
+import { normalizeCustomTypes } from '../lib/schema.js';
 import { isEndBeforeStart, isValidDate, isWithinRange, todayString } from '../lib/dates.js';
 import { navigate } from '../router.js';
 import { $, esc, toast } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { mount } from '../ui/layout.js';
 
-const radios = (name, list, value) =>
+const choices = (kind, name, list, isChecked) =>
   list
     .map(
       (x) => `
       <label class="chip">
-        <input type="radio" class="sr-only" name="${name}" value="${x.id}" ${x.id === value ? 'checked' : ''} />
+        <input type="${kind}" class="sr-only" name="${name}" value="${x.id}" ${isChecked(x.id) ? 'checked' : ''} />
         ${esc(x.label)}
       </label>`,
     )
@@ -26,7 +27,7 @@ export async function renderProjectForm(id, { isCurrent }) {
     navigate('/', { replace: true });
     return null;
   }
-  const v = project ?? { name: '', startDate: todayString(), endDate: '', location: '', type: 'travel', status: 'planning' };
+  const v = project ?? { name: '', startDate: todayString(), endDate: '', location: '', types: [], customTypes: [], status: 'planning' };
   const back = editing ? `#/p/${encodeURIComponent(id)}` : '#/';
 
   const root = mount(`
@@ -64,13 +65,14 @@ export async function renderProjectForm(id, { isCurrent }) {
           </div>
 
           <fieldset class="field">
-            <legend class="field-label">영상 유형</legend>
-            <div class="flex flex-wrap gap-2">${radios('type', TYPES, v.type)}</div>
+            <legend class="field-label">영상 유형 <span class="opt">여러 개 선택 가능</span></legend>
+            <div class="flex flex-wrap gap-2">${choices('checkbox', 'types', TYPES, (t) => v.types.includes(t))}</div>
+            <input id="f-custom-types" name="customTypes" class="input mt-2" maxlength="120" placeholder="직접 입력 · 예: 맛집, 캠핑 (쉼표로 구분)" value="${esc(v.customTypes.join(', '))}" aria-label="영상 유형 직접 입력" />
           </fieldset>
 
           <fieldset class="field">
             <legend class="field-label">프로젝트 상태</legend>
-            <div class="flex flex-wrap gap-2">${radios('status', STATUSES, v.status)}</div>
+            <div class="flex flex-wrap gap-2">${choices('radio', 'status', STATUSES, (st) => st === v.status)}</div>
           </fieldset>
 
           <p id="form-error" class="form-error hidden" role="alert"></p>
@@ -110,7 +112,8 @@ export async function renderProjectForm(id, { isCurrent }) {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const data = Object.fromEntries(new FormData(form));
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData);
     const name = String(data.name ?? '').trim();
     if (!name) {
       showError('프로젝트명을 입력해 주세요.');
@@ -132,7 +135,8 @@ export async function renderProjectForm(id, { isCurrent }) {
       startDate: data.startDate,
       endDate: data.endDate && data.endDate !== data.startDate ? data.endDate : '',
       location: String(data.location ?? '').trim(),
-      type: data.type,
+      types: formData.getAll('types'),
+      customTypes: normalizeCustomTypes(String(data.customTypes ?? '')),
       status: data.status,
     };
     try {
