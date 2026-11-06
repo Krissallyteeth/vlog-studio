@@ -520,7 +520,10 @@ export async function renderOcrAd([postId], { isCurrent }) {
     const toCheck = keys.filter((k) => f[k] && !(k in o.values));
     const done = keys.filter((k) => k in o.values);
     // Note count: 1 unless the screenshots say otherwise — not worth asking about.
-    const missing = keys.filter((k) => !f[k] && !(k in o.values) && k !== 'noteCount');
+    // Not missing: the publish time of a multi-note order (each note's date comes from its post) and
+    // the cost per result when spend and result are known (the reports work it out).
+    const notNeeded = (k) => k === 'noteCount' || (k === 'publishedAt' && o.postIds.length > 1) || (k === 'costPerResult' && o.values.spend != null && o.values.result != null);
+    const missing = keys.filter((k) => !f[k] && !(k in o.values) && !notNeeded(k));
     const checkItem = (k) => {
       const r = f[k];
       const cands = r.status === 'conflict' ? r.options.map((x) => x.value) : [r.candidate];
