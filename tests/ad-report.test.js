@@ -411,3 +411,17 @@ describe('orders without expanded details (no start time, no 实付)', () => {
     expect(r.fields.title.candidate).toContain('万宁');
   });
 });
+
+describe('result and report counts must agree', () => {
+  it('关注 order: result 26 but 新增关注 read as 20 → neither is trusted', () => {
+    const r = parseAdOrder([[L('推广 目标 粉丝 关注 量'), L('评论 量 新 增 关注 主页 浏览 私信 开口'), L('2 20 99 0'), L('粉丝 关注 量 26 效果 良好 / 预 估 转 化 7 ~ 43')]]);
+    expect(r.fields.follows).toMatchObject({ status: 'check', candidate: 20, reason: 'mismatch' });
+    expect(r.fields.result).toMatchObject({ status: 'check', candidate: 26, reason: 'mismatch' });
+    expect(r.fields.follows.at.word).toBeTruthy(); // the word box, for a second reading
+  });
+  it('agreeing counts stay confirmed', () => {
+    const r = parseAdOrder([[L('推广 目标 粉丝 关注 量'), L('评论 量 新 增 关注 主页 浏览 私信 开口'), L('2 26 99 0'), L('粉丝 关注 量 26 / 预 估 转 化 7 ~ 43')]]);
+    expect(r.fields.follows).toMatchObject({ status: 'ok', value: 26 });
+    expect(r.fields.result).toMatchObject({ status: 'ok', value: 26 });
+  });
+});

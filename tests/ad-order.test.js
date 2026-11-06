@@ -17,7 +17,7 @@ describe('薯条 order parsing', () => {
 
   it('reads the metric grid, spend, goal result and audience; uncertain values stay unfilled', () => {
     const r = parseAdOrder([
-      [L('推广 完成'), L('发 布 时 间 : 2026-01-05 19:20:05'), L('点 赞 收藏 量 9 / 预 估 转 化 5 ~ 20', 60), L('满 50.0 元 赠 20.0 元')],
+      [L('推广 完成'), L('发 布 时 间 : 2026-01-05 19:20:05'), L('点 赞 收藏 量 10 / 预 估 转 化 5 ~ 20', 60), L('满 50.0 元 赠 20.0 元')],
       [L('当前 已 消耗 金额 300/300 元'), L('曝光 量 阅读 量 点 赞 量 收藏 量'), L('500 60 8 2'), L('评论 量 新 增 关注 主页 浏览 私信 开口'), L('1 3 7 0')],
       [L('性 别 分 布'), L('男性 40.0% 女性 60.0%'), L('年 龄 分 布'), A('18以下', '2.0%'), A('18~23', '268%')],
     ]);
@@ -28,7 +28,7 @@ describe('薯条 order parsing', () => {
     expect([f.comments.value, f.follows.value, f.profileViews.value, f.dmOpens.value]).toEqual([1, 3, 7, 0]);
     expect(f.spend).toMatchObject({ status: 'ok', value: 300 });
     expect(f.goal.value).toBe('点赞收藏量');
-    expect(f.result).toMatchObject({ status: 'check', candidate: 9 }); // low confidence → not filled
+    expect(f.result).toMatchObject({ status: 'ok', value: 10 }); // unsure reading, but = likes 8 + saves 2 of the report
     expect(r.audience.gender.male).toMatchObject({ status: 'ok', value: 0.4 }); // 40 + 60 = 100 confirms
     expect(r.audience.age['18~23']).toMatchObject({ status: 'check' }); // "268%" is not a share
   });

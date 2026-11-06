@@ -1288,4 +1288,6 @@ export default {
   "oad.stageMemo": "截图中没有推广开始时间，使用 Excel 备注中的时机（{stage}）。展开“展开详情”的截图（下单时间）可得到准确时机。",
   "oad.memoMoney": "截图中没有实付金额。以 Excel 备注的 {money}元 作为实际支出，已消耗 {consumed}元 中其余 {credit}元 作为平台赠送。",
   "oad.memoMoneyCoupon": "截图中没有实付金额。备注 {money}元 + 之前订单获得的优惠券 {credit}元 = 已消耗 {consumed}元，正好吻合：实际支出 {money}元，平台赠送 {credit}元。",
+
+  "ocr.why.mismatch": "实际结果与报告数据不一致 — 其中一个识别有误",
 };

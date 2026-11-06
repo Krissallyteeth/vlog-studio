@@ -173,6 +173,64 @@ export async function refineAudience(parsed, sources) {
   return fixed;
 }
 
+/**
+ * Second look at numbers that contradict each other (result vs the report's count, marked
+ * "mismatch" by the parser): each one's own word is cut out, cleaned, enlarged and read again as
+ * digits. When the new readings make them agree, they are confirmed; otherwise they stay to check.
+ */
+export async function refineNumbers(parsed, sources) {
+  const f = parsed.fields;
+  const keys = Object.keys(f).filter((k) => f[k]?.reason === 'mismatch' && f[k].at?.word);
+  if (!keys.length || typeof document === 'undefined') return 0;
+  const { recognizeLine } = await import('../../xhs/ocr-engine.js');
+  const reread = {};
+  for (const k of keys) {
+    const { img, word } = f[k].at;
+    const src = sources[img];
+    const blob = typeof src === 'string' ? await (await fetch(src)).blob() : src;
+    const bmp = await createImageBitmap(blob).catch(() => null);
+    if (!bmp) continue;
+    const pad = 10;
+    const x0 = Math.max(0, word.x0 - pad);
+    const y0 = Math.max(0, word.y0 - pad);
+    const w = Math.min(bmp.width, word.x1 + pad) - x0;
+    const h = Math.min(bmp.height, word.y1 + pad) - y0;
+    for (const scale of [3, 2]) {
+      const c = document.createElement('canvas');
+      c.width = w * scale;
+      c.height = h * scale;
+      const g = c.getContext('2d', { willReadFrequently: true });
+      g.fillStyle = '#fff';
+      g.fillRect(0, 0, c.width, c.height);
+      g.drawImage(bmp, x0, y0, w, h, 0, 0, c.width, c.height);
+      const d = g.getImageData(0, 0, c.width, c.height);
+      for (let i = 0; i < d.data.length; i += 4) {
+        const a = d.data;
+        const mx = Math.max(a[i], a[i + 1], a[i + 2]);
+        a[i] = a[i + 1] = a[i + 2] = mx < 150 && mx - Math.min(a[i], a[i + 1], a[i + 2]) < 45 ? 0 : 255;
+      }
+      g.putImageData(d, 0, 0);
+      const read = await recognizeLine(c, { digits: true }).catch(() => null);
+      const n = Number(String(read?.text ?? '').replace(/[^\d]/g, ''));
+      if (String(read?.text ?? '').match(/\d/) && Number.isFinite(n)) {
+        reread[k] = n;
+        break;
+      }
+    }
+  }
+  const val = (k) => (k in reread ? reread[k] : f[k]?.value ?? f[k]?.candidate);
+  const goal = String(f.goal?.value ?? '');
+  const parts = /关注/.test(goal) ? ['follows'] : ['likes', 'favorites'];
+  const R = val('result');
+  const agree = R != null && parts.every((k) => val(k) != null) && parts.reduce((a, k) => a + val(k), 0) === R;
+  if (!agree) {
+    for (const k of Object.keys(reread)) if (reread[k] !== f[k].candidate) f[k] = { ...f[k], candidate: reread[k], text: `${f[k].text} → ${reread[k]}` };
+    return 0;
+  }
+  for (const k of ['result', ...parts]) if (f[k] && f[k].status !== 'ok') f[k] = { ...f[k], status: 'ok', value: val(k), candidate: undefined, reason: undefined, confirmedBy: 'reread' };
+  return keys.length;
+}
+
 export async function renderOcrAd([postId], { isCurrent }) {
   const posts = ordered(await listPosts()).reverse();
   if (!isCurrent()) return null;
@@ -253,6 +311,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
     for (const imgs of groups) {
       const parsed = parseAdOrder(imgs.map((im) => im.lines));
       await refineAudience(parsed, imgs.map((im) => im.file)).catch(() => 0);
+      await refineNumbers(parsed, imgs.map((im) => im.file)).catch(() => 0);
       parsedGroups.push(parsed);
     }
     const bonuses = couponBonuses();

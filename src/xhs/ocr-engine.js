@@ -62,14 +62,14 @@ export async function recognize(image, progress = () => {}, { gray = false } = {
 }
 
 /** Reads one line of text (a small, cleaned crop): page segmentation "single line", then back. */
-export async function recognizeLine(image) {
+export async function recognizeLine(image, { digits = false } = {}) {
   const worker = await getWorker();
-  await worker.setParameters({ tessedit_pageseg_mode: '7' });
+  await worker.setParameters({ tessedit_pageseg_mode: '7', tessedit_char_whitelist: digits ? '0123456789.,%' : '' });
   try {
     const { data } = await worker.recognize(image);
     return { text: String(data.text ?? '').trim(), confidence: data.confidence ?? 0 };
   } finally {
-    await worker.setParameters({ tessedit_pageseg_mode: '6' }); // tesseract.js default (single block)
+    await worker.setParameters({ tessedit_pageseg_mode: '6', tessedit_char_whitelist: '' }); // tesseract.js defaults
   }
 }
 

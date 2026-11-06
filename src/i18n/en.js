@@ -1288,4 +1288,6 @@ export default {
   "oad.stageMemo": "The screenshots have no ad start time, so the workbook memo's D+n ({stage}) is used. Screenshots with \"展开详情\" expanded (下单时间) give the exact one.",
   "oad.memoMoney": "The screenshots show no amount paid (实付). The workbook memo's {money}元 is taken as the real spend, the rest of the {consumed}元 consumed ({credit}元) as platform credit.",
   "oad.memoMoneyCoupon": "The screenshots show no amount paid (实付). Memo {money}元 + a coupon of {credit}元 from an earlier order = {consumed}元 consumed exactly, so: real spend {money}元, platform credit {credit}元.",
+
+  "ocr.why.mismatch": "The result and the report count disagree — one was misread",
 };

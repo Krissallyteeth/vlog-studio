@@ -101,7 +101,7 @@ export function parseAdOrder(linesPerImage) {
         // Left-most number = the result, the others = the estimate: each judged by its own words.
         const dw = [...nums].sort((a, b) => a.bbox.x0 - b.bbox.x0);
         const cOf = (list) => (list.length ? Math.min(...list.map((w) => w.confidence ?? 0)) : nc);
-        set('result', judge(Number(m[1]), m[1], cOf(dw.slice(0, 1))));
+        set('result', { ...judge(Number(m[1]), m[1], cOf(dw.slice(0, 1))), at: { img, box: here.box, word: dw[0]?.bbox } });
         set('estimate', judge([Number(m[2]), Number(m[3])], `${m[2]}~${m[3]}`, cOf(dw.slice(1))));
         const g = /^(点赞收藏量|粉丝关注量|关注量|阅读量|主页浏览量|新增关注)\d/.exec(text);
         if (g) set('goal', ok(/关注/.test(g[1]) ? '关注' : g[1], g[1], 100));
@@ -129,8 +129,9 @@ export function parseAdOrder(linesPerImage) {
       const labels = AD_METRICS.map(([key, names]) => ({ key, at: Math.min(...names.map((n) => (text.indexOf(n) < 0 ? Infinity : text.indexOf(n)))) })).filter((x) => x.at !== Infinity).sort((a, b) => a.at - b.at);
       if (labels.length >= 2 && lines[i + 1]) {
         here = { img, box: boxOf([line, lines[i + 1]]) }; // label row + number row
-        const nums = lines[i + 1].words.map((w) => ({ p: parseNumber(w.text), c: w.confidence, text: w.text })).filter((x) => x.p);
-        if (nums.length === labels.length) labels.forEach((l, j) => set(l.key, judge(nums[j].p.value, nums[j].text, nums[j].c, nums[j].p.unit === 'pct' ? 'format' : '')));
+        const nums = lines[i + 1].words.map((w) => ({ p: parseNumber(w.text), c: w.confidence, text: w.text, box: w.bbox })).filter((x) => x.p);
+        // Each value keeps the box of its own word, so a doubtful number can be read again on its own.
+        if (nums.length === labels.length) labels.forEach((l, j) => set(l.key, { ...judge(nums[j].p.value, nums[j].text, nums[j].c, nums[j].p.unit === 'pct' ? 'format' : ''), at: { img, box: here.box, word: nums[j].box } }));
         else labels.forEach((l) => set(l.key, { status: 'check', candidate: null, text: lines[i + 1].words.map((w) => w.text).join(' '), conf: 0, reason: 'layout' }));
       }
       // Audience sections
@@ -267,6 +268,7 @@ export function parseAdOrder(linesPerImage) {
     const fromReport = /点赞|收藏/.test(goal) && okv('likes') != null && okv('favorites') != null ? okv('likes') + okv('favorites') : /关注/.test(goal) ? okv('follows') : null;
     if (fromReport != null && f.result.candidate === fromReport) confirm('result', 'report');
   }
+  markMismatch(f);
   return { fields: f, audience, noteText: noteText.join(' ') };
 }
 
@@ -274,6 +276,27 @@ export function parseAdOrder(linesPerImage) {
 const PROVINCES = ['北京', '天津', '上海', '重庆', '河北', '山西', '辽宁', '吉林', '黑龙江', '江苏', '浙江', '安徽', '福建', '江西', '山东', '河南', '湖北', '湖南', '广东', '海南', '四川', '贵州', '云南', '陕西', '甘肃', '青海', '台湾', '内蒙古', '广西', '西藏', '宁夏', '新疆', '香港', '澳门', '其他'];
 const INTERESTS = ['体育运动', '运动健身', '美妆护肤', '时尚穿搭', '母婴育儿', '家居家装', '科技数码', '游戏动漫', '知识教育', '影视综艺', '生活记录', '娱乐', '美食', '情感', '影视', '时尚', '旅游', '宠物', '美妆', '护肤', '穿搭', '运动', '健身', '音乐', '游戏', '科技', '数码', '教育', '学习', '母婴', '家居', '家装', '汽车', '体育', '摄影', '读书', '二次元', '动漫', '搞笑', '职场', '财经', '健康', '婚嫁', '出行', '人文', '艺术', '手工', '绘画', '舞蹈', '明星', '综艺', '潮流', '户外', '露营', '咖啡', '探店', '美甲', '减肥', '亲子', '留学', '校园', '文化'];
 const WEAK = new Set(['人', '他', '其', '国', '本', '和', '的', '一', '大', '小', '上', '下']);
+
+/**
+ * The goal result and the report's own count must agree (关注: result = 新增关注; 点赞收藏:
+ * result = 点赞 + 收藏). When they do not, one of them is misread ("26" read as "20"), so none of
+ * them is trusted: all are marked "mismatch" for a second reading. A result confirmed another way
+ * (cost × result = spend, result − estimate top = bonus) keeps its value; only the counts are marked.
+ */
+export function markMismatch(f) {
+  const v = (k) => f[k]?.value ?? f[k]?.candidate ?? null;
+  const goal = String(f.goal?.value ?? '');
+  const R = v('result');
+  if (R == null) return [];
+  const parts = /关注/.test(goal) ? ['follows'] : /点赞|收藏/.test(goal) ? ['likes', 'favorites'] : [];
+  if (!parts.length || parts.some((k) => v(k) == null)) return [];
+  const total = parts.reduce((a, k) => a + v(k), 0);
+  if (total === R) return [];
+  const resultSure = ['bonus', 'costPerResult'].includes(f.result?.confirmedBy);
+  const keys = resultSure ? parts : ['result', ...parts];
+  for (const k of keys) f[k] = { ...f[k], status: 'check', value: undefined, candidate: v(k), reason: 'mismatch' };
+  return keys;
+}
 
 /** True when an audience label is one of the known names of its chart. */
 export const knownName = (name, section) => (section === 'city' ? PROVINCES : section === 'interest' ? INTERESTS : []).includes(name);

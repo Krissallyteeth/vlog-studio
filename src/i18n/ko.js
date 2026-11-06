@@ -1288,4 +1288,6 @@ export default {
   "oad.stageMemo": "캡처에 광고 시작 시각이 없어서 엑셀 메모의 시점({stage})을 써요. 정확한 시점은 \"展开详情\"을 펼친 캡처(下单时间)로 확인돼요.",
   "oad.memoMoney": "캡처에 실제 결제 금액(实付)이 없어요. 엑셀 메모의 {money}元을 실제 지출로 보고, 소모 {consumed}元 중 나머지 {credit}元은 플랫폼 서비스로 나눠요.",
   "oad.memoMoneyCoupon": "캡처에 실제 결제 금액(实付)이 없어요. 엑셀 메모의 {money}元 + 이전 주문에서 받은 쿠폰 {credit}元 = 소모 {consumed}元이 정확히 맞아서, 실제 지출 {money}元 · 플랫폼 서비스 {credit}元으로 나눠요.",
+
+  "ocr.why.mismatch": "실제 결과와 보고서 수치가 서로 안 맞아요 — 하나가 잘못 읽혔어요",
 };
