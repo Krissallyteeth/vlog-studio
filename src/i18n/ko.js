@@ -1269,4 +1269,6 @@ export default {
   "adr.c.monthSpend": "{cur} 실제 광고비는 {spend}예요(지난 {prev}: {spendPrev}).",
 
   "oad.audName": "이름을 못 읽었어요 — 캡처 보고 입력 (예: 美食)",
+  "oad.audienceOk": "시청자 정보 {n}개 — 모두 확인됨",
+  "oad.audienceCheck": "시청자 정보 {n}개 — 확인 필요 {k}개",
 };

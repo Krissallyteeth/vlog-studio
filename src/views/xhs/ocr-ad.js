@@ -155,6 +155,13 @@ export async function refineAudience(parsed, sources) {
     parsed.audience[sec] = Object.fromEntries(entries.filter(([k], i) => entries.findIndex(([k2]) => k2 === k) === i));
     fixed++;
   }
+  // Charts show at most 6 regions (top 5 + 其他) and 8 interests: once those are named, rows still
+  // without a name are page noise (a banner, a button) and are dropped.
+  for (const [sec, max] of [['city', 6], ['interest', 8]]) {
+    const list = parsed.audience[sec] ?? {};
+    const named = Object.keys(list).filter((k) => knownName(k, sec));
+    if (named.length >= max) parsed.audience[sec] = Object.fromEntries(Object.entries(list).filter(([k]) => knownName(k, sec)));
+  }
   completeBySum(parsed.audience.city);
   return fixed;
 }
@@ -403,7 +410,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
             </div>${singleExtras(o, oi)}`
             }
             ${fieldsHtml(o, oi)}
-            ${audRows.length ? `<details class="mt-3"><summary class="link-btn cursor-pointer">${esc(t('oad.audience', { n: audRows.length }))}</summary>
+            ${audRows.length ? `<details class="mt-3"><summary class="link-btn cursor-pointer">${esc(t(audRows.some(({ sec, label, r }) => r.status !== 'ok' || (sec !== 'gender' && sec !== 'age' && !knownName(label, sec))) ? 'oad.audienceCheck' : 'oad.audienceOk', { n: audRows.length, k: audRows.filter(({ sec, label, r }) => r.status !== 'ok' || (sec !== 'gender' && sec !== 'age' && !knownName(label, sec))).length }))}</summary>
               <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">${audRows.map(({ sec, label, r }) => {
                 const unnamed = sec !== 'gender' && sec !== 'age' && (label.startsWith('#') || r.reason === 'text');
                 return `<div class="flex flex-col gap-0.5 rounded-[10px] px-2 py-1.5 ${r.status === 'ok' && !unnamed ? 'bg-surface-2' : 'cf-mid'}"><span class="text-[11px] opacity-75">${esc(t(`oad.sec.${sec}`))}${unnamed ? '' : ` · ${esc(label)}`}</span>

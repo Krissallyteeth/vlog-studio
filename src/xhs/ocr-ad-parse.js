@@ -121,6 +121,8 @@ export function parseAdOrder(linesPerImage) {
         else labels.forEach((l) => set(l.key, { status: 'check', candidate: null, text: lines[i + 1].words.map((w) => w.text).join(' '), conf: 0, reason: 'layout' }));
       }
       // Audience sections
+      // The page below the charts (assistant card, course banner, help link, buttons) is not audience data.
+      if (/关注薯条|小助手|推广技巧|小课堂|开课|帮助中心|再次推广|订单管理|热力冲刺|抢流量/.test(text)) section = '';
       if (/性别分布/.test(text)) section = 'gender';
       else if (/年龄分布/.test(text)) section = 'age';
       else if (/城市分布/.test(text)) section = 'city';
@@ -253,6 +255,8 @@ function audienceRow(line, section) {
   const labelWords = [];
   for (const w of [...ws].sort((a, b) => a.bbox.x0 - b.bbox.x0)) {
     if (w === valueWord || w.bbox.x0 > right * 0.3) break;
+    // A heading read on the same line as the first row ("观众兴趣分布 娱乐 … 92.4%"): skip its words.
+    if (/分布|画像|观众|兴趣|城市|年龄|性别/.test(w.text)) continue;
     const prev = labelWords.at(-1);
     if (prev && w.bbox.x0 - prev.bbox.x1 > 24) break;
     if (!/[\u4e00-\u9fff]/.test(w.text) && !(section === 'age' && /\d/.test(w.text))) {

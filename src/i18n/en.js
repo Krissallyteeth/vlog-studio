@@ -1269,4 +1269,6 @@ export default {
   "adr.c.monthSpend": "{cur}: real ad spend {spend} (previous {prev}: {spendPrev}).",
 
   "oad.audName": "Name not readable — type it from the screenshot (e.g. 美食)",
+  "oad.audienceOk": "Audience: {n} values — all confirmed",
+  "oad.audienceCheck": "Audience: {n} values — {k} to check",
 };

@@ -1269,4 +1269,6 @@ export default {
   "adr.c.monthSpend": "{cur} 实际推广花费 {spend}（上期 {prev}：{spendPrev}）。",
 
   "oad.audName": "未能识别名称 — 请对照截图输入（如：美食）",
+  "oad.audienceOk": "观众画像 {n} 项 — 全部已确认",
+  "oad.audienceCheck": "观众画像 {n} 项 — {k} 项需确认",
 };

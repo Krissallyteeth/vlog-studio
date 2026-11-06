@@ -274,3 +274,16 @@ describe('audience names from a second reading', () => {
     expect(nameGuess('具他', 'city').name).toBe(''); // 他 alone is too common to decide
   });
 });
+
+describe('audience: page noise and merged lines', () => {
+  const W = (text, x0, conf = 90) => ({ text, confidence: conf, bbox: { x0, y0: 0, x1: x0 + 60, y1: 20 } });
+  it('a first row merged with its heading still gives the name; the banner below is not a row', () => {
+    const r = parseAdOrder([[
+      { words: [W('观众兴趣分布', 70), W('娱乐', 140), W('国', 300, 0), W('92.4%', 780)] },
+      { words: [W('生活记录', 70), W('国', 300, 0), W('91.8%', 780)] },
+      { words: [W('快来关注薯条小助手', 190), W('去关注', 700)] },
+      { words: [W('涨流量', 70), W('0.2', 780)] },
+    ]]);
+    expect(Object.keys(r.audience.interest)).toEqual(['娱乐', '生活记录']);
+  });
+});
