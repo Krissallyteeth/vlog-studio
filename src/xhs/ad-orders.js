@@ -17,9 +17,15 @@ const round2 = (n) => Math.round(n * 100) / 100;
  * values: recognised / typed fields (spend, startedAt, orderNo …); postIds: the linked posts in
  * note order; stage: typed D+n (single-note orders only). Returns [{ postId, ad, replace }].
  */
+/** A note slot of a multi-note order whose post is not in the app (published before records began). */
+export const LATER = '@later';
+
 export function orderAds({ values: v, postIds, posts, stage = '', audience = null, replace = undefined }) {
-  const ids = postIds.filter(Boolean);
-  const n = ids.length;
+  const ids = postIds.filter((id) => id && id !== LATER);
+  const later = postIds.filter((id) => id === LATER).length;
+  // Notes outside the app still take their share: the order is split over all its notes, and
+  // their part stays in the order total without going to any post.
+  const n = ids.length + later;
   const groupKey = n > 1 ? v.orderNo || uid() : '';
   const { money, credit } = splitMoney(v);
   return ids.map((postId) => {
@@ -59,6 +65,8 @@ export function orderAds({ values: v, postIds, posts, stage = '', audience = nul
         coupon: v.coupon ? { ...v.coupon, expires: v.couponExpires ?? '' } : null,
         order: Object.fromEntries(AD_METRICS.map(([k]) => [k, v[k] ?? null])),
         audience,
+        outsideNotes: later,
+        noteText: later ? String(v.noteText ?? '').slice(0, 400) : '',
         noteTitle: n === 1 ? v.title ?? '' : '',
         notePublishedAt: n === 1 ? v.publishedAt ?? '' : '',
       }),

@@ -94,6 +94,8 @@ export function normalizeAd(raw = {}) {
     noteCount: num(raw.noteCount) ?? 1,
     orderSpend: num(raw.orderSpend), // the whole order's spend (spend = this post's share)
     share: num(raw.share) ?? 1,
+    outsideNotes: num(raw.outsideNotes) ?? 0, // notes of this order whose post is not in the app (no data): their share is in the total only
+    noteText: str(raw.noteText), // text read under the order's thumbnails (what those notes were)
     allocation: ['single', 'equal', 'exact'].includes(raw.allocation) ? raw.allocation : 'single',
     screenshots: Array.isArray(raw.screenshots) ? raw.screenshots.filter((x) => typeof x === 'string') : [],
     sourceText: str(raw.sourceText), // original Excel note it was read from

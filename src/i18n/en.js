@@ -1309,4 +1309,8 @@ export default {
   "adr.perNote": "per note",
   "adr.noteOfOrder": "Results: whole order above",
   "adr.historyNote": "One row per order, newest first. A multi-note order is one row and its results are for the whole order; its spend is split across the notes (estimated) — open the notes to see them.",
+
+  "oad.later": "Post not in the app (no data)",
+  "oad.laterHelp": "{n} note(s) not in the app: their share of the spend counts in the order total and monthly figures, but goes to no post.",
+  "oad.laterN": "incl. {n} note(s) not in the app",
 };

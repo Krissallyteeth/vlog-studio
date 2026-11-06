@@ -79,8 +79,12 @@ export function parseAdOrder(linesPerImage) {
     // screenshot is row j already read, not a new one.
     const earlier = Object.fromEntries(SECS.map((k) => [k, Object.keys(audience[k])]));
     const headY = {}; // where each chart heading sits on this screenshot
+    let stopY = null; // where the page below the charts starts
     // Chart rows are evenly spaced, about 9.2% of the screenshot width apart.
-    const pitch = Math.max(...lines.flatMap((l) => (l?.words ?? []).map((w) => w.bbox?.x1 ?? 0)), 1) * 0.0923;
+    // Measured from the right edge of the share column ("41.7%" words are right-aligned), which banners
+    // and images further down cannot push out.
+    const pctRights = lines.flatMap((l) => (l?.words ?? []).filter((w) => /%/.test(w.text) && w.bbox).map((w) => w.bbox.x1)).sort((a, b) => a - b);
+    const pitch = (pctRights.length >= 3 ? pctRights[Math.floor(pctRights.length / 2)] : Math.max(...lines.flatMap((l) => (l?.words ?? []).map((w) => w.bbox?.x1 ?? 0)), 1)) * 0.0923;
     let belowTitle = false; // the phone status bar (time, battery "53") sits above the 订单详情 title
     let inNotes = false;
     let lastAge = -1; // index of the last age row read on this screenshot
@@ -161,7 +165,10 @@ export function parseAdOrder(linesPerImage) {
       }
       // Audience sections
       // The page below the charts (assistant card, course banner, help link, buttons) is not audience data.
-      if (/关注薯条|小助手|推广技巧|小课堂|开课|帮助中心|再次推广|订单管理|热力冲刺|抢流量/.test(text)) section = '';
+      if (/关注薯条|小助手|推广技巧|小课堂|开课|帮助中心|再次推广|订单管理|热力冲刺|抢流量/.test(text)) {
+        section = '';
+        if (stopY == null) stopY = midY(line) - pitch * 0.5;
+      }
       if (/订单详情|详情|咨询/.test(text)) belowTitle = true;
       if (/分布/.test(text) && /性别|年龄|城市|兴趣/.test(text)) headingSeen = true;
       // A chart carried over from the previous screenshot only continues below the title bar, with real shares.
@@ -217,6 +224,38 @@ export function parseAdOrder(linesPerImage) {
           const key = `#${Object.keys(list).length + 1}`;
           list[key] = { ...check(null, text, 0, 'format'), at: here };
         }
+      }
+    }
+    // The interest chart always lists its top 8 in evenly spaced rows. A row on this screenshot that
+    // was read as noise only (no name, no number) still gets its slot, to be read again from the image.
+    if (headY.interest != null) {
+      const list = audience.interest;
+      const yOf = (r) => (r.at?.img === img && r.at.box ? (r.at.box.y0 + r.at.box.y1) / 2 : null);
+      // Spacing and position from the rows read on this screen when there are some; else from the width.
+      const mids = Object.values(list).map(yOf).filter((y) => y != null).sort((a, b) => a - b);
+      const gaps = mids.slice(1).map((y, i) => y - mids[i]).filter((d) => d > pitch * 0.6 && d < pitch * 1.4).sort((a, b) => a - b);
+      const step = gaps.length ? gaps[Math.floor(gaps.length / 2)] : pitch;
+      const slotOf = (y) => Math.round((y - headY.interest) / pitch) - 1;
+      const ref = mids.length ? { y: mids[0], j: slotOf(mids[0]) } : { y: headY.interest + step, j: 0 };
+      const taken = new Set(mids.map(slotOf));
+      const lineYs = lines.filter((l) => l?.words?.length).map(midY);
+      const right = pitch / 0.0923;
+      const fresh = [];
+      for (let j = earlier.interest.length; j < 8; j++) {
+        if (taken.has(j)) continue;
+        const y = ref.y + (j - ref.j) * step;
+        // Only rows actually on screen, and not past the end of the chart (the assistant card).
+        // (The bottom ~11% of the screen is the fixed button bar, which covers the page.)
+        if (!lineYs.some((ly) => Math.abs(ly - y) < pitch * 0.4) || (stopY != null && y > stopY) || y > right * 2.05) continue;
+        fresh.push([`~${j}`, { ...check(null, '', 0, 'format'), at: { img, box: { x0: Math.round(right * 0.06), y0: Math.round(y - step * 0.3), x1: Math.round(right), y1: Math.round(y + step * 0.3) } } }]);
+      }
+      if (fresh.length) {
+        // Keep chart order: rows of earlier screenshots first, then this screenshot's rows top-down.
+        const all = [...Object.entries(list), ...fresh];
+        const old = all.filter(([, r]) => yOf(r) == null);
+        const mine = all.filter(([, r]) => yOf(r) != null).sort((a, b) => yOf(a[1]) - yOf(b[1]));
+        const rows = [...old, ...mine];
+        audience.interest = Object.fromEntries(rows.map(([k, r], i) => [k.startsWith('~') || k.startsWith('#') ? `#${i + 1}` : k, r]));
       }
     }
     carrySection = section === 'gender' ? '' : section;

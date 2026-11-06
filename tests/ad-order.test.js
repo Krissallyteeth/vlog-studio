@@ -84,3 +84,20 @@ describe('slots left after the title matches', () => {
     expect(recentBefore(posts, '', [])).toEqual([]);
   });
 });
+
+describe('a multi-note order with a note whose post is not in the app', () => {
+  it('splits over all notes; the outside share stays in the total only', async () => {
+    const { orderAds, LATER } = await import('../src/xhs/ad-orders.js');
+    const { adTotals } = await import('../src/xhs/stats.js');
+    const { historyEntries } = await import('../src/xhs/ad-report.js');
+    const { normalizePost } = await import('../src/xhs/store.js');
+    const ps = ['a', 'b', 'c', 'd'].map((id, i) => normalizePost({ id, title: id, date: `2026-03-0${i + 1}` }));
+    const entries = orderAds({ values: { spend: 140, orderAmount: 140, paid: 100, startedAt: '2026-03-10T06:39', orderNo: 'o9', follows: 27 }, postIds: ['a', 'b', LATER, 'c', 'd'], posts: ps });
+    expect(entries.map((x) => [x.postId, x.ad.spend, x.ad.credit, x.ad.noteCount, x.ad.outsideNotes])).toEqual([
+      ['a', 20, 8, 5, 1], ['b', 20, 8, 5, 1], ['c', 20, 8, 5, 1], ['d', 20, 8, 5, 1],
+    ]);
+    const saved = ps.map((p) => ({ ...p, ads: entries.filter((x) => x.postId === p.id).map((x) => x.ad) }));
+    expect(adTotals(saved)).toMatchObject({ spend: 100, credit: 40, count: 1 });
+    expect(historyEntries(saved)[0]).toMatchObject({ multi: true, spend: 100, credit: 40, outside: 1 });
+  });
+});

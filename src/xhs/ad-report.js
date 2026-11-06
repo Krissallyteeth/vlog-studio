@@ -33,7 +33,8 @@ export function adOrders(posts) {
     const date = start || fallback;
     const m = Object.fromEntries(KEYS.map((k) => [k, isNum(ad.order?.[k]) ? ad.order[k] : null]));
     const likeFav = isNum(m.likes) || isNum(m.favorites) ? (m.likes ?? 0) + (m.favorites ?? 0) : null;
-    const credit = sum(links, (l) => l.ad.credit);
+    // A multi-note order's credit is split over all its notes, linked or not.
+    const credit = ad.groupKey && isNum(ad.credit) ? Math.round(ad.credit * (ad.noteCount || links.length) * 100) / 100 : sum(links, (l) => l.ad.credit);
     return {
       key,
       ad,
@@ -298,10 +299,11 @@ export function historyEntries(posts) {
   return [...byKey.values()]
     .map((e) => {
       e.items.sort((x, y) => (y.p.date || '').localeCompare(x.p.date || ''));
-      e.multi = e.multi && e.items.length > 1;
+      e.multi = e.multi && (e.items.length > 1 || (e.items[0].a.outsideNotes ?? 0) > 0);
       e.ad = e.items[0].a;
       e.spend = e.multi ? (isNum(e.ad.orderSpend) ? e.ad.orderSpend : sum(e.items, (x) => x.a.spend)) : e.ad.spend;
-      e.credit = sum(e.items, (x) => x.a.credit) || null;
+      e.credit = (e.multi || e.ad.groupKey) && isNum(e.ad.credit) ? Math.round(e.ad.credit * (e.ad.noteCount || e.items.length) * 100) / 100 : sum(e.items, (x) => x.a.credit) || null;
+      e.outside = e.ad.outsideNotes || 0;
       e.when = when(e);
       return e;
     })

@@ -7,7 +7,7 @@ import { icon } from '../../ui/icons.js';
 import { putMany } from '../../xhs/db.js';
 import { AD_METRICS, AD_REVIEW_FIELDS, checkOrder, completeBySum, knownName, nameGuess, parseAdOrder } from '../../xhs/ocr-ad-parse.js';
 import { ordered } from '../../xhs/stats.js';
-import { memoAds, memoMoney, memoToReplace, mergeOrderGroups, orderAds, placeOrder, rememberTitle, splitMoney } from '../../xhs/ad-orders.js';
+import { LATER, memoAds, memoMoney, memoToReplace, mergeOrderGroups, orderAds, placeOrder, rememberTitle, splitMoney } from '../../xhs/ad-orders.js';
 import { listPosts, savePosts, stageFromDates } from '../../xhs/store.js';
 import { xhsPage } from './shell.js';
 
@@ -30,11 +30,11 @@ const pieces = (s) => {
 };
 const COMMON = new Set(['vl', 'lo', 'og', '的一', '一天']);
 /** How well an OCR'd title fits a post (its workbook title or a title remembered from earlier screenshots). */
-export function titleScore(post, text) {
+export function titleScore(post, text, shared = COMMON) {
   const got = pieces(text);
   let best = 0;
   for (const name of [post.title, ...(post.adTitles ?? [])]) {
-    const n = [...pieces(name)].filter((x) => got.has(x) && !COMMON.has(x)).length;
+    const n = [...pieces(name)].filter((x) => got.has(x) && !COMMON.has(x) && !shared.has(x)).length;
     best = Math.max(best, n);
   }
   return best;
@@ -66,11 +66,15 @@ export function matchPost(posts, publishedAt, title, startedAt = '') {
 
 /** Posts that may be the notes of a multi-note order: title pieces found in the thumbnails' text. */
 export function suggestPosts(posts, text, startedAt) {
-  return posts
-    .filter((p) => !startedAt || !p.date || p.date <= startedAt.slice(0, 10))
-    .map((p) => ({ post: p, score: titleScore(p, text) }))
-    .filter((x) => x.score >= 2)
-    .sort((a, b) => b.score - a.score)
+  const pool = posts.filter((p) => !startedAt || !p.date || p.date <= startedAt.slice(0, 10));
+  // Pieces that several posts' titles have ("贵阳vlog" of a series) say nothing about which post it is.
+  const df = new Map();
+  for (const p of pool) for (const x of new Set([p.title, ...(p.adTitles ?? [])].flatMap((n) => [...pieces(n)]))) df.set(x, (df.get(x) ?? 0) + 1);
+  const shared = new Set([...df].filter(([, n]) => n >= 2).map(([x]) => x));
+  return pool
+    .map((p) => ({ post: p, score: titleScore(p, text), own: titleScore(p, text, shared) }))
+    .filter((x) => x.score >= 2 && x.own >= 1)
+    .sort((a, b) => b.own - a.own || b.score - a.score)
     .slice(0, 6);
 }
 
@@ -158,7 +162,10 @@ export async function refineAudience(parsed, sources) {
     if (value == null) {
       const read = await recognizeLine(clean(bmp, W * 0.75, y0, W, y1)).catch(() => null);
       const m = /(\d{1,3}\.\d)\s*%?/.exec(read?.text ?? '');
+      // "417%": the dot lost; shares always have one decimal, so three digits are XX.X.
+      const m3 = m ? null : /(?:^|\D)(\d{3})\s*%/.exec(read?.text ?? '');
       if (m && Number(m[1]) <= 100) value = Math.round(Number(m[1]) * 10) / 1000;
+      else if (m3 && Number(m3[1]) <= 999) value = Number(m3[1]) / 1000;
       else if (r.candidate != null && nameSure && r.reason === 'text') value = r.candidate; // only the name was unsure
     }
     if (!name || value == null) continue;
@@ -575,10 +582,11 @@ export async function renderOcrAd([postId], { isCurrent }) {
               o.postIds.length > 1
                 ? `<div class="mt-2"><p class="text-[14px] font-semibold">${esc(t('oad.multi', { n: o.postIds.length }))}</p>
                 <p class="text-[12px] text-muted">${esc(t('oad.multiHelp'))}</p>
-                <div class="mt-2 grid gap-2 sm:grid-cols-2">${o.postIds.map((id, k) => `<label class="field"><span class="field-label">${esc(t('oad.noteN', { n: k + 1 }))}${id && autoStage(o, id) ? ` · ${esc(autoStage(o, id))}` : ''}</span><select class="input" data-post="${oi}" data-slot="${k}"><option value="">${esc(t('oad.choosePost'))}</option>${posts.map((p) => `<option value="${esc(p.id)}" ${p.id === id ? 'selected' : ''}>${esc(`${p.date} · ${p.title}`)}</option>`).join('')}</select></label>`).join('')}</div>
+                <div class="mt-2 grid gap-2 sm:grid-cols-2">${o.postIds.map((id, k) => `<label class="field"><span class="field-label">${esc(t('oad.noteN', { n: k + 1 }))}${id && autoStage(o, id) ? ` · ${esc(autoStage(o, id))}` : ''}</span><select class="input" data-post="${oi}" data-slot="${k}"><option value="">${esc(t('oad.choosePost'))}</option><option value="${LATER}" ${id === LATER ? 'selected' : ''}>${esc(t('oad.later'))}</option>${posts.map((p) => `<option value="${esc(p.id)}" ${p.id === id ? 'selected' : ''}>${esc(`${p.date} · ${p.title}`)}</option>`).join('')}</select></label>`).join('')}</div>
                 ${o.prefilled ? `<p class="mt-2 text-[12px] text-muted">${esc(t('oad.prefilled', { n: o.prefilled }))}</p>` : ''}
                 ${o.suggestions.some((x) => !o.postIds.includes(x.post.id)) ? `<div class="mt-2 flex flex-wrap items-center gap-1.5 text-[12px]"><span class="text-muted">${esc(t('oad.suggest'))}</span>${o.suggestions.filter((x) => !o.postIds.includes(x.post.id)).map((x) => `<button type="button" class="chip" data-suggest="${oi}" data-id="${esc(x.post.id)}">${esc(`${x.post.date} · ${x.post.title}`)}</button>`).join('')}</div>` : ''}
-                ${o.postIds.includes('') && recentPosts(o).length ? `<div class="mt-2 flex flex-wrap items-center gap-1.5 text-[12px]"><span class="text-muted">${esc(t('oad.recent'))}</span>${recentPosts(o).map((p) => `<button type="button" class="chip" data-suggest="${oi}" data-id="${esc(p.id)}">${esc(`${p.date} · ${p.title}`)}</button>`).join('')}</div>` : ''}
+                ${o.postIds.includes('') ? `<div class="mt-2 flex flex-wrap items-center gap-1.5 text-[12px]"><span class="text-muted">${esc(t('oad.recent'))}</span>${recentPosts(o).map((p) => `<button type="button" class="chip" data-suggest="${oi}" data-id="${esc(p.id)}">${esc(`${p.date} · ${p.title}`)}</button>`).join('')}<button type="button" class="chip" data-suggest="${oi}" data-id="${LATER}">${esc(t('oad.later'))}</button></div>` : ''}
+                ${o.postIds.includes(LATER) ? `<p class="mt-2 notice text-[12px]">${esc(t('oad.laterHelp', { n: o.postIds.filter((x) => x === LATER).length }))}</p>` : ''}
                 <details class="mt-1 text-[12px] text-muted"><summary>${esc(t('oad.readNotesShow'))}</summary>${esc(t('oad.readNotes', { text: o.parsed.noteText || '?' }))}</details>
                 <p class="mt-1 text-[12px] text-muted">${esc(t(o.values.startedAt ? 'oad.multiStage' : 'oad.stageNeedStart'))}</p></div>`
                 : `<div class="mt-2 grid gap-3 sm:grid-cols-[2fr_1fr]">
@@ -616,7 +624,8 @@ export async function renderOcrAd([postId], { isCurrent }) {
       if (v === null) delete o.values[inp.dataset.k];
       else o.values[inp.dataset.k] = v;
     }
-    const problems = chosen.filter((o) => o.postIds.some((id) => !id) || new Set(o.postIds).size !== o.postIds.length || o.values.spend == null);
+    const linked = (o) => o.postIds.filter((id) => id !== LATER);
+    const problems = chosen.filter((o) => o.postIds.some((id) => !id) || !linked(o).length || new Set(linked(o)).size !== linked(o).length || o.values.spend == null);
     if (problems.length) return toast(t('oad.missingRequired', { n: problems.length }), { tone: 'error' });
     const list = chosen.map((o) => {
       const audience = { gender: {}, age: {}, city: {}, interest: {} };
@@ -627,7 +636,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
         const named = result.querySelector(`[data-aud-name="${CSS.escape(inp.dataset.aud)}"]`)?.value.trim();
         if (inp.value.trim() && Number.isFinite(n)) audience[sec][named || label] = n / 100;
       }
-      return { o, entries: orderAds({ values: o.values, postIds: o.postIds, posts, stage: o.stage, audience, replace: o.replace }) };
+      return { o, entries: orderAds({ values: { ...o.values, noteText: o.parsed.noteText }, postIds: o.postIds, posts, stage: o.stage, audience, replace: o.replace }) };
     });
     const titleOf = (id) => posts.find((p) => p.id === id)?.title ?? '';
     const ok = await openSheet({
@@ -636,10 +645,10 @@ export async function renderOcrAd([postId], { isCurrent }) {
         .map(({ o, entries }) => {
           const ad = entries[0].ad;
           const total = ad.orderSpend ?? ad.spend;
-          const credit = entries.reduce((a, x) => a + (x.ad.credit ?? 0), 0);
+          const credit = ad.groupKey ? (ad.credit ?? 0) * ad.noteCount : entries.reduce((a, x) => a + (x.ad.credit ?? 0), 0);
           const post = posts.find((p) => p.id === entries[0].postId);
           const memo = entries.length === 1 && (o.replace === undefined ? memoToReplace(post, ad) : memoAds(post).find((a) => a.id === o.replace));
-          return `<li><b>${esc(entries.map((x) => `${titleOf(x.postId)} (${x.ad.stage || '?'})`).join(' + '))}</b> · ${esc(t('oad.realSpend', { v: total }))}${credit ? ` · ${esc(t('oad.creditPart', { v: Math.round(credit * 100) / 100 }))}` : ''}${entries.length > 1 ? ` · ${esc(t('oad.splitNote', { n: entries.length, each: ad.spend }))}` : ''}${savedOrder(o) || memo ? ` · ${esc(t('oad.replaces'))}${memo ? ` (${esc(memo.sourceText || memo.stage)})` : ''}` : ''}<br/><span class="text-[12px] text-muted">${esc(AD_METRICS.map(([k, n]) => `${n[0]} ${ad.order[k] ?? '–'}`).join(', '))}</span></li>`;
+          return `<li><b>${esc(entries.map((x) => `${titleOf(x.postId)} (${x.ad.stage || '?'})`).join(' + '))}</b> · ${esc(t('oad.realSpend', { v: total }))}${credit ? ` · ${esc(t('oad.creditPart', { v: Math.round(credit * 100) / 100 }))}` : ''}${ad.noteCount > 1 ? ` · ${esc(t('oad.splitNote', { n: ad.noteCount, each: ad.spend }))}` : ''}${ad.outsideNotes ? ` · ${esc(t('oad.laterN', { n: ad.outsideNotes }))}` : ''}${savedOrder(o) || memo ? ` · ${esc(t('oad.replaces'))}${memo ? ` (${esc(memo.sourceText || memo.stage)})` : ''}` : ''}<br/><span class="text-[12px] text-muted">${esc(AD_METRICS.map(([k, n]) => `${n[0]} ${ad.order[k] ?? '–'}`).join(', '))}</span></li>`;
         })
         .join('')}</ul>
         <p class="mt-2 text-[12px] text-muted">${esc(t('oad.confirmNote'))}</p>
@@ -658,7 +667,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
       const shots = [];
       for (const im of o.imgs) {
         const blob = await compressImage(im.file, { maxSide: 1600, quality: 0.8 }).catch(() => null);
-        if (blob) shots.push({ id: uid(), postId: o.postIds[0], stage: 'ad', name: im.file.name, blob, createdAt: Date.now(), text: im.text ?? '' });
+        if (blob) shots.push({ id: uid(), postId: o.postIds.find((id) => id && id !== LATER), stage: 'ad', name: im.file.name, blob, createdAt: Date.now(), text: im.text ?? '' });
       }
       await putMany('shots', shots);
       for (const x of entries) x.ad.screenshots = shots.map((sh) => sh.id);
