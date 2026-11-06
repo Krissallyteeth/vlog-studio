@@ -498,3 +498,17 @@ describe('fixed layouts fill in labels that were not read', () => {
     expect(r.audience.interest['资讯']).toMatchObject({ status: 'ok', value: 0.371 });
   });
 });
+
+describe('ad history: one entry per order', () => {
+  it('a multi-note order is one entry with its notes; entries are newest first', async () => {
+    const { historyEntries } = await import('../src/xhs/ad-report.js');
+    const g = (id, spend) => normalizeAd({ id, groupKey: 'G1', noteCount: 2, orderSpend: 40, spend, allocation: 'equal', start: '2026-05-02T21:10', order: { reads: 300, follows: 20 } });
+    const posts = [
+      { id: 'p1', title: 'A', date: '2026-04-01', ads: [g('a1', 20), normalizeAd({ id: 'a2', start: '2026-04-02T10:00', spend: 30 })] },
+      { id: 'p2', title: 'B', date: '2026-04-20', ads: [g('b1', 20)] },
+    ];
+    const h = historyEntries(posts);
+    expect(h.map((e) => [e.multi, e.items.length, e.spend])).toEqual([[true, 2, 40], [false, 1, 30]]);
+    expect(h[0].items.map((x) => x.p.id)).toEqual(['p2', 'p1']);
+  });
+});

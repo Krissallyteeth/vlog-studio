@@ -4,9 +4,9 @@ import { esc, toast } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { adEffect, orderEfficiency } from '../../xhs/analysis.js';
 import { fmt, won, yuan } from '../../xhs/format.js';
-import { adTotals, ordered } from '../../xhs/stats.js';
+import { adTotals } from '../../xhs/stats.js';
 import { activeBaseline, getSettings, listIncome, listPosts, onXhsChange, savePosts, saveSettings } from '../../xhs/store.js';
-import { adComments, adOrders, adSummary, goalRows, periodRows, postRows, stageRows } from '../../xhs/ad-report.js';
+import { adComments, adOrders, adSummary, goalRows, historyEntries, NOTE_FIELDS, periodRows, postRows, stageRows } from '../../xhs/ad-report.js';
 import { adSheet } from './post.js';
 import { xhsPage } from './shell.js';
 
@@ -40,7 +40,7 @@ export async function renderAds({ isCurrent }) {
   const sum = adSummary(orders);
   const comments = adComments(orders, { posts, baseline, income, cnyKrw: settings.cnyKrw });
   const periods = periodRows(orders, prefs.unit, income, settings.cnyKrw);
-  const rows = ordered(posts).flatMap((p) => p.ads.map((a, i) => ({ p, a, i }))).reverse();
+  const history = historyEntries(posts);
   const toneCls = { good: 'cf-good', warn: 'cf-mid', info: 'bg-surface-2' };
   const costHead = `<th class="num" data-m="inline">${esc(t('ads.perRead'))}</th><th class="num">${esc(t('ads.perLikeFav'))}</th><th class="num">${esc(t('ads.perFollow'))}</th>`;
   const costCells = (r) => `<td class="num">${esc(cost(r.perRead))}</td><td class="num">${esc(cost(r.perLikeFav))}</td><td class="num">${esc(cost(r.perFollow))}</td>`;
@@ -98,15 +98,28 @@ export async function renderAds({ isCurrent }) {
       <section class="card mt-3">
         <h2 class="text-[16px] font-semibold">${esc(t('ads.history'))}</h2>
         <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th class="col-title">${esc(t('xg.title'))}</th><th>${esc(t('adr.start'))}</th><th data-m="inline">${esc(t('ads.stage'))}</th><th data-m="inline">${esc(t('ads.goal'))}</th><th class="num" data-m="key">${esc(t('ads.spendYuan'))}</th><th class="num">${esc(t('adr.creditCol'))}</th><th class="num">阅读量</th><th class="num">点赞+收藏</th><th class="num">新增关注</th>${costHead}<th>${esc(t('adr.orderNo'))}</th><th data-m="inline"></th></tr></thead>
-        <tbody>${rows
-          .map(({ p, a, i }) => {
+        <tbody>${history
+          .map((h) => {
+            const a = h.ad;
             const e = orderEfficiency(a);
-            return `<tr class="${a.needsReview ? 'cf-mid' : ''}"><td class="col-title"><a class="link-btn" href="#/c/${encodeURIComponent(p.id)}">${esc(p.title)}</a><span class="block text-[11px] text-muted">${esc(p.date)}${a.sourceText ? ` · ${esc(t('ads.from', { text: a.sourceText }))}` : ''}${a.noteCount > 1 ? ` · ${esc(t('adr.multiShort', { n: a.noteCount, total: a.orderSpend ?? '?' }))}` : ''}</span></td>
-            <td class="tabular-nums">${esc((a.start || '').replace('T', ' '))}</td><td>${esc(a.stage)}${a.executed ? '' : ` (${esc(t('ads.notExecuted'))})`}</td><td>${esc(a.goal)}</td><td class="num">${esc(yuan(a.spend))}${a.allocation === 'equal' ? ` <span class="badge cf-mid">${esc(t('adr.estShort'))}</span>` : ''}</td><td class="num">${esc(a.credit ? yuan(a.credit) : '')}</td>
-            <td class="num">${a.order.reads ?? ''}</td><td class="num">${e.likeFav ?? ''}</td><td class="num">${a.order.follows ?? ''}</td><td class="num">${esc(e.perRead == null ? '' : yuan(e.perRead))}</td><td class="num">${esc(e.perLikeFav == null ? '' : yuan(e.perLikeFav))}</td><td class="num">${esc(e.perFollow == null ? '' : yuan(e.perFollow))}</td><td class="text-[12px] text-muted">${esc(a.orderNo ? a.orderNo.slice(0, 8) : '')}</td>
-            <td><button type="button" class="link-btn" data-ad="${esc(p.id)}" data-i="${i}">${esc(t('ads.edit'))}</button></td></tr>`;
+            const metrics = `<td class="num">${a.order.reads ?? ''}</td><td class="num">${e.likeFav ?? ''}</td><td class="num">${a.order.follows ?? ''}</td><td class="num">${esc(e.perRead == null ? '' : yuan(e.perRead))}</td><td class="num">${esc(e.perLikeFav == null ? '' : yuan(e.perLikeFav))}</td><td class="num">${esc(e.perFollow == null ? '' : yuan(e.perFollow))}</td><td class="text-[12px] text-muted">${esc(a.orderNo ? a.orderNo.slice(0, 8) : '')}</td>`;
+            const startCell = `<td class="tabular-nums">${esc((a.start || '').replace('T', ' '))}</td>`;
+            if (!h.multi) {
+              const { p, i } = h.items[0];
+              return `<tr class="${a.needsReview ? 'cf-mid' : ''}"><td class="col-title"><a class="link-btn" href="#/c/${encodeURIComponent(p.id)}">${esc(p.title)}</a><span class="block text-[11px] text-muted">${esc(p.date)}${a.sourceText ? ` · ${esc(t('ads.from', { text: a.sourceText }))}` : ''}</span></td>
+            ${startCell}<td>${esc(a.stage)}${a.executed ? '' : ` (${esc(t('ads.notExecuted'))})`}</td><td>${esc(a.goal)}</td><td class="num">${esc(yuan(a.spend))}</td><td class="num">${esc(a.credit ? yuan(a.credit) : '')}</td>
+            ${metrics}<td><button type="button" class="link-btn" data-ad="${esc(p.id)}" data-i="${i}">${esc(t('ads.edit'))}</button></td></tr>`;
+            }
+            // A multi-note order: one row with the order's numbers, its notes folded below.
+            const notes = h.items
+              .map(({ p, a: x, i }) => `<tr class="hist-note" data-parent="${esc(h.key)}" hidden><td class="col-title pl-5"><a class="link-btn" href="#/c/${encodeURIComponent(p.id)}">${esc(p.title)}</a><span class="block text-[11px] text-muted">${esc(p.date)}</span></td><td></td><td>${esc(x.stage)}</td><td></td><td class="num">${esc(yuan(x.spend))}${x.allocation === 'equal' ? ` <span class="badge cf-mid" title="${esc(t('adr.shareHelp'))}">${esc(t('adr.estShort'))}</span>` : ''}</td><td class="num">${esc(x.credit ? yuan(x.credit) : '')}</td><td colspan="7" class="text-[12px] text-muted">${esc(t('adr.noteOfOrder'))}</td><td><button type="button" class="link-btn" data-ad="${esc(p.id)}" data-i="${i}">${esc(t('ads.edit'))}</button></td></tr>`)
+              .join('');
+            return `<tr class="${a.needsReview ? 'cf-mid' : ''}"><td class="col-title"><b>${esc(t('adr.groupTitle', { n: h.items.length }))}</b><span class="block text-[11px] text-muted">${esc(h.items.map((x) => x.p.title).join(' · '))}</span><button type="button" class="link-btn text-[12px]" data-toggle="${esc(h.key)}" aria-expanded="false">${esc(t('adr.showNotes', { n: h.items.length }))}</button></td>
+            ${startCell}<td class="text-muted">${esc(t('adr.perNote'))}</td><td>${esc(a.goal)}</td><td class="num">${esc(yuan(h.spend))}</td><td class="num">${esc(h.credit ? yuan(h.credit) : '')}</td>
+            ${metrics}<td><button type="button" class="link-btn" data-group="${esc(h.key)}">${esc(t('ads.edit'))}</button></td></tr>${notes}`;
           })
           .join('') || `<tr><td colspan="15" class="text-muted">${esc(t('ads.none'))}</td></tr>`}</tbody></table></div>
+        <p class="mt-2 text-[12px] text-muted">${esc(t('adr.historyNote'))}</p>
       </section>
       <section class="card mt-3">
         <div class="flex items-center justify-between"><h2 class="text-[16px] font-semibold">${esc(t('data.tab.income'))}</h2><a class="link-btn text-[13px]" href="#/data/income">${esc(t('ads.editIncome'))}</a></div>
@@ -123,6 +136,29 @@ export async function renderAds({ isCurrent }) {
         /* ignore */
       }
       return navigate('/ads', { replace: true });
+    }
+    const tg = e.target.closest('[data-toggle]');
+    if (tg) {
+      const open = tg.getAttribute('aria-expanded') !== 'true';
+      tg.setAttribute('aria-expanded', String(open));
+      for (const r of root.querySelectorAll('tr[data-parent]')) if (r.dataset.parent === tg.dataset.toggle) r.hidden = !open;
+      return;
+    }
+    const g = e.target.closest('[data-group]');
+    if (g) {
+      // Editing a multi-note order changes the order's own fields on every note; each note keeps its share.
+      const h = history.find((x) => x.key === g.dataset.group);
+      if (!h) return;
+      const res = await adSheet(h.ad);
+      if (!res) return;
+      const gk = h.ad.groupKey;
+      const linked = posts.filter((x) => x.ads.some((a) => a.groupKey === gk));
+      if (res === 'delete') await savePosts(linked.map((x) => ({ ...x, ads: x.ads.filter((a) => a.groupKey !== gk) })));
+      else {
+        const shared = Object.fromEntries(Object.entries(res).filter(([k]) => !NOTE_FIELDS.includes(k)));
+        await savePosts(linked.map((x) => ({ ...x, ads: x.ads.map((a) => (a.groupKey === gk ? { ...a, ...shared, groupKey: gk } : a)) })));
+      }
+      return toast(t('common.saved'));
     }
     const b = e.target.closest('[data-ad]');
     if (!b) return;

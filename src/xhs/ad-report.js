@@ -280,3 +280,33 @@ export function adComments(orders, { posts = [], baseline = null, income = [], c
   return out;
 }
 
+
+/**
+ * Ad history, one entry per order (newest first): a multi-note order is one entry with its notes
+ * inside, so its numbers are shown once. Orders without a start time sort by their post's date.
+ */
+export function historyEntries(posts) {
+  const byKey = new Map();
+  for (const p of posts) {
+    (p.ads ?? []).forEach((a, i) => {
+      const key = a.groupKey ? `g:${a.groupKey}` : `${p.id}:${a.id}`;
+      if (!byKey.has(key)) byKey.set(key, { key, multi: !!a.groupKey, items: [] });
+      byKey.get(key).items.push({ p, a, i });
+    });
+  }
+  const when = (e) => e.items[0].a.start || e.items.map((x) => x.p.date).filter(Boolean).sort().at(-1) || '';
+  return [...byKey.values()]
+    .map((e) => {
+      e.items.sort((x, y) => (y.p.date || '').localeCompare(x.p.date || ''));
+      e.multi = e.multi && e.items.length > 1;
+      e.ad = e.items[0].a;
+      e.spend = e.multi ? (isNum(e.ad.orderSpend) ? e.ad.orderSpend : sum(e.items, (x) => x.a.spend)) : e.ad.spend;
+      e.credit = sum(e.items, (x) => x.a.credit) || null;
+      e.when = when(e);
+      return e;
+    })
+    .sort((x, y) => y.when.localeCompare(x.when));
+}
+
+/** Fields that belong to one note of a multi-note order; the rest is the order's and is shared. */
+export const NOTE_FIELDS = ['id', 'stage', 'spend', 'credit', 'share', 'allocation', 'notePublishedAt', 'noteTitle', 'sourceText'];

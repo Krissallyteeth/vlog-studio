@@ -1303,4 +1303,10 @@ export default {
   "oad.prefilled": "已按缩略图标题预先填入 {n} 篇，如有错误请修改。",
   "oad.recent": "剩余 · 推广开始前的最近笔记：",
   "oad.readNotesShow": "查看缩略图下识别的文字",
+
+  "adr.groupTitle": "{n} 篇笔记合并订单",
+  "adr.showNotes": "查看 {n} 篇笔记",
+  "adr.perNote": "按笔记",
+  "adr.noteOfOrder": "结果按上方整单统计",
+  "adr.historyNote": "每行为一个订单（最新在前）。多篇笔记的订单合为一行，结果按整单统计；花费按笔记平分（估算），点击查看笔记。",
 };

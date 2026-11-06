@@ -1303,4 +1303,10 @@ export default {
   "oad.prefilled": "썸네일 제목과 맞는 게시물 {n}개를 미리 채웠어요. 틀리면 바꾸세요.",
   "oad.recent": "남은 칸 · 광고 시작 전 최근 게시물:",
   "oad.readNotesShow": "썸네일에서 읽은 글자 보기",
+
+  "adr.groupTitle": "노트 {n}개 묶음 주문",
+  "adr.showNotes": "노트 {n}개 보기",
+  "adr.perNote": "노트별",
+  "adr.noteOfOrder": "결과는 위 주문 전체 기준",
+  "adr.historyNote": "한 줄이 주문 1건이에요(최근 순). 여러 노트를 함께 광고한 주문은 한 줄로 묶이고, 결과 숫자는 주문 전체 기준이에요. 광고비는 노트별로 나눠 들어가요(추정) — 노트 보기를 눌러 확인하세요.",
 };

@@ -1303,4 +1303,10 @@ export default {
   "oad.prefilled": "Filled {n} slots with posts whose titles match the thumbnails. Change any that are wrong.",
   "oad.recent": "Slots left · latest posts before the ad started:",
   "oad.readNotesShow": "Show text read under the thumbnails",
+
+  "adr.groupTitle": "{n}-note order",
+  "adr.showNotes": "Show {n} notes",
+  "adr.perNote": "per note",
+  "adr.noteOfOrder": "Results: whole order above",
+  "adr.historyNote": "One row per order, newest first. A multi-note order is one row and its results are for the whole order; its spend is split across the notes (estimated) — open the notes to see them.",
 };
