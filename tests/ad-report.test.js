@@ -225,7 +225,9 @@ describe('audience charts', () => {
     const r = parseAdOrder([[L('城市 分 布'), A('头州', '55.5%'), A('川', '3.9%'), A('其他', '40.6%'), L('观众 兴趣 分 布'), A('炽乐', '94.5%'), A('生活记录人', '99.4%')]]);
     expect(Object.keys(r.audience.city)).toEqual(['贵州', '四川', '其他']);
     expect(r.audience.city['贵州']).toMatchObject({ status: 'ok', value: 0.555 });
-    expect(Object.keys(r.audience.interest)).toEqual(['娱乐', '生活记录']);
+    // "炽乐": 乐 fits 娱乐 and 音乐 equally — kept as a guess, to be read again from the image
+    expect(Object.keys(r.audience.interest)).toEqual(['#1', '生活记录']);
+    expect(r.audience.interest['#1']).toMatchObject({ status: 'check', guessName: '娱乐' });
   });
   it('shares that add up to 100% confirm each other; one missing dot is filled from the rest', () => {
     const r = parseAdOrder([[L('年 龄 分 布'), A('18以下', '1.4%'), A('18~23', '11%', 50), A('24~30', '36.6%'), A('31~40', '31.9%'), A('41~50', '13.0%'), A('50以上', '6.0%')]]);
@@ -329,8 +331,7 @@ describe('audience: number glued to the bar', () => {
     ]]);
     const keys = Object.keys(r.audience.interest);
     expect(keys).toHaveLength(4); // every row kept, none lost
-    expect(keys[0]).toBe('娱乐');
-    expect(r.audience.interest['娱乐'].status).toBe('check'); // glued word → read again from the image
+    expect(r.audience.interest[keys[0]]).toMatchObject({ status: 'check', guessName: '娱乐' }); // glued word, guessed name → read again
     expect(keys).not.toContain('人'); // bar junk is not a name
     expect(Object.values(r.audience.interest).at(-1).candidate).toBe(0.418);
   });
@@ -344,5 +345,22 @@ describe('goal result confirmed by the report', () => {
   it('a reading that does not add up stays to check', () => {
     const r = parseAdOrder([[L('推广 目标 点 赞 收藏 量'), L('曝光 量 阅读 量 点 赞 量 收藏 量'), L('519 80 15 4'), L('点 赞 收藏 量 18 / 预 估 转 化 15 ~ 51', 40)]]);
     expect(r.fields.result.status).toBe('check');
+  });
+});
+
+describe('audience: guessed names and carried charts', () => {
+  const W = (text, x0, x1, y, conf = 90) => ({ text, confidence: conf, bbox: { x0, y0: y, x1, y1: y + 30 } });
+  const row = (label, v, y) => ({ words: [W(label, 89, 156, y), W('国', 189, 400, y, 0), W(v, 990, 1089, y)] });
+  it('a tie ("汽南" → 海南/河南/湖南) is not confirmed even when the shares add up', () => {
+    const r = parseAdOrder([[{ words: [W('城市分布', 88, 252, 0)] }, row('汽南', '25.6%', 100), row('北京', '30.0%', 200), row('其他', '44.4%', 300)]]);
+    const [k, v] = Object.entries(r.audience.city)[0];
+    expect(k).toBe('#1');
+    expect(v.guessName).toBeTruthy();
+  });
+  it('a chart continues on the next screenshot below its title bar; the status bar and repeated rows are ignored', () => {
+    const shot1 = [{ words: [W('观众兴趣分布', 88, 335, 0)] }, row('美食', '80.0%', 100), row('旅游', '70.0%', 200)];
+    const shot2 = [{ words: [W('10:17', 128, 248, 0), W('53', 1000, 1060, 0)] }, { words: [W('订单详情', 491, 686, 50)] }, row('旅游', '70.0%', 100), row('=¢', '60.0%', 200), row('体育运动', '50.0%', 300)];
+    const r = parseAdOrder([shot1, shot2]);
+    expect(Object.keys(r.audience.interest)).toEqual(['美食', '旅游', '#3', '体育运动']);
   });
 });

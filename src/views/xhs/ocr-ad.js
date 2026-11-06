@@ -143,7 +143,8 @@ export async function refineAudience(parsed, sources) {
       if (g.name && g.sure) name = g.name;
     }
     const nameSure = !!name;
-    if (!name && knownName(job.key, sec)) name = job.key; // re-reading did not help: keep the guess, unconfirmed
+    // Re-reading did not help: keep the first reading's guess, unconfirmed.
+    if (!name) name = knownName(job.key, sec) ? job.key : knownName(r.guessName, sec) ? r.guessName : '';
     let value = r.status === 'ok' ? r.value : null;
     if (value == null) {
       const read = await recognizeLine(clean(bmp, W * 0.75, y0, W, y1)).catch(() => null);

@@ -61,8 +61,11 @@ export function parseAdOrder(linesPerImage) {
   let budgetUsedUp = false;
   const noteCountSeen = () => f.noteCount?.value ?? 1;
   const noteText = []; // text under the thumbnails of a multi-note order (titles, often garbled)
+  let carrySection = ''; // a chart can continue at the top of the next screenshot
   for (const [img, lines] of linesPerImage.entries()) {
-    let section = '';
+    let section = carrySection;
+    let headingSeen = false;
+    let belowTitle = false; // the phone status bar (time, battery "53") sits above the 订单详情 title
     let inNotes = false;
     let pendingName = null; // a chart name read as its own line ("娱乐"), waiting for its number line
     for (let i = 0; i < lines.length; i++) {
@@ -124,6 +127,10 @@ export function parseAdOrder(linesPerImage) {
       // Audience sections
       // The page below the charts (assistant card, course banner, help link, buttons) is not audience data.
       if (/关注薯条|小助手|推广技巧|小课堂|开课|帮助中心|再次推广|订单管理|热力冲刺|抢流量/.test(text)) section = '';
+      if (/订单详情|详情|咨询/.test(text)) belowTitle = true;
+      if (/分布/.test(text) && /性别|年龄|城市|兴趣/.test(text)) headingSeen = true;
+      // A chart carried over from the previous screenshot only continues below the title bar, with real shares.
+      if (!headingSeen && section && (!belowTitle || !/\d[.%]|%/.test(text))) continue;
       if (/性别分布/.test(text)) section = 'gender';
       else if (/年龄分布/.test(text)) section = 'age';
       else if (/城市分布/.test(text)) section = 'city';
@@ -150,11 +157,34 @@ export function parseAdOrder(linesPerImage) {
           const list = audience[section];
           let key = row.label || `#${Object.keys(list).length + 1}`;
           if (section === 'age') key = ageLabel(text) ?? AGE_LABELS[Object.keys(list).length] ?? key;
-          const r = { ...row.result, at: here };
+          const r = { ...row.result, at: here, carried: !headingSeen }; // carried: above any heading of this screenshot
           // The same section often appears on two screenshots: keep the clearer reading.
           if (!list[key] || (list[key].status !== 'ok' && (r.status === 'ok' || list[key].candidate == null))) list[key] = r;
         }
       }
+    }
+    carrySection = section === 'gender' ? '' : section;
+  }
+  // Interests are listed from the largest share down: of two that break the order, the less certain
+  // reading is marked for a second look ("36" above "80.8").
+  const ints = Object.entries(audience.interest);
+  for (let i = 0; i + 1 < ints.length; i++) {
+    const [ka, a] = ints[i];
+    const [kb, b] = ints[i + 1];
+    const va = a.value ?? a.candidate;
+    const vb = b.value ?? b.candidate;
+    if (va == null || vb == null || va >= vb) continue;
+    const [k, r] = (a.status === 'ok' ? 1 : 0) + (a.conf ?? 0) / 1000 <= (b.status === 'ok' ? 1 : 0) + (b.conf ?? 0) / 1000 ? [ka, a] : [kb, b];
+    audience.interest[k] = { ...r, status: 'check', candidate: r.value ?? r.candidate, value: undefined, reason: 'format' };
+  }
+  // Rows repeated at the top of the next screenshot (the overlap): an unnamed one with the same share
+  // as a row already read is that row again.
+  for (const sec of ['city', 'interest']) {
+    const list = audience[sec];
+    const entries = Object.entries(list);
+    for (const [k, r] of entries) {
+      const v = r.value ?? r.candidate;
+      if (r.carried && !knownName(k, sec) && v != null && entries.some(([k2, x]) => k2 !== k && (x.value ?? x.candidate) === v)) delete list[k];
     }
   }
   // 城市分布 lists the top regions and ends with 其他 (everyone else): an unnamed last row is 其他.
@@ -233,7 +263,7 @@ export function parseAdOrder(linesPerImage) {
 
 // Names the 薯条 audience report uses: provinces (城市分布) and interest groups (观众兴趣分布).
 const PROVINCES = ['北京', '天津', '上海', '重庆', '河北', '山西', '辽宁', '吉林', '黑龙江', '江苏', '浙江', '安徽', '福建', '江西', '山东', '河南', '湖北', '湖南', '广东', '海南', '四川', '贵州', '云南', '陕西', '甘肃', '青海', '台湾', '内蒙古', '广西', '西藏', '宁夏', '新疆', '香港', '澳门', '其他'];
-const INTERESTS = ['生活记录', '娱乐', '美食', '情感', '影视', '时尚', '旅游', '宠物', '美妆', '护肤', '穿搭', '运动', '健身', '音乐', '游戏', '科技', '数码', '教育', '学习', '母婴', '家居', '家装', '汽车', '体育', '摄影', '读书', '二次元', '动漫', '搞笑', '职场', '财经', '健康', '婚嫁', '出行', '人文', '艺术', '手工', '绘画', '舞蹈', '明星', '综艺', '潮流', '户外', '露营', '咖啡', '探店', '美甲', '减肥', '亲子', '留学', '校园', '文化'];
+const INTERESTS = ['体育运动', '运动健身', '美妆护肤', '时尚穿搭', '母婴育儿', '家居家装', '科技数码', '游戏动漫', '知识教育', '影视综艺', '生活记录', '娱乐', '美食', '情感', '影视', '时尚', '旅游', '宠物', '美妆', '护肤', '穿搭', '运动', '健身', '音乐', '游戏', '科技', '数码', '教育', '学习', '母婴', '家居', '家装', '汽车', '体育', '摄影', '读书', '二次元', '动漫', '搞笑', '职场', '财经', '健康', '婚嫁', '出行', '人文', '艺术', '手工', '绘画', '舞蹈', '明星', '综艺', '潮流', '户外', '露营', '咖啡', '探店', '美甲', '减肥', '亲子', '留学', '校园', '文化'];
 const WEAK = new Set(['人', '他', '其', '国', '本', '和', '的', '一', '大', '小', '上', '下']);
 
 /** True when an audience label is one of the known names of its chart. */
@@ -247,7 +277,7 @@ export function nameGuess(raw, section) {
   const vocab = section === 'city' ? PROVINCES : section === 'interest' ? INTERESTS : null;
   const t = String(raw ?? '').replace(/[^\u4e00-\u9fff]/g, '');
   if (!vocab || !t) return { name: '', sure: false };
-  const exact = vocab.find((v) => t.includes(v) || v === t);
+  const exact = [...vocab].sort((a, b) => b.length - a.length).find((v) => t.includes(v)); // "体育运动" before "运动"
   if (exact) return { name: exact, sure: true };
   let best = '';
   let bestScore = 0;
@@ -256,7 +286,8 @@ export function nameGuess(raw, section) {
     const hits = [...new Set(v)].filter((ch) => t.includes(ch) && !WEAK.has(ch));
     if (!hits.length) continue;
     // A matching character in the same place counts a little more ("影饮" → 影视, not 摄影).
-    const score = hits.length + hits.filter((ch) => t.indexOf(ch) === v.indexOf(ch)).length * 0.5;
+    // …and a name mostly covered by the reading beats a longer one ("影饮" → 影视, not 影视综艺).
+    const score = hits.length + hits.filter((ch) => t.indexOf(ch) === v.indexOf(ch)).length * 0.5 + (hits.length / v.length) * 0.1;
     if (score > bestScore) [best, bestScore, tie] = [v, score, false];
     else if (score === bestScore) tie = true;
   }
@@ -305,7 +336,10 @@ function audienceRow(line, section) {
   const label = guess.name;
   const ok1 = !glued && hasDot && value <= 1 && (section === 'age' || (label && guess.sure)) && c >= MIN_CONF;
   const result = value > 1 || !Number.isFinite(value) ? check(null, line.words.map((w) => w.text).join(' '), c, 'format') : ok1 ? ok(value, `${num}%`, c) : check(value, `${num}%`, c, !hasDot || glued ? 'format' : section !== 'age' && !(label && guess.sure) ? 'text' : 'confidence');
-  return { label: label || (section === 'age' ? '' : rawLabel.replace(/[^\u4e00-\u9fff]/g, '')), result };
+  // Only a sure name becomes the key; a guess (a tie, "汽南" → 海南/河南/湖南) is kept beside it and
+  // the row is read again from the image.
+  if (section !== 'age' && !(label && guess.sure)) result.guessName = label || rawLabel.replace(/[^\u4e00-\u9fff]/g, '');
+  return { label: section === 'age' ? '' : label && guess.sure ? label : '', result };
 }
 
 /**
@@ -319,7 +353,7 @@ export function completeBySum(list, expectedCount = 0) {
   const unsure = entries.filter(([, r]) => r.status !== 'ok');
   const total = entries.reduce((a, [, r]) => a + (val(r) ?? 0), 0);
   if (entries.every(([, r]) => val(r) != null) && Math.abs(total - 1) < 0.0035) {
-    for (const [k, r] of unsure) list[k] = { ...ok(val(r), r.text, r.conf), at: r.at, confirmedBy: 'sum' };
+    for (const [k, r] of unsure) list[k] = { ...ok(val(r), r.text, r.conf), at: r.at, guessName: r.guessName, carried: r.carried, confirmedBy: 'sum' };
     return;
   }
   // Readings that lost their dot ("11%", "247%") are the doubtful ones; the others count toward the sum.
@@ -336,9 +370,9 @@ export function completeBySum(list, expectedCount = 0) {
       const want = String(Math.round(left * 1000));
       // Each other dot-less reading must be its own digits with the dot restored (e.g. "319" = 31.9%).
       const othersFit = others.every(([, x]) => x.reason !== 'format' || String(Math.round(val(x) * 1000)) === digitsOf(x));
-      if (left > 0 && read.length >= 2 && want.startsWith(read.slice(0, 2)) && othersFit) {
-        list[k] = { ...ok(left, r.text, r.conf), at: r.at, confirmedBy: 'sum' };
-        for (const [key, x] of others) if (x.status !== 'ok') list[key] = { ...ok(val(x), x.text, x.conf), at: x.at, confirmedBy: 'sum' };
+      if (((left > 0 && read.length >= 2 && want.startsWith(read.slice(0, 2))) || (left === 0 && /^0+$/.test(read))) && othersFit) {
+        list[k] = { ...ok(left, r.text, r.conf), at: r.at, guessName: r.guessName, confirmedBy: 'sum' };
+        for (const [key, x] of others) if (x.status !== 'ok') list[key] = { ...ok(val(x), x.text, x.conf), at: x.at, guessName: x.guessName, carried: x.carried, confirmedBy: 'sum' };
         return;
       }
     }
@@ -349,7 +383,7 @@ export function completeBySum(list, expectedCount = 0) {
     const left = Math.round((1 - rest) * 1000) / 1000;
     const read = String(r.text ?? '').replace(/[^\d]/g, '');
     const want = String(Math.round(left * 1000));
-    if (left > 0 && read && want.startsWith(read.slice(0, 2)) && (read.length <= want.length || read.startsWith(want))) list[k] = { ...ok(left, r.text, r.conf), at: r.at, confirmedBy: 'sum' };
+    if (left > 0 && read && want.startsWith(read.slice(0, 2)) && (read.length <= want.length || read.startsWith(want))) list[k] = { ...ok(left, r.text, r.conf), at: r.at, guessName: r.guessName, confirmedBy: 'sum' };
   }
 }
 
