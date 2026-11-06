@@ -240,3 +240,20 @@ describe('audience: two readings without a dot', () => {
     expect(Object.values(r.audience.age).map((x) => [x.status, x.value])).toEqual([['ok', 0.014], ['ok', 0.111], ['ok', 0.366], ['ok', 0.319], ['ok', 0.13], ['ok', 0.06]]);
   });
 });
+
+describe('comment texts', () => {
+  it('every placeholder in a comment text is filled by the comment data (all languages)', async () => {
+    const dicts = await Promise.all(['ko', 'en', 'zh'].map((l) => import(`../src/i18n/${l}.js`).then((m) => m.default)));
+    const mk = (id, date, goal, extra = {}) => normalizePost({ id, title: `T${id}`, date, d1: { views: id < 'c' ? 500 : 50 }, ads: [{ start: `${date}T20:00`, spend: 60, credit: 10, goal, order: { reads: 100, likes: 5, favorites: 1, follows: 1 }, goalResult: 6, estimate: [1, 5], ...extra }] });
+    const posts = [mk('a', '2026-01-01', '点赞收藏量'), mk('b', '2026-01-10', '关注'), mk('c', '2026-02-01', '点赞收藏量'), mk('d', '2026-02-10', '点赞收藏量')];
+    const comments = adComments(adOrders(posts), { baseline: { medians: { views: 300 } }, income: [{ date: '2026-02-01', cashKRW: 1 }] });
+    expect(comments.length).toBeGreaterThan(5);
+    for (const dict of dicts) {
+      for (const c of comments) {
+        const text = dict[`adr.c.${c.key}`];
+        expect(text, c.key).toBeTruthy();
+        for (const [, name] of text.matchAll(/\{(\w+)\}/g)) expect(c.vars, `${c.key}: {${name}}`).toHaveProperty(name);
+      }
+    }
+  });
+});
