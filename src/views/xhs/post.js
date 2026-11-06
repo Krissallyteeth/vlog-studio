@@ -10,6 +10,8 @@ import { judge, ordered, stage } from '../../xhs/stats.js';
 import { activeBaseline, deletePost, getPost, getSettings, listPosts, normalizeAd, normalizeStage, onXhsChange, savePosts } from '../../xhs/store.js';
 import { AD_METRICS } from '../../xhs/ocr-ad-parse.js';
 import { memoDuplicateOf } from '../../xhs/ad-orders.js';
+import { postFocus } from '../../xhs/insights.js';
+import { insightList } from './insight-text.js';
 import { relativeNote, xhsPage } from './shell.js';
 
 const CF = { good: 'cf-good', mid: 'cf-mid', bad: 'cf-bad' };
@@ -54,6 +56,8 @@ export async function renderPost([id], { isCurrent }) {
   }
   const project = post.projectId ? await getProject(post.projectId) : null;
   const report = analysePost(post, posts, baseline);
+  // The funnel step to fix first, against my own records; plus what this post's ads showed.
+  const focus = postFocus(post, posts, baseline);
   const eff = adEffect(post);
   const d1 = stage(post, 'd1');
   const d2 = stage(post, 'd2');
@@ -139,7 +143,9 @@ export async function renderPost([id], { isCurrent }) {
         <a class="btn btn-secondary btn-sm mt-3" href="#/ocr/${encodeURIComponent(post.id)}">${icon('scan', 'size-4')}${esc(t('post.fromShot'))}</a>
       </section>
       <section class="card mt-3"><h2 class="section-step">4 · ${esc(t('post.s.ads'))}</h2><div class="mt-2" id="p-ads">${adsHtml()}</div></section>
-      <section class="card mt-3"><h2 class="section-step">5 · ${esc(t('post.s.analysis'))}</h2><div class="mt-2">${reportHtml()}</div></section>
+      <section class="card mt-3"><h2 class="section-step">5 · ${esc(t('post.s.analysis'))}</h2>
+        <div class="mt-2 rounded-[12px] border border-line p-3"><h3 class="text-[14px] font-semibold">${esc(t('pf.title'))}</h3>${insightList('pf', focus.items)}</div>
+        <div class="mt-3">${reportHtml()}</div></section>
       <button type="button" class="btn btn-ghost text-danger mt-4" id="p-delete">${icon('trash', 'size-4')}${esc(t('post.delete'))}</button>`,
   });
 

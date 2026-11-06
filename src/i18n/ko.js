@@ -1322,4 +1322,80 @@ export default {
   "ads.dupMemo": "이 메모({spend}元)는 캡처로 넣은 주문({stage}, {start})과 같은 광고로 보여요. 그대로 두면 광고비가 두 번 집계돼요.",
   "ads.dupDrop": "중복 메모 지우기",
   "ads.dupDropBody": "엑셀 메모 기록 \"{text}\"을 지워요. 캡처로 넣은 주문 기록은 그대로 남아요.",
+
+  "ops.weak.ctr": "원인은 표지 클릭률이에요: 최근 {n}편 중 {below}편이 기준 아래(중앙값 {now}, 기준 {base}). 표지 첫 장면·표지 문구·제목 앞 10자를 바꿔 보세요. 클릭률이 가장 높았던 \"{best}\"({bestV})의 표지·제목과 나란히 놓고 비교하면 차이가 보여요.",
+
+  "pf.focus.ctr": "먼저 고칠 곳: 표지 클릭률 {now} — 내 기준 {base}보다 {pct}% 낮고, 내 상위 3편은 {top}이에요. 표지 첫 장면·표지 문구·제목 앞 10자를 바꿔 보세요.",
+
+  "ops.weak.exit2s": "원인은 2초 이탈률이에요: 최근 {n}편 중 {below}편이 기준 아래(중앙값 {now}, 기준 {base}). 첫 2초에 결과·가장 강한 장면을 먼저 보여 주고, 인사·인트로를 빼 보세요. 2초 이탈이 가장 낮았던 \"{best}\"({bestV})의 시작 장면을 참고하세요.",
+
+  "pf.focus.exit2s": "먼저 고칠 곳: 2초 이탈률 {now} — 내 기준 {base}보다 {pct}% 낮고, 내 상위 3편은 {top}이에요. 첫 2초에 결과·가장 강한 장면을 먼저 보여 주고, 인사·인트로를 빼 보세요. 2초 이탈이 가장 낮",
+
+  "ops.weak.retain5s": "원인은 5초 유지율이에요: 최근 {n}편 중 {below}편이 기준 아래(중앙값 {now}, 기준 {base}). 3~5초에 \"끝까지 보면 무엇을 얻는지\"를 말·자막으로 약속해 보세요. \"{best}\"({bestV}) 참고.",
+
+  "pf.focus.retain5s": "먼저 고칠 곳: 5초 유지율 {now} — 내 기준 {base}보다 {pct}% 낮고, 내 상위 3편은 {top}이에요. 3~5초에 \"끝까지 보면 무엇을 얻는지\"를 말·자막으로 약속해 보세요.",
+
+  "ops.weak.avgWatchRatio": "원인은 평균 시청 비율이에요: 최근 {n}편 중 {below}편이 기준 아래(중앙값 {now}, 기준 {base}). 중반이 늘어져요. 컷 길이를 줄이고 같은 장면 반복을 빼서 영상을 짧게 해 보세요. \"{best}\"({bestV}) 참고.",
+
+  "pf.focus.avgWatchRatio": "먼저 고칠 곳: 평균 시청 비율 {now} — 내 기준 {base}보다 {pct}% 낮고, 내 상위 3편은 {top}이에요. 중반이 늘어져요. 컷 길이를 줄이고 같은 장면 반복을 빼서 영상을 짧게 해 보세요.",
+
+  "ops.weak.completion": "원인은 완주율이에요: 최근 {n}편 중 {below}편이 기준 아래(중앙값 {now}, 기준 {base}). 끝까지 볼 이유를 앞에서 예고하고(마지막 반전·정리), 마무리를 짧게 해 보세요. \"{best}\"({bestV}) 참고.",
+
+  "pf.focus.completion": "먼저 고칠 곳: 완주율 {now} — 내 기준 {base}보다 {pct}% 낮고, 내 상위 3편은 {top}이에요. 끝까지 볼 이유를 앞에서 예고하고(마지막 반전·정리), 마무리를 짧게 해 보세요.",
+
+  "ops.weak.interactionRate": "원인은 상호작용률이에요: 최근 {n}편 중 {below}편이 기준 아래(중앙값 {now}, 기준 {base}). 본문·영상 끝에 답하기 쉬운 질문이나 저장할 이유(정보 요약)를 넣어 보세요. \"{best}\"({bestV}) 참고.",
+
+  "pf.focus.interactionRate": "먼저 고칠 곳: 상호작용률 {now} — 내 기준 {base}보다 {pct}% 낮고, 내 상위 3편은 {top}이에요. 본문·영상 끝에 답하기 쉬운 질문이나 저장할 이유(정보 요약)를 넣어 보세요.",
+  "pf.gain": "같은 노출에서 클릭률만 내 기준이었다면 조회가 약 {gain}회 더 나왔을 거예요.",
+  "pf.focus.none": "내 기준보다 크게 뒤처진 단계가 없어요. 한 번에 한 가지만 바꿔 실험해 보세요.",
+  "pf.noData": "D+1 성과 데이터가 없어서 개선점을 판단할 수 없어요.",
+  "pf.followRate": "조회 1,000회당 팔로워 {now}명 — 내 평소 {med}명보다 적어요. 영상 끝에 \"다음 편/시리즈\" 예고나 팔로우할 이유를 넣어 보세요.",
+  "pf.profileConv": "광고로 프로필에 온 {pv}명 중 {fo}명만 팔로우({now}%, 평소 {med}%). 프로필 소개·고정 게시물·최근 게시물 표지를 점검해 보세요.",
+  "pf.youngAudience": "광고 시청자 중 23세 이하가 {now}%(평소 {med}%)로 젊어요. 주제가 평소 시청자와 달라 팔로우로 이어지기 어려울 수 있어요.",
+  "pf.olderAudience": "광고 시청자 중 23세 이하가 {now}%(평소 {med}%)로 평소보다 나이 든 층이 많아요.",
+  "pf.title": "가장 먼저 고칠 것",
+
+  "ops.title": "운영 브리핑",
+  "ops.note": "내 데이터로 계산한 건의예요. 기록이 쌓이면 내용과 순서가 바뀌고, 표본이 적은 항목은 \"참고\"로 표시돼요.",
+  "ops.none": "아직 건의할 만한 뚜렷한 패턴이 없어요.",
+  "ops.ref": "참고",
+  "ops.recentDown": "최근 {n}편 조회수 중앙값 {views}회 — 기준 {base}회보다 {pct}% 낮아요.",
+  "ops.recentUp": "최근 {n}편 조회수 중앙값 {views}회 — 기준 {base}회보다 {pct}% 높아요. 지금 방식을 유지하세요.",
+  "ops.adOnlyStrong": "광고는 D+1 조회 {cut}회 이상인 글에만 거세요: 팔로워 1명 {cheap} vs 미만인 글 {dear}({times}배, 주문 {nWin}건 vs {nLose}건).",
+  "ops.adCutUnclear": "D+1 조회가 낮은 글의 광고가 오히려 쌌어요({cheap} vs {dear}). 자연 조회만으로 광고 대상을 고를 근거는 아직 약해요.",
+  "ops.adGoal": "팔로워가 목적이면 关注 목표로: 100元당 팔로워 {f}명 vs 点赞收藏 목표 {l}명. 点赞收藏은 반응을 늘릴 때만 쓰세요.",
+  "ops.adTrendUp": "최근 팔로워 단가가 올랐어요: {from}부터 {now}(이전 {before}). 광고 대상 글·목표를 다시 점검해 보세요.",
+  "ops.dependOnAds": "{from}~{to} 팔로워 증가 {growth}명 중 약 {share}%({bought}명)가 광고로 왔어요. 자연 증가({organic}명)를 늘리려면 위 표지·초반 개선이 먼저예요.",
+  "ops.gap": "마지막 게시({last}) 후 {since}일이 지났어요. 평소 간격은 {usual}일이에요.",
+  "ops.setTypes": "유효 글 {n}편에 콘텐츠 유형이 없어요. 데이터 표에서 유형(예: 여행·일상·정보)을 지정하면 어떤 유형이 잘 되는지, 광고가 어떤 유형에 싼지도 계산돼요.",
+  "ops.noReport": "보고서(캡처) 없는 광고 {n}건 — 캡처를 올리면 광고 분석에 포함돼요.",
+
+  "ins.title": "광고 인사이트",
+  "ins.note": "모든 기준값은 내 기록에서 매번 다시 계산해요(예: D+1 조회 중앙값). 양쪽 모두 2건 이상일 때만 비교하고, 3건 미만이면 \"참고\"예요.",
+  "ins.goalForFollowers": "팔로워는 关注 목표가 훨씬 효율적이에요: 100元당 {f}명 vs 点赞收藏 목표 {l}명(주문 {nF}건 vs {nL}건).",
+  "ins.naturalCut": "D+1 조회 {cut}회(내 중앙값) 기준: {win} 글의 팔로워 단가 {cheap} vs {lose} 글 {dear} — {times}배 차이.",
+  "ins.timing": "关注 광고 시점: {win}이 팔로워 1명 {cheap}으로 {lose}({dear})보다 쌌어요(주문 {nWin}건 vs {nLose}건).",
+  "ins.multiVsSingle": "{win} 주문이 팔로워 1명 {cheap}으로 {lose}({dear})보다 쌌어요(주문 {nWin}건 vs {nLose}건).",
+  "ins.multi": "여러 노트 묶음",
+  "ins.single": "노트 1개",
+  "ins.contentType": "유형 \"{win}\" 글의 팔로워 단가 {cheap} vs \"{lose}\" {dear}({times}배).",
+  "ins.trendUp": "최근 3건의 팔로워 단가 {now} — 그 전 {before}보다 올랐어요({from}부터).",
+  "ins.trendDown": "최근 3건의 팔로워 단가 {now} — 그 전 {before}보다 내려갔어요({from}부터).",
+  "ins.followerSplit": "{from}~{to} 팔로워 +{growth}명: 광고 약 {bought}명({share}%), 그 외 약 {organic}명.",
+
+  "data.tab.ads": "광고기록",
+
+  "adr.toAnalysis": "대시보드에서 분석 보기",
+  "adr.section": "광고·수익 분석",
+
+  "xg.adGroup": "광고",
+  "xg.adSpend": "광고비(元)",
+  "xg.adSpendSub": "실제 지출 합계",
+  "xg.adPerFollow": "팔로워당",
+  "xg.adPerFollowSub": "关注 목표 주문",
+
+  "chart.ad": "광고 {spend} · {goal}{per}",
+  "chart.adPer": " · 팔로워당 {v}",
+
+  "xg.adColHelp": "모든 광고 기록(엑셀 메모·캡처 주문·묶음 주문의 몫)에서 자동 계산돼요. 누르면 게시물 광고로 이동해요.",
 };

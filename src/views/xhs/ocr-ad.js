@@ -315,7 +315,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
   const root = xhsPage({
     nav: 'more',
     wide: true,
-    back: '#/ads',
+    back: '#/data/ads',
     title: t('oad.title'),
     sub: t('oad.sub'),
     body: `
@@ -692,7 +692,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
     }
     await savePosts([...changed]);
     toast(t('oad.saved', { n: list.length }));
-    navigate('/ads');
+    navigate('/data/ads');
   }
 
   root.addEventListener('change', (e) => {

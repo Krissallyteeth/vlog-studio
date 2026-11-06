@@ -1322,4 +1322,80 @@ export default {
   "ads.dupMemo": "此备注（{spend}元）看起来与截图录入的订单（{stage}，{start}）是同一次推广，保留会重复计算花费。",
   "ads.dupDrop": "删除重复备注",
   "ads.dupDropBody": "删除备注记录\"{text}\"，截图录入的订单保留。",
+
+  "ops.weak.ctr": "原因在封面点击率：最近{n}篇中有{below}篇低于基准（中位数{now}，基准{base}）。试着更换封面首帧、封面文字和标题前10个字。和点击率最高的\"{best}\"（{bestV}）对比看差别。",
+
+  "pf.focus.ctr": "先改：封面点击率 {now}，比基准{base}低{pct}%，你的前3篇为{top}。试着更换封面首帧、封面文字和标题前10个字。",
+
+  "ops.weak.exit2s": "原因在2秒退出率：最近{n}篇中有{below}篇低于基准（中位数{now}，基准{base}）。前2秒先放结果或最强画面，去掉开场白。参考\"{best}\"（{bestV}）的开头。",
+
+  "pf.focus.exit2s": "先改：2秒退出率 {now}，比基准{base}低{pct}%，你的前3篇为{top}。前2秒先放结果或最强画面，去掉开场白。",
+
+  "ops.weak.retain5s": "原因在5秒完播率：最近{n}篇中有{below}篇低于基准（中位数{now}，基准{base}）。在3~5秒内用口播或字幕说明看完能得到什么。参考\"{best}\"（{bestV}）。",
+
+  "pf.focus.retain5s": "先改：5秒完播率 {now}，比基准{base}低{pct}%，你的前3篇为{top}。在3~5秒内用口播或字幕说明看完能得到什么。",
+
+  "ops.weak.avgWatchRatio": "原因在平均观看时长%：最近{n}篇中有{below}篇低于基准（中位数{now}，基准{base}）。中段拖沓：缩短镜头、去掉重复画面、缩短时长。参考\"{best}\"（{bestV}）。",
+
+  "pf.focus.avgWatchRatio": "先改：平均观看时长% {now}，比基准{base}低{pct}%，你的前3篇为{top}。中段拖沓：缩短镜头、去掉重复画面、缩短时长。",
+
+  "ops.weak.completion": "原因在全片完播率：最近{n}篇中有{below}篇低于基准（中位数{now}，基准{base}）。提前预告结尾的看点（反转或总结），并缩短结尾。参考\"{best}\"（{bestV}）。",
+
+  "pf.focus.completion": "先改：全片完播率 {now}，比基准{base}低{pct}%，你的前3篇为{top}。提前预告结尾的看点（反转或总结），并缩短结尾。",
+
+  "ops.weak.interactionRate": "原因在互动率：最近{n}篇中有{below}篇低于基准（中位数{now}，基准{base}）。在文末或视频结尾加一个好回答的问题或值得收藏的总结。参考\"{best}\"（{bestV}）。",
+
+  "pf.focus.interactionRate": "先改：互动率 {now}，比基准{base}低{pct}%，你的前3篇为{top}。在文末或视频结尾加一个好回答的问题或值得收藏的总结。",
+  "pf.gain": "在相同曝光下，如果点击率达到你的基准，大约能多{gain}次观看。",
+  "pf.focus.none": "没有明显落后基准的环节。每次只改一处做实验。",
+  "pf.noData": "没有D+1数据，暂时无法判断。",
+  "pf.followRate": "每千次观看涨粉{now}人，低于平时的{med}人。结尾加下集预告或关注理由。",
+  "pf.profileConv": "广告带来{pv}次主页访问，只有{fo}人关注（{now}%，平时{med}%）。检查简介、置顶笔记和近期封面。",
+  "pf.youngAudience": "广告观众中23岁以下占{now}%（平时{med}%），与常规观众不同。",
+  "pf.olderAudience": "广告观众中23岁以下仅{now}%（平时{med}%），比平时年龄偏大。",
+  "pf.title": "最先要改的",
+
+  "ops.title": "运营简报",
+  "ops.note": "根据你的数据计算的建议。随记录增加而变化，样本少的标为“参考”。",
+  "ops.none": "暂时没有明显的规律。",
+  "ops.ref": "参考",
+  "ops.recentDown": "最近{n}篇观看中位数{views}，比基准{base}低{pct}%。",
+  "ops.recentUp": "最近{n}篇观看中位数{views}，比基准{base}高{pct}%，保持当前做法。",
+  "ops.adOnlyStrong": "只给D+1观看≥{cut}的笔记投薯条：每个粉丝{cheap}，低于该值的{dear}（{times}倍，{nWin}单 vs {nLose}单）。",
+  "ops.adCutUnclear": "D+1观看低的笔记投放反而更便宜（{cheap} vs {dear}），仅凭自然观看筛选依据不足。",
+  "ops.adGoal": "涨粉请选关注目标：每100元{f}个粉丝，点赞收藏目标仅{l}个。点赞收藏只在想提升互动时使用。",
+  "ops.adTrendUp": "从{from}起粉丝单价上升到{now}（之前{before}），请检查投放的笔记和目标。",
+  "ops.dependOnAds": "{from}~{to}新增粉丝{growth}人中约{share}%（{bought}人）来自薯条。要提高自然增长（{organic}人），先改进上面的封面和开头。",
+  "ops.gap": "距上次发布（{last}）已{since}天，平时间隔{usual}天。",
+  "ops.setTypes": "{n}篇有效笔记没有内容类型。在数据表中设置类型后，可比较哪类内容表现好、投放更便宜。",
+  "ops.noReport": "{n}个推广没有报告（截图），上传后可纳入分析。",
+
+  "ins.title": "投放洞察",
+  "ins.note": "所有阈值都根据你的记录重新计算（如D+1观看中位数）。两组各≥2单才比较，少于3单标为参考。",
+  "ins.goalForFollowers": "涨粉用关注目标效率更高：每100元{f}人 vs 点赞收藏{l}人（{nF}单 vs {nL}单）。",
+  "ins.naturalCut": "以D+1观看{cut}（你的中位数）为界：{win}的粉丝单价{cheap}，{lose}为{dear}，相差{times}倍。",
+  "ins.timing": "关注投放时机：{win}每个粉丝{cheap}，{lose}为{dear}（{nWin}单 vs {nLose}单）。",
+  "ins.multiVsSingle": "{win}订单每个粉丝{cheap}，{lose}为{dear}（{nWin}单 vs {nLose}单）。",
+  "ins.multi": "多篇合投",
+  "ins.single": "单篇",
+  "ins.contentType": "类型“{win}”每个粉丝{cheap}，“{lose}”为{dear}（{times}倍）。",
+  "ins.trendUp": "最近3单粉丝单价{now}，高于之前的{before}（自{from}起）。",
+  "ins.trendDown": "最近3单粉丝单价{now}，低于之前的{before}（自{from}起）。",
+  "ins.followerSplit": "{from}~{to}粉丝+{growth}：薯条约{bought}人（{share}%），其余约{organic}人。",
+
+  "data.tab.ads": "推广记录",
+
+  "adr.toAnalysis": "查看分析",
+  "adr.section": "推广与收益分析",
+
+  "xg.adGroup": "推广",
+  "xg.adSpend": "推广花费(元)",
+  "xg.adSpendSub": "实付合计",
+  "xg.adPerFollow": "每粉丝",
+  "xg.adPerFollowSub": "关注目标订单",
+
+  "chart.ad": "推广 {spend} · {goal}{per}",
+  "chart.adPer": " · 每粉丝{v}",
+
+  "xg.adColHelp": "根据全部推广记录（备注、截图订单、合投分摊）自动计算，点击查看该笔记的推广。",
 };

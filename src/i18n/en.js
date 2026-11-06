@@ -1322,4 +1322,80 @@ export default {
   "ads.dupMemo": "This memo ({spend}元) looks like the same ad as the order from screenshots ({stage}, {start}). Kept, its spend is counted twice.",
   "ads.dupDrop": "Remove duplicate memo",
   "ads.dupDropBody": "Removes the memo record \"{text}\". The order from the screenshots stays.",
+
+  "ops.weak.ctr": "The cause is the cover click rate: {below} of the last {n} posts are below your baseline (median {now}, baseline {base}). Change the cover frame, cover text and the first 10 characters of the title. Put it next to \"{best}\" ({bestV}), your best click rate, to see the difference.",
+
+  "pf.focus.ctr": "Fix first: cover click rate {now} — {pct}% below your baseline {base}; your top 3 posts have {top}. Change the cover frame, cover text and the first 10 characters of the title.",
+
+  "ops.weak.exit2s": "The cause is the 2-second exit rate: {below} of the last {n} posts are below your baseline (median {now}, baseline {base}). Open with the result or strongest shot in the first 2 seconds and cut greetings/intros. See how \"{best}\" ({bestV}) starts.",
+
+  "pf.focus.exit2s": "Fix first: 2-second exit rate {now} — {pct}% below your baseline {base}; your top 3 posts have {top}. Open with the result or strongest shot in the first 2 seconds and cut greetings/intros.",
+
+  "ops.weak.retain5s": "The cause is the 5-second retention: {below} of the last {n} posts are below your baseline (median {now}, baseline {base}). Promise what viewers get by the end within 3–5 seconds (voice or caption). See \"{best}\" ({bestV}).",
+
+  "pf.focus.retain5s": "Fix first: 5-second retention {now} — {pct}% below your baseline {base}; your top 3 posts have {top}. Promise what viewers get by the end within 3–5 seconds (voice or caption).",
+
+  "ops.weak.avgWatchRatio": "The cause is the average watch ratio: {below} of the last {n} posts are below your baseline (median {now}, baseline {base}). The middle drags: shorten cuts, drop repeated shots, make it shorter. See \"{best}\" ({bestV}).",
+
+  "pf.focus.avgWatchRatio": "Fix first: average watch ratio {now} — {pct}% below your baseline {base}; your top 3 posts have {top}. The middle drags: shorten cuts, drop repeated shots, make it shorter.",
+
+  "ops.weak.completion": "The cause is the completion rate: {below} of the last {n} posts are below your baseline (median {now}, baseline {base}). Tease a reason to stay to the end (a twist or summary) early and keep the ending short. See \"{best}\" ({bestV}).",
+
+  "pf.focus.completion": "Fix first: completion rate {now} — {pct}% below your baseline {base}; your top 3 posts have {top}. Tease a reason to stay to the end (a twist or summary) early and keep the ending short.",
+
+  "ops.weak.interactionRate": "The cause is the interaction rate: {below} of the last {n} posts are below your baseline (median {now}, baseline {base}). Add an easy question or a reason to save (a summary) at the end or in the caption. See \"{best}\" ({bestV}).",
+
+  "pf.focus.interactionRate": "Fix first: interaction rate {now} — {pct}% below your baseline {base}; your top 3 posts have {top}. Add an easy question or a reason to save (a summary) at the end or in the caption.",
+  "pf.gain": "At the same exposure, your usual click rate would have brought about {gain} more views.",
+  "pf.focus.none": "No step is clearly behind your baseline. Change one thing at a time to experiment.",
+  "pf.noData": "No D+1 data, so there is nothing to judge yet.",
+  "pf.followRate": "{now} followers per 1,000 views — below your usual {med}. End with a next-episode tease or a reason to follow.",
+  "pf.profileConv": "Of {pv} profile visits from the ad only {fo} followed ({now}%, usually {med}%). Check your bio, pinned posts and recent covers.",
+  "pf.youngAudience": "{now}% of the ad audience is 23 or younger (usually {med}%): a different crowd from your usual viewers.",
+  "pf.olderAudience": "Only {now}% of the ad audience is 23 or younger (usually {med}%): an older crowd than usual.",
+  "pf.title": "Fix this first",
+
+  "ops.title": "Briefing",
+  "ops.note": "Suggestions computed from your data. They change as records grow; items with few samples are marked as reference.",
+  "ops.none": "No clear pattern to suggest yet.",
+  "ops.ref": "reference",
+  "ops.recentDown": "Median views of the last {n} posts: {views} — {pct}% below your baseline {base}.",
+  "ops.recentUp": "Median views of the last {n} posts: {views} — {pct}% above your baseline {base}. Keep going.",
+  "ops.adOnlyStrong": "Only promote posts with D+1 views ≥ {cut}: {cheap} per follower vs {dear} below ({times}×, {nWin} vs {nLose} orders).",
+  "ops.adCutUnclear": "Ads on posts with lower D+1 views were cheaper ({cheap} vs {dear}): D+1 views alone are not a good filter yet.",
+  "ops.adGoal": "For followers use the 关注 goal: {f} followers per 100元 vs {l} with 点赞收藏. Use 点赞收藏 only to grow reactions.",
+  "ops.adTrendUp": "The price of a follower has risen since {from}: {now} (before {before}). Review which posts and goals you promote.",
+  "ops.dependOnAds": "About {share}% ({bought}) of the {growth} new followers ({from}–{to}) came from ads. Growing the organic part ({organic}) starts with the cover and opening fixes above.",
+  "ops.gap": "{since} days since the last post ({last}); you usually post every {usual} days.",
+  "ops.setTypes": "{n} valid posts have no content type. Set types in the data table to compare which kinds work and where ads are cheaper.",
+  "ops.noReport": "{n} ads without a report (screenshots) — upload them to include them in the analysis.",
+
+  "ins.title": "Ad insights",
+  "ins.note": "All cut-offs are recomputed from your records (e.g. the median D+1 views). Groups are compared only with 2+ orders each; under 3 is marked as reference.",
+  "ins.goalForFollowers": "The 关注 goal is far better for followers: {f} per 100元 vs {l} with 点赞收藏 ({nF} vs {nL} orders).",
+  "ins.naturalCut": "Split at {cut} D+1 views (your median): {win} posts {cheap} per follower vs {lose} {dear} — {times}×.",
+  "ins.timing": "关注 ads timing: {win} cost {cheap} per follower vs {lose} {dear} ({nWin} vs {nLose} orders).",
+  "ins.multiVsSingle": "{win} orders cost {cheap} per follower vs {lose} {dear} ({nWin} vs {nLose} orders).",
+  "ins.multi": "multi-note",
+  "ins.single": "single-note",
+  "ins.contentType": "Type \"{win}\": {cheap} per follower vs \"{lose}\" {dear} ({times}×).",
+  "ins.trendUp": "Last 3 orders: {now} per follower — up from {before} (since {from}).",
+  "ins.trendDown": "Last 3 orders: {now} per follower — down from {before} (since {from}).",
+  "ins.followerSplit": "{from}–{to}: +{growth} followers, about {bought} from ads ({share}%), about {organic} otherwise.",
+
+  "data.tab.ads": "Ad records",
+
+  "adr.toAnalysis": "See the analysis",
+  "adr.section": "Ads & income",
+
+  "xg.adGroup": "Ads",
+  "xg.adSpend": "Ad spend (元)",
+  "xg.adSpendSub": "real money, total",
+  "xg.adPerFollow": "Per follower",
+  "xg.adPerFollowSub": "关注-goal orders",
+
+  "chart.ad": "Ad {spend} · {goal}{per}",
+  "chart.adPer": " · {v} per follower",
+
+  "xg.adColHelp": "Calculated from every ad record (memo, screenshot order, multi-note share). Click to open the post’s ads.",
 };

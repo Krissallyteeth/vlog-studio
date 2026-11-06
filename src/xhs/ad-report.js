@@ -312,3 +312,17 @@ export function historyEntries(posts) {
 
 /** Fields that belong to one note of a multi-note order; the rest is the order's and is shared. */
 export const NOTE_FIELDS = ['id', 'stage', 'spend', 'credit', 'share', 'allocation', 'notePublishedAt', 'noteTitle', 'sourceText'];
+
+/**
+ * One post's ads for the data table: real money of all its ads (a multi-note order counts its
+ * share), and the price of a follower over its 关注-goal ads with a report (shares of the follows).
+ */
+export function postAdSummary(post) {
+  const ads = (post.ads ?? []).filter((a) => a.executed !== false);
+  if (!ads.length) return { spend: null, perFollow: null, count: 0 };
+  const spend = sum(ads, (a) => a.spend);
+  const fol = ads.filter((a) => goalType(a.goal) === 'follow' && isNum(a.order?.follows));
+  const f = sum(fol, (a) => a.order.follows * (isNum(a.share) ? a.share : 1));
+  const s = sum(fol, (a) => a.spend);
+  return { spend: Math.round(spend * 100) / 100, perFollow: f > 0 ? Math.round((s / f) * 100) / 100 : null, count: ads.length };
+}

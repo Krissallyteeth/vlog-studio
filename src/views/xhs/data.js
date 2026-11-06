@@ -25,7 +25,7 @@ import { createGrid } from './grid.js';
 import { applyValue, editTextOf, parseCell, postColumns, postValue, renderPostCell } from './post-columns.js';
 import { relativeNote, xhsPage } from './shell.js';
 
-const TABS = ['posts', 'criteria', 'income', 'rules'];
+const TABS = ['posts', 'criteria', 'ads', 'income', 'rules'];
 const PREF_KEY = 'xhs-data-prefs';
 const loadPrefs = () => {
   try {
@@ -55,7 +55,7 @@ export async function renderData([tab = 'posts', focus], { isCurrent }) {
       <button type="button" class="btn btn-secondary btn-sm" id="data-export">${icon('download', 'size-4')}${esc(t('data.export'))}</button>`,
     body: `
       <div class="segmented segmented-tabs mb-3" role="tablist">
-        ${TABS.map((x, i) => `<a href="#/data/${x}" role="tab" class="seg ${x === tab ? 'is-active' : ''}" aria-selected="${x === tab}">${['①', '②', '③', '④'][i]} ${esc(t(`data.tab.${x}`))}</a>`).join('')}
+        ${TABS.map((x, i) => `<a href="#/data/${x}" role="tab" class="seg ${x === tab ? 'is-active' : ''}" aria-selected="${x === tab}">${['①', '②', '③', '④', '⑤'][i]} ${esc(t(`data.tab.${x}`))}</a>`).join('')}
       </div>
       <div id="data-body"></div>`,
   });
@@ -64,6 +64,13 @@ export async function renderData([tab = 'posts', focus], { isCurrent }) {
   let view;
   if (tab === 'posts') view = renderPosts(body, ctx, focus);
   if (tab === 'criteria') view = renderCriteria(body, ctx);
+  if (tab === 'ads') {
+    // ③ 광고기록: one row per 薯条 order (the analysis of them is on the dashboard).
+    const { adRecordsSection } = await import('./ads.js');
+    const sec = adRecordsSection({ posts });
+    body.innerHTML = sec.html;
+    sec.bind(body);
+  }
   if (tab === 'income') view = renderIncome(body, ctx);
   if (tab === 'rules') view = renderRules(body, ctx);
 

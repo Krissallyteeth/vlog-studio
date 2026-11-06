@@ -5,9 +5,11 @@ import { icon } from '../../ui/icons.js';
 import { adEffect, orderEfficiency } from '../../xhs/analysis.js';
 import { fmt, won, yuan } from '../../xhs/format.js';
 import { adTotals } from '../../xhs/stats.js';
-import { activeBaseline, getSettings, listIncome, listPosts, onXhsChange, savePosts, saveSettings } from '../../xhs/store.js';
+import { savePosts, saveSettings } from '../../xhs/store.js';
 import { adComments, adOrders, adSummary, goalRows, historyEntries, NOTE_FIELDS, periodRows, postRows, stageRows } from '../../xhs/ad-report.js';
 import { adSheet } from './post.js';
+import { insightList } from './insight-text.js';
+import { adInsights } from '../../xhs/insights.js';
 import { xhsPage } from './shell.js';
 
 // ── 광고 및 수익 관리 ─────────────────────────────────
@@ -25,22 +27,36 @@ function commentText(c) {
   return t(`adr.c.${c.key}`, vars);
 }
 
-export async function renderAds({ isCurrent }) {
-  const [posts, income, settings, baseline] = await Promise.all([listPosts(), listIncome(), getSettings(), activeBaseline()]);
-  if (!isCurrent()) return null;
-  const prefs = (() => {
-    try {
-      return { unit: 'month', ...JSON.parse(localStorage.getItem('xhs-ads-prefs') || '{}') };
-    } catch {
-      return { unit: 'month' };
-    }
-  })();
+const loadPrefs = () => {
+  try {
+    return { unit: 'month', ...JSON.parse(localStorage.getItem('xhs-ads-prefs') || '{}') };
+  } catch {
+    return { unit: 'month' };
+  }
+};
+
+/** The old ad page: records now live in Data → ③ 광고기록, analysis on the dashboard. */
+export async function renderAds() {
+  navigate('/data/ads', { replace: true });
+  return null;
+}
+
+/**
+ * Ad & income analysis for the dashboard: totals, comments, month/year, per post, D+n and goal.
+ * `rerender` redraws the host screen (after the month/year switch).
+ */
+export function adAnalysisSection({ posts, income, settings, baseline }, rerender) {
+  const prefs = loadPrefs();
   const totals = adTotals(posts);
   const orders = adOrders(posts);
   const sum = adSummary(orders);
   const comments = adComments(orders, { posts, baseline, income, cnyKrw: settings.cnyKrw });
   const periods = periodRows(orders, prefs.unit, income, settings.cnyKrw);
-  const history = historyEntries(posts);
+  const insights = adInsights(posts);
+  // Comments the insights already cover (and phrase per goal) are not repeated.
+  const has = (k) => insights.some((x) => x.key === k);
+  const covered = [...(has('goalForFollowers') ? ['followsFromLikeFav'] : []), ...(has('naturalCut') ? ['boost'] : []), ...(has('timing') ? ['stage'] : [])];
+  const shown = comments.filter((c) => !covered.some((k) => c.key.startsWith(k)));
   const toneCls = { good: 'cf-good', warn: 'cf-mid', info: 'bg-surface-2' };
   const costHead = `<th class="num" data-m="inline">${esc(t('ads.perRead'))}</th><th class="num">${esc(t('ads.perLikeFav'))}</th><th class="num">${esc(t('ads.perFollow'))}</th>`;
   const costCells = (r) => `<td class="num">${esc(cost(r.perRead))}</td><td class="num">${esc(cost(r.perLikeFav))}</td><td class="num">${esc(cost(r.perFollow))}</td>`;
@@ -51,14 +67,7 @@ export async function renderAds({ isCurrent }) {
         <tbody>${list.map((r) => `<tr><td>${esc(name(r))}</td><td class="num">${r.count}</td><td class="num">${esc(yuan(r.spend))}</td><td class="num">${n0(r.reads)}</td><td class="num">${n0(r.likeFav)}</td><td class="num">${n0(r.follows)}</td>${costCells(r)}</tr>`).join('')}</tbody></table></div></section>`
       : '';
 
-  const root = xhsPage({
-    nav: 'more',
-    wide: true,
-    back: '#/more',
-    title: t('ads.title'),
-    sub: t('ads.sub'),
-    actions: `<a class="btn btn-primary btn-sm" href="#/ocr-ad">${icon('scan', 'size-4')}${esc(t('oad.fromShots'))}</a>`,
-    body: `
+  const html = `
       <div class="kpi-grid">
         <div class="kpi"><p class="kpi-label">${esc(t('ads.spendTotal'))}</p><p class="kpi-value">${esc(yuan(totals.spend) || '0元')}</p><p class="text-[11px] opacity-75">${esc(t('adr.ordersN', { n: totals.count }))}</p></div>
         <div class="kpi"><p class="kpi-label">${esc(t('adr.credit'))}</p><p class="kpi-value">${esc(yuan(totals.credit) || '0元')}</p><p class="text-[11px] opacity-75">${esc(t('adr.creditSub'))}</p></div>
@@ -70,8 +79,12 @@ export async function renderAds({ isCurrent }) {
       </div>
       <p class="mt-2 text-[12px] text-muted">${esc(t('adr.costNote'))}</p>
 
+      <section class="card mt-3"><h2 class="text-[16px] font-semibold">${esc(t('ins.title'))}</h2>
+        ${insightList('ins', insights, { empty: t('ops.none') })}
+        <p class="mt-2 text-[12px] text-muted">${esc(t('ins.note'))}</p></section>
+
       <section class="card mt-3"><h2 class="text-[16px] font-semibold">${esc(t('adr.comments'))}</h2>
-        ${comments.length ? `<ul class="mt-2 flex flex-col gap-1.5">${comments.map((c) => `<li class="rounded-[12px] px-3 py-2 text-[14px] leading-relaxed ${toneCls[c.tone]}">${esc(commentText(c))}</li>`).join('')}</ul>` : `<p class="mt-2 text-[14px] text-muted">${esc(t('ads.none'))}</p>`}
+        ${shown.length ? `<ul class="mt-2 flex flex-col gap-1.5">${shown.map((c) => `<li class="rounded-[12px] px-3 py-2 text-[14px] leading-relaxed ${toneCls[c.tone]}">${esc(commentText(c))}</li>`).join('')}</ul>` : `<p class="mt-2 text-[14px] text-muted">${esc(t('ads.none'))}</p>`}
         <p class="mt-2 text-[12px] text-muted">${esc(t('adr.commentsNote'))}</p></section>
 
       <section class="card mt-3">
@@ -93,9 +106,38 @@ export async function renderAds({ isCurrent }) {
         <p class="mt-2 text-[12px] text-muted">${esc(t('adr.byPostNote'))}</p></section>
 
       ${groupTable(t('adr.byStage'), t('ads.stage'), stageRows(orders), (r) => (r.bucket === '?' ? t('adr.stageUnknown') : r.bucket))}
-      ${groupTable(t('adr.byGoal'), t('ads.goal'), goalRows(orders), (r) => r.goal || t('adr.goalUnknown'))}
+      ${groupTable(t('adr.byGoal'), t('ads.goal'), goalRows(orders), (r) => r.goal || t('adr.goalUnknown'))}`;
+  const bind = (root) => {
+    root.addEventListener('click', (e) => {
+      const u = e.target.closest('[data-unit]');
+    if (u) {
+      try {
+        localStorage.setItem('xhs-ads-prefs', JSON.stringify({ ...prefs, unit: u.dataset.unit }));
+      } catch {
+        /* ignore */
+      }
+      return rerender();
+    }
+    });
+    root.addEventListener('change', async (e) => {
+    if (e.target.id !== 'adr-rate') return;
+    const raw = e.target.value.trim().replace(',', '.');
+    const v = raw ? Number(raw) : null;
+    if (raw && !(v > 0)) return toast(t('ocr.badInput', { n: 1 }), { tone: 'error' });
+    await saveSettings({ ...settings, cnyKrw: v });
+    toast(t('common.saved'));
+    });
+  };
+  return { html, bind };
+}
 
-      <section class="card mt-3">
+/** Order-level ad history for Data → ③ 광고기록: one row per order, multi-note orders folded. */
+export function adRecordsSection({ posts }) {
+  const history = historyEntries(posts);
+  const costHead = `<th class="num" data-m="inline">${esc(t('ads.perRead'))}</th><th class="num">${esc(t('ads.perLikeFav'))}</th><th class="num">${esc(t('ads.perFollow'))}</th>`;
+  const html = `
+      <div class="mb-3 flex flex-wrap items-center gap-2"><a class="btn btn-primary btn-sm" href="#/ocr-ad">${icon('scan', 'size-4')}${esc(t('oad.fromShots'))}</a><a class="btn btn-secondary btn-sm" href="#/xhs" data-scroll-to="ad-analysis">${icon('chart', 'size-4')}${esc(t('adr.toAnalysis'))}</a></div>
+      <section class="card">
         <h2 class="text-[16px] font-semibold">${esc(t('ads.history'))}</h2>
         <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th class="col-title">${esc(t('xg.title'))}</th><th>${esc(t('adr.start'))}</th><th data-m="inline">${esc(t('ads.stage'))}</th><th data-m="inline">${esc(t('ads.goal'))}</th><th class="num" data-m="key">${esc(t('ads.spendYuan'))}</th><th class="num">${esc(t('adr.creditCol'))}</th><th class="num">阅读量</th><th class="num">点赞+收藏</th><th class="num">新增关注</th>${costHead}<th>${esc(t('adr.orderNo'))}</th><th data-m="inline"></th></tr></thead>
         <tbody>${history
@@ -120,22 +162,17 @@ export async function renderAds({ isCurrent }) {
           })
           .join('') || `<tr><td colspan="15" class="text-muted">${esc(t('ads.none'))}</td></tr>`}</tbody></table></div>
         <p class="mt-2 text-[12px] text-muted">${esc(t('adr.historyNote'))}</p>
-      </section>
-      <section class="card mt-3">
-        <div class="flex items-center justify-between"><h2 class="text-[16px] font-semibold">${esc(t('data.tab.income'))}</h2><a class="link-btn text-[13px]" href="#/data/income">${esc(t('ads.editIncome'))}</a></div>
-        <ul class="mt-2 flex flex-col gap-1.5 text-[14px]">${income.map((x) => `<li><b>${esc(x.brand)}</b> · ${esc(x.collabType)} · ${esc(x.date)} — ${esc(t('inc.inKind'))} ${esc(won(x.inKindKRW) || '–')}, ${esc(t('inc.cash'))} ${esc(won(x.cashKRW) || '–')}</li>`).join('') || `<li class="text-muted">–</li>`}</ul>
-        <p class="mt-2 text-[12px] text-muted">${esc(t('ads.currencyNote'))}</p>
-      </section>`,
-  });
-  root.addEventListener('click', async (e) => {
-    const u = e.target.closest('[data-unit]');
-    if (u) {
+      </section>`;
+  const bind = (root) => {
+    root.addEventListener('click', async (e) => {
+    const go = e.target.closest('[data-scroll-to]');
+    if (go) {
       try {
-        localStorage.setItem('xhs-ads-prefs', JSON.stringify({ ...prefs, unit: u.dataset.unit }));
+        sessionStorage.setItem('xhs-scroll', go.dataset.scrollTo);
       } catch {
         /* ignore */
       }
-      return navigate('/ads', { replace: true });
+      return;
     }
     const tg = e.target.closest('[data-toggle]');
     if (tg) {
@@ -178,18 +215,11 @@ export async function renderAds({ isCurrent }) {
     else ads[i] = res;
     await savePosts([{ ...p, ads }]);
     toast(t('common.saved'));
-  });
-  root.addEventListener('change', async (e) => {
-    if (e.target.id !== 'adr-rate') return;
-    const raw = e.target.value.trim().replace(',', '.');
-    const v = raw ? Number(raw) : null;
-    if (raw && !(v > 0)) return toast(t('ocr.badInput', { n: 1 }), { tone: 'error' });
-    await saveSettings({ ...settings, cnyKrw: v });
-    toast(t('common.saved'));
-  });
-  const off = onXhsChange(() => navigate('/ads', { replace: true }));
-  return { kind: 'xhs-ads', destroy: off };
+    });
+  };
+  return { html, bind };
 }
+
 
 // ── 더보기 ─────────────────────────────────────────────
 export async function renderMore({ isCurrent }) {
@@ -200,7 +230,6 @@ export async function renderMore({ isCurrent }) {
     title: t('nav.more'),
     body: `<div class="flex flex-col gap-2.5">
       ${item('#/ocr', 'scan', t('nav.ocr'), t('more.ocr'))}
-      ${item('#/ads', 'coin', t('ads.title'), t('more.ads'))}
       ${item('#/import', 'upload', t('data.import'), t('more.import'))}
       ${item('#/xhs/backup', 'archive', t('more.xhsBackup'), t('more.xhsBackupHint'))}
       ${item('#/new', 'plus', t('nav.new'), t('more.newProject'))}

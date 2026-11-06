@@ -90,6 +90,12 @@ function draw(host) {
     meta.className = 'text-muted';
     meta.textContent = [p.date, p.admixed ? t('xg.admixed') : '', typeof baseline === 'number' && typeof p.y === 'number' && baseline !== 0 ? `${t('chart.vsBase')} ${((p.y / baseline - 1) * 100).toFixed(0)}%` : ''].filter(Boolean).join(' · ');
     tip.append(strong, name, meta);
+    if (p.note) {
+      const note = document.createElement('span');
+      note.className = 'block text-[11px]';
+      note.textContent = p.note;
+      tip.append(note);
+    }
     const left = Math.min(Math.max(0, x(i) - 90), W - 190);
     tip.style.left = `${left}px`;
   };

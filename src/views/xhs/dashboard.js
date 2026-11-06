@@ -8,6 +8,10 @@ import { BASELINE_SIZE, adTotals, buildBaseline, byContentType, criteria, judge,
 import { activeBaseline, addBaseline, getBaselines, getSettings, listIncome, listPosts, onXhsChange } from '../../xhs/store.js';
 import { chartLegend, lineChart } from './charts.js';
 import { relativeNote, xhsPage } from './shell.js';
+import { adAnalysisSection } from './ads.js';
+import { insightList } from './insight-text.js';
+import { opsBrief } from '../../xhs/insights.js';
+import { postRows } from '../../xhs/ad-report.js';
 
 const CHARTS = [
   { key: 'views' },
@@ -36,6 +40,17 @@ export async function renderDashboard({ isCurrent }) {
   const cash = income.reduce((s, x) => s + (x.cashKRW ?? 0), 0);
   const inKind = income.reduce((s, x) => s + (x.inKindKRW ?? 0), 0);
 
+  const brief = opsBrief(posts, baseline, { recent });
+  const analysis = adAnalysisSection({ posts, income, settings, baseline }, () => navigate('/xhs', { replace: true }));
+  // Each post's ads, for the chart tooltips: real money, goals, price of a follower.
+  const adByPost = new Map(postRows(posts).map((r) => [r.post.id, r]));
+  const adNote = (p) => {
+    const r = adByPost.get(p.id);
+    if (!r || !r.spend) return '';
+    const goals = [...new Set((p.ads ?? []).filter((a) => a.executed !== false && a.goal).map((a) => a.goal))].join('·');
+    const follows = r.follows;
+    return t('chart.ad', { spend: yuan(r.spend), goal: goals || '–', per: follows ? t('chart.adPer', { v: yuan(r.spend / follows) }) : '' });
+  };
   const kpi = (label, value, sub = '', cls = '') => `<div class="kpi ${cls}"><p class="kpi-label">${esc(label)}</p><p class="kpi-value">${esc(value)}</p>${sub ? `<p class="text-[11px] opacity-75">${esc(sub)}</p>` : ''}</div>`;
   const empty = !posts.length;
 
@@ -67,6 +82,9 @@ export async function renderDashboard({ isCurrent }) {
           <section class="card"><h3 class="text-[14px] font-semibold">涨粉丝 <span class="font-normal text-muted">${esc(t('dash.newFans'))}</span></h3><div class="mt-2" data-chart="newFollowers"></div></section>
         </div>
         <aside class="flex min-w-0 flex-col gap-4">
+          <section class="card" id="ops-brief"><h3 class="text-[15px] font-semibold">${esc(t('ops.title'))}</h3>
+            ${insightList('ops', brief, { empty: t('ops.none') })}
+            <p class="mt-2 text-[12px] text-muted">${esc(t('ops.note'))}</p></section>
           <section class="card">
             <div class="flex items-center justify-between"><h3 class="text-[15px] font-semibold">${esc(t('dash.recent5'))}</h3><a class="link-btn text-[13px]" href="#/data/posts">${esc(t('dash.all'))}</a></div>
             <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th class="col-title">${esc(t('xg.title'))}</th>${['views', 'ctr', 'exit2s', 'retain5s', 'completion'].map((k) => `<th class="num" data-m="${k === 'views' ? 'key' : 'inline'}">${esc(METRIC[k].zh)}</th>`).join('')}</tr></thead>
@@ -84,16 +102,29 @@ export async function renderDashboard({ isCurrent }) {
           ${typesHtml(posts)}
           ${longTermHtml(posts, baseline, crit)}
         </aside>
-      </div>`,
+      </div>
+      <section id="ad-analysis" class="mt-8"><h2 class="text-[20px] font-bold">${esc(t('adr.section'))}</h2>
+        <div class="mt-3">${analysis.html}</div></section>`,
   });
 
   if (!empty) {
-    const points = (key) => list.map((p) => ({ y: stage(p)[key], admixed: p.validity === '광고혼입', label: `#${p.no ?? ''}`, title: p.title, date: p.date }));
+    const points = (key) => list.map((p) => ({ y: stage(p)[key], admixed: p.validity === '광고혼입', label: `#${p.no ?? ''}`, title: p.title, date: p.date, note: adNote(p) }));
     for (const c of CHARTS) {
       lineChart($(`[data-chart="${c.key}"]`, root), { points: points(c.key), baseline: baseline?.medians[c.key] ?? null, baselineLabel: `V${baseline?.version ?? ''}`, format: (v) => fmt(c.key, v), title: METRIC[c.key].zh });
     }
     lineChart($('[data-chart="followers"]', root), { points: list.map((p) => ({ y: p.followers, admixed: p.validity === '광고혼입', label: `#${p.no ?? ''}`, title: p.title, date: p.date })), format: (v) => Math.round(v).toLocaleString('en-US'), title: '粉丝' });
     lineChart($('[data-chart="newFollowers"]', root), { points: points('newFollowers'), format: (v) => String(Math.round(v * 10) / 10), title: '涨粉丝' });
+  }
+  if (!empty) analysis.bind(root);
+  // Opened from Data → 광고기록 "see the analysis": go to that section.
+  try {
+    const to = sessionStorage.getItem('xhs-scroll');
+    if (to) {
+      sessionStorage.removeItem('xhs-scroll');
+      requestAnimationFrame(() => document.getElementById(to)?.scrollIntoView({ block: 'start' }));
+    }
+  } catch {
+    /* ignore */
   }
   root.addEventListener('click', (e) => {
     const row = e.target.closest('[data-goto]');

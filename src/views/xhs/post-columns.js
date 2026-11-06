@@ -1,9 +1,10 @@
 import { t } from '../../i18n/index.js';
 import { esc } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { fmt, parseInput, toEditText } from '../../xhs/format.js';
+import { fmt, parseInput, toEditText, yuan } from '../../xhs/format.js';
 import { METRICS, VALIDITY, computeStage } from '../../xhs/metrics.js';
 import { judge, validSeq } from '../../xhs/stats.js';
+import { postAdSummary } from '../../xhs/ad-report.js';
 
 /*
  * Columns of the "XHS배포기록" table, in the original sheet order (B … AX), plus the app's
@@ -53,6 +54,10 @@ export function postColumns({ contentTypes, extraKeys = [] }) {
       cols.push({ id: 'expectedFollowersD2', label: '예상 팔로워 증가수2', sub: '', group, groupCls, num: true, editable: true, excel: 'AU', kind: 'int' });
     }
   }
+  // Ads of the post, from every ad record (workbook memo, screenshots, a multi-note order's share).
+  const adg = (id, label, sub, field) => ({ id, label, sub, group: t('xg.adGroup'), num: true, editable: false, computed: true, width: 96, kind: 'ad', field, title: t('xg.adColHelp') });
+  cols.push(adg('adSpend', t('xg.adSpend'), t('xg.adSpendSub'), 'spend'));
+  cols.push(adg('adPerFollow', t('xg.adPerFollow'), t('xg.adPerFollowSub'), 'perFollow'));
   const tail = (id, label, sub, opts) => ({ id, label, sub, group: t('xg.tail'), ...opts });
   cols.push(tail('memo', '备注', t('xg.memo'), { editable: true, width: 220, excel: 'AV', kind: 'text' }));
   cols.push(tail('validity', 'D+1 유효성', '', { editable: true, width: 96, excel: 'AW', kind: 'text', options: VALIDITY }));
@@ -68,6 +73,7 @@ export function postValue(post, col, ctx) {
     return post[col.stage]?.[col.metric] ?? null;
   }
   if (col.id === 'validSeq') return ctx.seq.get(post.id) ?? null;
+  if (col.kind === 'ad') return postAdSummary(post)[col.field] ?? null;
   if (col.extra) return post.extra?.[col.extra] ?? '';
   return post[col.id] ?? (col.num ? null : '');
 }
@@ -130,6 +136,7 @@ export function renderPostCell(post, col, v, ctx) {
     }
     return { text, cls, title, html };
   }
+  if (col.kind === 'ad') return { text: isNum(v) ? yuan(v) : '', html: isNum(v) ? `<a class="link-btn" href="#/c/${encodeURIComponent(post.id)}">${esc(yuan(v))}</a>` : '' };
   if (col.id === 'validity') return { text: v, cls: v === '유효' ? 'cf-good' : v ? 'cf-mid' : '' };
   if (col.id === 'adAux' || col.id === 'adDecisionD2') return { text: v, cls: /진행/.test(v) ? 'cf-mid' : '' };
   if (col.kind === 'int') return { text: isNum(v) ? v.toLocaleString('en-US') : '' };
