@@ -75,3 +75,12 @@ describe('D+n from dates', () => {
     expect(p.ads.map((a) => a.stage)).toEqual(['D+2', 'D+1']); // typed value wins
   });
 });
+
+describe('slots left after the title matches', () => {
+  it('lists posts published up to the ad start, latest first, without those already chosen', async () => {
+    const { recentBefore } = await import('../src/views/xhs/ocr-ad.js');
+    const posts = [{ id: 'a', date: '2026-03-01' }, { id: 'b', date: '2026-03-08' }, { id: 'c', date: '2026-03-10' }, { id: 'd', date: '2026-03-20' }];
+    expect(recentBefore(posts, '2026-03-10T21:00', ['b']).map((p) => p.id)).toEqual(['c', 'a']);
+    expect(recentBefore(posts, '', [])).toEqual([]);
+  });
+});

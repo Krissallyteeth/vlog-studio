@@ -16,7 +16,11 @@ export const AD_METRICS = [
   ['profileViews', ['主页浏览']],
   ['dmOpens', ['私信开口']],
 ];
-export const AD_GOALS = ['点赞收藏量', '关注', '阅读量', '主页浏览', '私信开口'];
+const GRID_ROWS = [
+  ['exposure', 'reads', 'likes', 'favorites'],
+  ['comments', 'follows', 'profileViews', 'dmOpens'],
+];
+export const AD_GOALS =['点赞收藏量', '关注', '阅读量', '主页浏览', '私信开口'];
 const AGE_LABELS = ['18以下', '18~23', '24~30', '31~40', '41~50', '50以上'];
 const MIN_CONF = 80;
 
@@ -67,6 +71,7 @@ export function parseAdOrder(linesPerImage) {
     let headingSeen = false;
     let belowTitle = false; // the phone status bar (time, battery "53") sits above the 订单详情 title
     let inNotes = false;
+    let lastAge = -1; // index of the last age row read on this screenshot
     let pendingName = null; // a chart name read as its own line ("娱乐"), waiting for its number line
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -134,7 +139,12 @@ export function parseAdOrder(linesPerImage) {
         here = { img, box: boxOf([line, lines[i + 1]]) }; // label row + number row
         const nums = lines[i + 1].words.map((w) => ({ p: parseNumber(w.text), c: w.confidence, text: w.text, box: w.bbox })).filter((x) => x.p);
         // Each value keeps the box of its own word, so a doubtful number can be read again on its own.
-        if (nums.length === labels.length) labels.forEach((l, j) => set(l.key, { ...judge(nums[j].p.value, nums[j].text, nums[j].c, nums[j].p.unit === 'pct' ? 'format' : ''), at: { img, box: here.box, word: nums[j].box } }));
+        // The report grid always has the same two rows of four. A label that was not read (e.g.
+        // 点赞量 as "REBE") still has its number in its fixed place, so the full row decides.
+        const row = GRID_ROWS.find((r) => labels.every((l) => r.includes(l.key)));
+        const inOrder = row && labels.every((l, j) => j === 0 || row.indexOf(l.key) > row.indexOf(labels[j - 1].key));
+        if (row && inOrder && nums.length === row.length && labels.length < row.length) row.forEach((key, j) => set(key, { ...judge(nums[j].p.value, nums[j].text, nums[j].c, nums[j].p.unit === 'pct' ? 'format' : ''), at: { img, box: here.box, word: nums[j].box } }));
+        else if (nums.length === labels.length) labels.forEach((l, j) => set(l.key, { ...judge(nums[j].p.value, nums[j].text, nums[j].c, nums[j].p.unit === 'pct' ? 'format' : ''), at: { img, box: here.box, word: nums[j].box } }));
         else labels.forEach((l) => set(l.key, { status: 'check', candidate: null, text: lines[i + 1].words.map((w) => w.text).join(' '), conf: 0, reason: 'layout' }));
       }
       // Audience sections
@@ -145,7 +155,10 @@ export function parseAdOrder(linesPerImage) {
       // A chart carried over from the previous screenshot only continues below the title bar, with real shares.
       if (!headingSeen && section && (!belowTitle || !/\d[.%]|%/.test(text))) continue;
       if (/性别分布/.test(text)) section = 'gender';
-      else if (/年龄分布/.test(text)) section = 'age';
+      else if (/年龄分布/.test(text)) {
+        section = 'age';
+        lastAge = -1;
+      }
       else if (/城市分布/.test(text)) section = 'city';
       else if (/兴趣分布/.test(text)) section = 'interest';
       if (section === 'gender') {
@@ -169,7 +182,12 @@ export function parseAdOrder(linesPerImage) {
         if (row) {
           const list = audience[section];
           let key = row.label || `#${Object.keys(list).length + 1}`;
-          if (section === 'age') key = ageLabel(text) ?? AGE_LABELS[Object.keys(list).length] ?? key;
+          // Age rows are always the same six in the same order: an unreadable label ("sot" for 50以上)
+          // is the row after the one above it on this screenshot.
+          if (section === 'age') {
+            key = ageLabel(text) ?? (lastAge >= 0 || headingSeen ? AGE_LABELS[lastAge + 1] : null) ?? key;
+            if (AGE_LABELS.includes(key)) lastAge = AGE_LABELS.indexOf(key);
+          }
           const r = { ...row.result, at: here, carried: !headingSeen }; // carried: above any heading of this screenshot
           // The same section often appears on two screenshots: keep the clearer reading.
           if (!list[key] || (list[key].status !== 'ok' && (r.status === 'ok' || list[key].candidate == null))) list[key] = r;
@@ -190,6 +208,17 @@ export function parseAdOrder(linesPerImage) {
     const [k, r] = (a.status === 'ok' ? 1 : 0) + (a.conf ?? 0) / 1000 <= (b.status === 'ok' ? 1 : 0) + (b.conf ?? 0) / 1000 ? [ka, a] : [kb, b];
     audience.interest[k] = { ...r, status: 'check', candidate: r.value ?? r.candidate, value: undefined, reason: 'format' };
   }
+  // "371%" with its dot lost can only be 37.1% (shares have one decimal). When the row has a sure
+  // name and sits in the descending order between its neighbours, that reading is confirmed.
+  const ints2 = Object.entries(audience.interest);
+  ints2.forEach(([k, r], i) => {
+    if (r.status === 'ok' || r.reason !== 'format' || r.candidate == null || !knownName(k, 'interest') || (r.conf ?? 0) < 60) return;
+    if (!/^\d{3}%$/.test(r.text ?? '')) return;
+    const v = r.candidate;
+    const prev = ints2[i - 1] && (ints2[i - 1][1].value ?? ints2[i - 1][1].candidate);
+    const next = ints2[i + 1] && (ints2[i + 1][1].value ?? ints2[i + 1][1].candidate);
+    if ((prev == null || prev >= v) && (next == null || v >= next) && (prev != null || next != null)) audience.interest[k] = ok(v, r.text, r.conf);
+  });
   // Rows repeated at the top of the next screenshot (the overlap): an unnamed one with the same share
   // as a row already read is that row again.
   for (const sec of ['city', 'interest']) {

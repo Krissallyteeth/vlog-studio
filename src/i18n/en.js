@@ -1299,4 +1299,8 @@ export default {
 
   "ocr.why.derived": "Not readable; calculated as top of the estimate + amount above it",
   "ocr.why.reread": "The digit shapes (holes of 0·6·8·9) suggest a different number — compare with the crop and pick",
+
+  "oad.prefilled": "Filled {n} slots with posts whose titles match the thumbnails. Change any that are wrong.",
+  "oad.recent": "Slots left · latest posts before the ad started:",
+  "oad.readNotesShow": "Show text read under the thumbnails",
 };

@@ -74,6 +74,13 @@ export function suggestPosts(posts, text, startedAt) {
     .slice(0, 6);
 }
 
+/** Posts published before the ad started, latest first, not chosen yet: a one-tap list for the slots left. */
+export function recentBefore(posts, startedAt, chosen, max = 4) {
+  if (!startedAt) return [];
+  const day = startedAt.slice(0, 10);
+  return posts.filter((p) => p.date && p.date <= day && !chosen.includes(p.id)).sort((a, b) => b.date.localeCompare(a.date)).slice(0, max);
+}
+
 /** A clicked recognition candidate is also copied, so it can be pasted elsewhere. */
 async function copyCandidate(text) {
   if (!text) return;
@@ -380,9 +387,10 @@ export async function renderOcrAd([postId], { isCurrent }) {
       for (const [k, v] of Object.entries(f)) if (v.status === 'ok') values[k] = v.value;
       const n = Math.min(Math.max(f.noteCount?.value ?? 1, 1), 20);
       // One note: match by publish time + title. Several: suggest, never pick silently.
-      const postIds = n === 1 ? [postId || match?.post.id || ''] : Array(n).fill('');
       const suggestions = n > 1 ? suggestPosts(posts, parsed.noteText, values.startedAt) : [];
-      const order = { imgs, parsed, values, postIds, match: n === 1 ? match : null, suggestions, stage: '', save: true };
+      // Several notes: posts whose title was read on the thumbnails fill the slots (shown, changeable).
+      const postIds = n === 1 ? [postId || match?.post.id || ''] : Array.from({ length: n }, (_, k) => suggestions[k]?.post.id ?? '');
+      const order = { imgs, parsed, values, postIds, match: n === 1 ? match : null, suggestions, prefilled: n > 1 ? Math.min(n, suggestions.length) : 0, stage: '', save: true };
       // Consumed amount unsure, no 实付 shown: memo 60元 + a coupon bonus 35元 from an earlier order = 95 confirms it.
       const c = f.spend?.status !== 'ok' ? f.spend?.candidate : null;
       if (c != null && values.paid == null && values.orderAmount == null) {
@@ -534,6 +542,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
     </div>`;
   }
 
+  const recentPosts = (o) => recentBefore(posts, o.values.startedAt, o.postIds);
   function drawOrders() {
     if (!state.orders.length) {
       result.innerHTML = `<p class="card text-[14px] text-muted">${esc(t('oad.none'))}</p>`;
@@ -554,8 +563,10 @@ export async function renderOcrAd([postId], { isCurrent }) {
                 ? `<div class="mt-2"><p class="text-[14px] font-semibold">${esc(t('oad.multi', { n: o.postIds.length }))}</p>
                 <p class="text-[12px] text-muted">${esc(t('oad.multiHelp'))}</p>
                 <div class="mt-2 grid gap-2 sm:grid-cols-2">${o.postIds.map((id, k) => `<label class="field"><span class="field-label">${esc(t('oad.noteN', { n: k + 1 }))}${id && autoStage(o, id) ? ` · ${esc(autoStage(o, id))}` : ''}</span><select class="input" data-post="${oi}" data-slot="${k}"><option value="">${esc(t('oad.choosePost'))}</option>${posts.map((p) => `<option value="${esc(p.id)}" ${p.id === id ? 'selected' : ''}>${esc(`${p.date} · ${p.title}`)}</option>`).join('')}</select></label>`).join('')}</div>
-                ${o.suggestions.length ? `<div class="mt-2 flex flex-wrap items-center gap-1.5 text-[12px]"><span class="text-muted">${esc(t('oad.suggest'))}</span>${o.suggestions.map((x) => `<button type="button" class="chip" data-suggest="${oi}" data-id="${esc(x.post.id)}" ${o.postIds.includes(x.post.id) ? 'disabled' : ''}>${esc(`${x.post.date} · ${x.post.title}`)}</button>`).join('')}</div>` : ''}
-                <p class="mt-1 text-[12px] text-muted">${esc(t('oad.readNotes', { text: o.parsed.noteText || '?' }))}</p>
+                ${o.prefilled ? `<p class="mt-2 text-[12px] text-muted">${esc(t('oad.prefilled', { n: o.prefilled }))}</p>` : ''}
+                ${o.suggestions.some((x) => !o.postIds.includes(x.post.id)) ? `<div class="mt-2 flex flex-wrap items-center gap-1.5 text-[12px]"><span class="text-muted">${esc(t('oad.suggest'))}</span>${o.suggestions.filter((x) => !o.postIds.includes(x.post.id)).map((x) => `<button type="button" class="chip" data-suggest="${oi}" data-id="${esc(x.post.id)}">${esc(`${x.post.date} · ${x.post.title}`)}</button>`).join('')}</div>` : ''}
+                ${o.postIds.includes('') && recentPosts(o).length ? `<div class="mt-2 flex flex-wrap items-center gap-1.5 text-[12px]"><span class="text-muted">${esc(t('oad.recent'))}</span>${recentPosts(o).map((p) => `<button type="button" class="chip" data-suggest="${oi}" data-id="${esc(p.id)}">${esc(`${p.date} · ${p.title}`)}</button>`).join('')}</div>` : ''}
+                <details class="mt-1 text-[12px] text-muted"><summary>${esc(t('oad.readNotesShow'))}</summary>${esc(t('oad.readNotes', { text: o.parsed.noteText || '?' }))}</details>
                 <p class="mt-1 text-[12px] text-muted">${esc(t(o.values.startedAt ? 'oad.multiStage' : 'oad.stageNeedStart'))}</p></div>`
                 : `<div class="mt-2 grid gap-3 sm:grid-cols-[2fr_1fr]">
               <label class="field"><span class="field-label">${esc(t('ocr.post'))}</span><select class="input" data-post="${oi}" data-slot="0"><option value="">${esc(t('oad.choosePost'))}</option>${posts.map((p) => `<option value="${esc(p.id)}" ${p.id === o.postIds[0] ? 'selected' : ''}>${esc(`${p.date} · ${p.title}`)}</option>`).join('')}</select>

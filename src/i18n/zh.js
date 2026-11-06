@@ -1299,4 +1299,8 @@ export default {
 
   "ocr.why.derived": "未能识别，按预估上限 + 超额部分计算",
   "ocr.why.reread": "按数字形状（0·6·8·9 的孔）判断与识别结果不同，请对照截图选择",
+
+  "oad.prefilled": "已按缩略图标题预先填入 {n} 篇，如有错误请修改。",
+  "oad.recent": "剩余 · 推广开始前的最近笔记：",
+  "oad.readNotesShow": "查看缩略图下识别的文字",
 };

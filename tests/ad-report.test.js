@@ -481,3 +481,20 @@ describe('result line without its "/"', () => {
     expect(r.fields.bonus).toMatchObject({ status: 'ok', value: 7 });
   });
 });
+
+describe('fixed layouts fill in labels that were not read', () => {
+  const A = (label, value, conf = 90) => ({ words: [{ text: label, confidence: 90, bbox: { x0: 70, y0: 0, x1: 160, y1: 20 } }, { text: '国', confidence: 0, bbox: { x0: 190, y0: 0, x1: 400, y1: 20 } }, { text: value, confidence: conf, bbox: { x0: 780, y0: 0, x1: 850, y1: 20 } }] });
+  it('a report row with one unreadable label ("REBE" for 点赞量) still has four values in place', () => {
+    const r = parseAdOrder([[L('曝光 量 阅读 量 REBE 收藏 量'), L('1,571 313 31 5')]]);
+    expect(['exposure', 'reads', 'likes', 'favorites'].map((k) => r.fields[k].value)).toEqual([1571, 313, 31, 5]);
+  });
+  it('an unreadable age label ("sot") is the row after the one above it', () => {
+    const r = parseAdOrder([[L('年 龄 分 布'), A('18以下', '2.6%'), A('18~23', '5.6%'), A('24~30', '22.6%'), A('31~40', '48.5%'), A('41~50', '18.4%'), A('sot', '2.3%')]]);
+    expect(Object.keys(r.audience.age)).toEqual(['18以下', '18~23', '24~30', '31~40', '41~50', '50以上']);
+    expect(r.audience.age['50以上']).toMatchObject({ status: 'ok', value: 0.023 });
+  });
+  it('an interest share without its dot ("371%") is confirmed when it fits the descending order', () => {
+    const r = parseAdOrder([[L('观众 兴趣 分 布'), A('时尚', '45.4%'), A('情感', '44.1%'), A('资讯', '371%', 70)]]);
+    expect(r.audience.interest['资讯']).toMatchObject({ status: 'ok', value: 0.371 });
+  });
+});
