@@ -451,3 +451,15 @@ describe('more wording of order screens', () => {
     expect(r.fields.result).toMatchObject({ status: 'ok', value: 36 }); // 36 − 29 = bonus 7
   });
 });
+
+describe('result line without its "/"', () => {
+  it('"粉丝关注量 36 效果极好 | 预估转化 6~29" is read', () => {
+    const r = parseAdOrder([[L('粉丝 关注 量 36 效果 极 好 | 预 估 转 化 6 ~ 29')]]);
+    expect(r.fields.result.value ?? r.fields.result.candidate).toBe(36);
+  });
+  it('no result line at all: 29 + 超额获赠 7 = 36, confirmed by 新增关注 36', () => {
+    const r = parseAdOrder([[L('推广 目标 粉丝 关注 量'), L('预 估 转 化 6~29 个 粉丝 关注 量'), L('超额 获 赠 7', 40), L('评论 量 新 增 关注 主页 浏览 私信 开口'), L('1 36 80 0')]]);
+    expect(r.fields.result).toMatchObject({ status: 'ok', value: 36 });
+    expect(r.fields.bonus).toMatchObject({ status: 'ok', value: 7 });
+  });
+});

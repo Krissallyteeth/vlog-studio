@@ -459,7 +459,8 @@ export async function renderOcrAd([postId], { isCurrent }) {
     const keys = AD_REVIEW_FIELDS.filter((k) => !(k === 'noteCount' && o.postIds.length === 1 && f.noteCount?.status === 'ok'));
     const toCheck = keys.filter((k) => f[k] && !(k in o.values));
     const done = keys.filter((k) => k in o.values);
-    const missing = keys.filter((k) => !f[k] && !(k in o.values));
+    // Note count: 1 unless the screenshots say otherwise — not worth asking about.
+    const missing = keys.filter((k) => !f[k] && !(k in o.values) && k !== 'noteCount');
     const checkItem = (k) => {
       const r = f[k];
       const cands = r.status === 'conflict' ? r.options.map((x) => x.value) : [r.candidate];

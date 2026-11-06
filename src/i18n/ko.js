@@ -1296,4 +1296,6 @@ export default {
   "oad.miss.cost": "일부 주문 화면에만 나오는 문구예요",
   "oad.miss.publish": "노트 정보 부분(발행 시각)이 캡처에 없어요",
   "oad.miss.other": "이번 캡처에 없는 항목이에요",
+
+  "ocr.why.derived": "글자를 못 읽어서 예상 상단 + 초과 달성으로 계산한 값이에요",
 };

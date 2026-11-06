@@ -1296,4 +1296,6 @@ export default {
   "oad.miss.cost": "Shown on some order screens only",
   "oad.miss.publish": "The note header (publish time) is not in the screenshots",
   "oad.miss.other": "Not in these screenshots",
+
+  "ocr.why.derived": "Not readable; calculated as top of the estimate + amount above it",
 };

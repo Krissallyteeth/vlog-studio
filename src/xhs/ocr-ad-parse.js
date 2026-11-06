@@ -97,7 +97,8 @@ export function parseAdOrder(linesPerImage) {
       // Result vs estimate: "点赞收藏量 27 / 预估转化 16 ~ 71", "点赞收藏量 60 效果极好 / 预估转化 11 ~ 53",
       // "赞藏量 61 / 目标区间 16~63" (the label is often misread, the numbers around "/" are what count).
       // "… 19 / 预估转化 15~51", "… 60 效果极好 / …", "粉丝关注量 26 效果良好 / 预估转化 7~43"
-      if ((m = /(\d+)[^/\d]{0,10}\/(?:预估转化|目标区间)(\d+)~(\d+)/.exec(text))) {
+      // The "/" is often read as "|", "l" or lost: up to 12 non-digits may sit between them.
+      if ((m = /(\d+)[^\d]{0,12}?(?:预估转化|目标区间|估转化)(\d+)~(\d+)/.exec(text))) {
         // Left-most number = the result, the others = the estimate: each judged by its own words.
         const dw = [...nums].sort((a, b) => a.bbox.x0 - b.bbox.x0);
         const cOf = (list) => (list.length ? Math.min(...list.map((w) => w.confidence ?? 0)) : nc);
@@ -269,6 +270,20 @@ export function parseAdOrder(linesPerImage) {
     const okv = (k) => (f[k]?.status === 'ok' ? f[k].value : null);
     const fromReport = /点赞|收藏/.test(goal) && okv('likes') != null && okv('favorites') != null ? okv('likes') + okv('favorites') : /关注/.test(goal) ? okv('follows') : null;
     if (fromReport != null && f.result.candidate === fromReport) confirm('result', 'report');
+  }
+  // No result read but the estimate and 超额获赠 are: result = top of the estimate + bonus.
+  if (!f.result && Array.isArray(f.estimate?.value ?? f.estimate?.candidate) && (f.bonus?.value ?? f.bonus?.candidate) != null) {
+    const est = f.estimate.value ?? f.estimate.candidate;
+    const bonus = f.bonus.value ?? f.bonus.candidate;
+    f.result = { status: 'check', candidate: est[1] + bonus, text: `${est[1]} + ${bonus}`, conf: 0, reason: 'derived', at: f.bonus.at };
+    // …and the report's own count agreeing with it confirms both.
+    const goal = String(f.goal?.value ?? '');
+    const v = (k) => (f[k]?.status === 'ok' ? f[k].value : null);
+    const count = /关注/.test(goal) ? v('follows') : /点赞|收藏/.test(goal) && v('likes') != null && v('favorites') != null ? v('likes') + v('favorites') : null;
+    if (count === est[1] + bonus) {
+      confirm('result', 'estimate+bonus');
+      confirm('bonus', 'result');
+    }
   }
   markMismatch(f);
   return { fields: f, audience, noteText: noteText.join(' ') };

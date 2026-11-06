@@ -1296,4 +1296,6 @@ export default {
   "oad.miss.cost": "仅部分订单页面显示",
   "oad.miss.publish": "截图中没有笔记信息（发布时间）",
   "oad.miss.other": "本次截图中没有该项",
+
+  "ocr.why.derived": "未能识别，按预估上限 + 超额部分计算",
 };
