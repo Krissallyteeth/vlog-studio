@@ -123,7 +123,8 @@ export function normalizePost(raw = {}, now = Date.now()) {
     ads: (Array.isArray(raw.ads) ? raw.ads : []).map((a) => {
       const ad = normalizeAd(a);
       // No D+n typed but the start time is known: calculate it from the publish date.
-      if (!ad.stage && ad.start) ad.stage = stageFromDates(raw.date, ad.start);
+      // The note's publish time from its screenshot beats the workbook date (it can be a day off).
+      if (!ad.stage && ad.start) ad.stage = stageFromDates(ad.notePublishedAt || raw.date, ad.start);
       return ad;
     }),
     // Titles this post had in 薯条 screenshots (they can differ from the workbook title).

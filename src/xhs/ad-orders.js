@@ -81,11 +81,18 @@ export function splitMoney(v) {
 /** Records on a post that only come from a memo / manual entry (no order number, no report numbers). */
 export const memoAds = (post) => (post?.ads ?? []).filter((a) => a.executed !== false && !a.orderNo && !Object.values(a.order ?? {}).some((x) => typeof x === 'number'));
 
-/** The memo record an order most likely replaces: same D+n; otherwise the only memo with the same amount. */
+/**
+ * The memo record an order most likely replaces: the one with the same D+n; a memo without a D+n
+ * only when it is the single one with the same amount. A memo with a different D+n is a different
+ * ad (e.g. memo D+1 60元 and order D+10 60元) and is never picked automatically.
+ */
 export function memoToReplace(post, ad) {
   const memos = memoAds(post);
   const amounts = [ad.spend, ad.credit != null ? ad.spend + ad.credit : null].filter((x) => x != null);
-  return memos.find((a) => a.stage && a.stage === ad.stage) ?? (memos.filter((a) => amounts.includes(a.spend)).length === 1 ? memos.find((a) => amounts.includes(a.spend)) : null) ?? null;
+  const sameStage = memos.find((a) => a.stage && a.stage === ad.stage);
+  if (sameStage) return sameStage;
+  const noStage = memos.filter((a) => !a.stage && amounts.includes(a.spend));
+  return noStage.length === 1 ? noStage[0] : null;
 }
 
 /** True when two ad records describe the same 薯条 order. */

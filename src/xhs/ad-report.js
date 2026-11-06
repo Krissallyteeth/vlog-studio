@@ -140,12 +140,26 @@ export function postRows(posts) {
     .filter((p) => (p.ads ?? []).some((a) => a.executed !== false))
     .map((p) => {
       const ads = p.ads.filter((a) => a.executed !== false);
+      // What the ads themselves brought, from the 薯条 order reports (any D+n). A multi-note order's
+      // numbers are split like its spend (estimated).
+      const reported = ads.filter((a) => isNum(a.order?.reads));
+      const share = (a) => (isNum(a.share) ? a.share : 1);
+      const m = (k) => (reported.some((a) => isNum(a.order?.[k])) ? sum(reported, (a) => (isNum(a.order?.[k]) ? a.order[k] * share(a) : null)) : null);
+      const reads = m('reads');
+      const likeFav = reported.length ? sum(reported, (a) => ((a.order?.likes ?? 0) + (a.order?.favorites ?? 0)) * share(a)) : null;
+      const reportedSpend = sum(reported, (a) => a.spend);
       return {
         post: p,
         count: ads.length,
         spend: sum(ads, (a) => a.spend),
         estimatedShare: ads.some((a) => a.allocation === 'equal'),
         stages: ads.map((a) => a.stage || '?'),
+        reports: reported.length,
+        missingReports: ads.length - reported.length,
+        reads: reads == null ? null : Math.round(reads),
+        perRead: reads > 0 ? reportedSpend / reads : null,
+        likeFav: likeFav == null ? null : Math.round(likeFav),
+        follows: m('follows') == null ? null : Math.round(m('follows')),
         d1Views: stageOf(p).views ?? null,
         d2Views: stageOf(p, 'd2').views ?? null,
       };
@@ -229,7 +243,8 @@ export function adComments(orders, { posts = [], baseline = null, income = [], c
   // Did the post already do well before the ad? (D+1 views vs the fixed median.)
   const base = baseline?.medians?.views;
   if (isNum(base)) {
-    const pre = single.map((o) => ({ o, v: stageOf(o.links[0].post).views })).filter((x) => isNum(x.v));
+    // Ads started on the publishing day (D) are left out: their D+1 views already include the ad.
+    const pre = single.filter((o) => stageBucket(o.stages[0]) !== 'D').map((o) => ({ o, v: stageOf(o.links[0].post).views })).filter((x) => isNum(x.v));
     const strong = pre.filter((x) => x.v >= base).map((x) => x.o);
     const weak = pre.filter((x) => x.v < base).map((x) => x.o);
     if (strong.length >= MIN_GROUP && weak.length >= MIN_GROUP) {
@@ -254,6 +269,9 @@ export function adComments(orders, { posts = [], baseline = null, income = [], c
   }
 
   // Data quality.
+  // An ad started on the publishing day runs before the D+1 numbers are taken: that D+1 is ad-mixed.
+  const mixed = [...new Set(orders.flatMap((o) => o.links.filter((l) => l.ad.stage === 'D' && l.post.validity === '유효').map((l) => l.post.title)))];
+  if (mixed.length) out.push({ tone: 'warn', key: 'validityD', vars: { list: mixed.join(', ') } });
   const multi = orders.filter((o) => o.multi).length;
   if (multi) out.push({ tone: 'info', key: 'multiSplit', vars: { n: multi } });
   if (all.estimatedDates) out.push({ tone: 'info', key: 'datesEstimated', vars: { n: all.estimatedDates } });

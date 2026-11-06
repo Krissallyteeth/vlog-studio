@@ -1094,7 +1094,7 @@ export default {
   "data.newRowRemoved": "已删除未保存的新行。",
 
   "ads.unknownStage": "有 {n} 条推广没有填写时间点，未计入 D+1→D+2 对比。请在推广记录中填写 D+n。",
-  "ads.betweenSpend": "D+1 推广花费（用于 D+1→D+2 对比）",
+  "ads.betweenSpend": "参考：无报告的 D+1 花费",
   "ads.budget": "预算（元）",
   "ads.orderReport": "薯条订单结果（推广带来的数据）",
   "ads.perRead": "每次阅读成本",
@@ -1274,4 +1274,14 @@ export default {
   "oad.dump": "复制识别原文",
   "oad.dumpHelp": "如有识别错误，请点此按钮并粘贴到对话中。只复制从截图中读到的文字和位置（不含图片）。",
   "oad.dumpDone": "已复制识别原文，请粘贴到对话中。",
+
+  "adr.adReads": "推广阅读",
+  "adr.adLikeFav": "推广点赞+收藏",
+  "adr.adFollows": "推广涨粉",
+  "adr.reportCol": "订单报告",
+  "adr.reportAll": "已有报告",
+  "adr.reportN": "报告 {n}/{total} · 需上传截图",
+  "adr.needShotHelp": "仅由 Excel 备注记录的推广。上传该订单的薯条截图即可补齐推广带来的阅读、点赞和关注。",
+  "adr.byPostNote": "推广效果按薯条订单报告（推广带来的阅读、点赞+收藏、关注）计算，与 D+n 无关。没有报告的推广（Excel 备注）上传截图后会补齐；在此之前仅对 D+1 推广参考显示 D+1→D+2 的观看变化。",
+  "adr.c.validityD": "有帖子在发布当天（D）开始推广，但 D+1 仍标记为“有效”：{list}。D+1 数据可能混入了推广流量，请在数据表中确认是否改为“混入推广”。",
 };

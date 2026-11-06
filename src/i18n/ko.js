@@ -1094,7 +1094,7 @@ export default {
   "data.newRowRemoved": "저장하지 않은 새 행을 지웠어요.",
 
   "ads.unknownStage": "시점이 비어 있는 광고 {n}건은 D+1→D+2 비교에 넣지 않았어요. 광고 기록에서 D+n을 입력해 주세요.",
-  "ads.betweenSpend": "D+1 광고비 (D+1→D+2 비교용)",
+  "ads.betweenSpend": "참고: 보고서 없는 D+1 광고비",
   "ads.budget": "예산(元)",
   "ads.orderReport": "薯条 주문 결과 (광고로 생긴 수치)",
   "ads.perRead": "열람당 비용",
@@ -1274,4 +1274,14 @@ export default {
   "oad.dump": "인식 원문 복사",
   "oad.dumpHelp": "인식이 틀린 항목이 있으면 이 버튼을 누르고 대화창에 붙여 넣어 주세요. 캡처에서 읽은 글자와 위치만 복사돼요(사진은 포함되지 않아요).",
   "oad.dumpDone": "인식 원문을 복사했어요. 대화창에 붙여 넣어 주세요.",
+
+  "adr.adReads": "광고 열람",
+  "adr.adLikeFav": "광고 좋아요+저장",
+  "adr.adFollows": "광고 팔로워",
+  "adr.reportCol": "주문 보고서",
+  "adr.reportAll": "보고서 있음",
+  "adr.reportN": "보고서 {n}/{total} · 캡처 필요",
+  "adr.needShotHelp": "엑셀 메모로만 기록된 광고예요. 그 주문의 薯条 캡처를 올리면 광고로 생긴 열람·좋아요·팔로워가 채워져요.",
+  "adr.byPostNote": "광고 효과는 D+n에 상관없이 薯条 주문 보고서(광고로 생긴 열람·좋아요+저장·팔로워)로 계산해요. 보고서가 없는 광고(엑셀 메모)는 캡처를 올리면 채워지고, 그전까지는 D+1 광고에 한해 D+1→D+2 조회수 변화만 참고로 보여줘요.",
+  "adr.c.validityD": "발행 당일(D)에 시작한 광고가 있는데 D+1이 \"유효\"로 되어 있는 게시물이 있어요: {list}. D+1 수치에 광고 유입이 섞였을 수 있으니 데이터 표에서 D+1 유효성을 \"광고혼입\"으로 바꿀지 확인해 주세요.",
 };

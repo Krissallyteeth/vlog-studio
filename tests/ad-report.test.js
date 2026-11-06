@@ -142,7 +142,7 @@ describe('ad report', () => {
   const ad = (start, spend, reads, extra = {}) => ({ start, spend, goal: '点赞收藏量', order: { reads, likes: 5, favorites: 1, follows: 0 }, ...extra });
   const posts = [
     mk('p1', '2026-01-01', [ad('2026-01-02T10:00', 50, 200)]),
-    mk('p2', '2026-01-10', [ad('2026-01-10T20:00', 50, 250)]),
+    mk('p2', '2026-01-10', [ad('2026-01-11T09:00', 50, 250)]),
     mk('p3', '2026-02-01', [ad('2026-02-05T10:00', 50, 100)]),
     mk('p4', '2026-02-10', [ad('2026-02-14T10:00', 50, 50), ad('', 20, null)]),
   ];
@@ -163,7 +163,7 @@ describe('ad report', () => {
     expect(stageBucket('D+5')).toBe('D+3~7');
     expect(stageBucket('')).toBe('?');
     const orders = adOrders(posts);
-    expect(stageRows(orders).map((r) => r.bucket)).toEqual(['D', 'D+1', 'D+3~7', '?']);
+    expect(stageRows(orders).map((r) => r.bucket)).toEqual(['D+1', 'D+3~7', '?']);
     const c = adComments(orders, { baseline: { medians: { views: 300 } } });
     const keys = c.map((x) => x.key);
     expect(keys).toContain('overall');
@@ -362,5 +362,30 @@ describe('audience: guessed names and carried charts', () => {
     const shot2 = [{ words: [W('10:17', 128, 248, 0), W('53', 1000, 1060, 0)] }, { words: [W('订单详情', 491, 686, 50)] }, row('旅游', '70.0%', 100), row('=¢', '60.0%', 200), row('体育运动', '50.0%', 300)];
     const r = parseAdOrder([shot1, shot2]);
     expect(Object.keys(r.audience.interest)).toEqual(['美食', '旅游', '#3', '体育运动']);
+  });
+});
+
+describe('logic review fixes', () => {
+  it('a memo with a different D+n is never replaced automatically (memo D+1 60 vs order D+10 60)', async () => {
+    const { memoToReplace } = await import('../src/xhs/ad-orders.js');
+    const post = normalizePost({ id: 'z', date: '2026-08-05', ads: [{ stage: 'D+1', spend: 60, sourceText: '진행(60元)' }] });
+    expect(memoToReplace(post, normalizeAd({ stage: 'D+10', spend: 60 }))).toBeNull();
+    expect(memoToReplace(post, normalizeAd({ stage: 'D+1', spend: 85 }))?.stage).toBe('D+1');
+    const noStage = normalizePost({ id: 'y', date: '2026-08-05', ads: [{ spend: 60, sourceText: '60元' }] });
+    expect(memoToReplace(noStage, normalizeAd({ stage: 'D+3', spend: 60 }))).not.toBeNull();
+  });
+  it('D+n on load uses the screenshot publish time like saving does', () => {
+    const p = normalizePost({ date: '2026-07-27', ads: [{ start: '2026-07-27T09:20', notePublishedAt: '2026-07-26T19:20', spend: 60 }] });
+    expect(p.ads[0].stage).toBe('D+1');
+  });
+  it('warns when a post with an ad on day D still has a valid D+1', () => {
+    const posts = [normalizePost({ id: 'v', title: 'V', date: '2026-01-01', validity: '유효', ads: [{ start: '2026-01-01T20:00', spend: 50 }] })];
+    expect(adComments(adOrders(posts)).map((c) => c.key)).toContain('validityD');
+  });
+  it('per post: ad results from the order reports, for any D+n; memo-only ads are counted as missing reports', async () => {
+    const { postRows } = await import('../src/xhs/ad-report.js');
+    const p = normalizePost({ id: 'r', date: '2026-02-01', ads: [{ stage: 'D+2', spend: 60, order: { reads: 120, likes: 10, favorites: 2, follows: 1 } }, { stage: 'D+1', spend: 60, sourceText: '진행(60元)' }] });
+    const [row] = postRows([p]);
+    expect(row).toMatchObject({ reports: 1, missingReports: 1, reads: 120, likeFav: 12, follows: 1, perRead: 0.5 });
   });
 });
