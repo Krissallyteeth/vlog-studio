@@ -1127,7 +1127,7 @@ export default {
   "oad.f.budget": "Budget (元) · second number of 已消耗",
   "oad.f.goal": "Goal",
   "oad.f.status": "Status",
-  "oad.f.result": "Goal result · what the order got for its goal",
+  "oad.f.result": "Actual result · what the order actually got for its goal",
   "oad.f.estimate": "Estimated range · 预估转化",
   "oad.f.beatPct": "Vs similar notes (%)",
   "oad.f.coupon": "Coupon (满/赠 元)",

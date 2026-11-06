@@ -1127,7 +1127,7 @@ export default {
   "oad.f.budget": "预算（元）· 已消耗后面的数字",
   "oad.f.goal": "推广目标",
   "oad.f.status": "状态",
-  "oad.f.result": "目标结果 · 按推广目标获得的数量",
+  "oad.f.result": "实际结果 · 按推广目标实际获得的数量",
   "oad.f.estimate": "预估转化范围",
   "oad.f.beatPct": "超过同类笔记（%）",
   "oad.f.coupon": "优惠券（满/赠 元）",

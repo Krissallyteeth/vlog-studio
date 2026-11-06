@@ -1127,7 +1127,7 @@ export default {
   "oad.f.budget": "예산(元) · 已消耗 뒤 숫자",
   "oad.f.goal": "추천 목표",
   "oad.f.status": "상태",
-  "oad.f.result": "목표 결과 · 목표(点赞收藏量 등)로 얻은 수",
+  "oad.f.result": "실제 결과 · 광고 목표(点赞收藏量 등)로 실제로 얻은 수",
   "oad.f.estimate": "예상 전환 범위 · 预估转化",
   "oad.f.beatPct": "동일 유형 대비(%)",
   "oad.f.coupon": "쿠폰 (满/赠 元)",
