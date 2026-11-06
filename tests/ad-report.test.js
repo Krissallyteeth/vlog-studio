@@ -389,3 +389,25 @@ describe('logic review fixes', () => {
     expect(row).toMatchObject({ reports: 1, missingReports: 1, reads: 120, likeFav: 12, follows: 1, perRead: 0.5 });
   });
 });
+
+describe('orders without expanded details (no start time, no 实付)', () => {
+  it('replace the only memo, keep its D+n, and split consumed into memo money + credit', () => {
+    const ps = [normalizePost({ id: 'w', title: 'W', date: '2026-08-30', ads: [{ stage: 'D+2', spend: 60, sourceText: '진행(60元)' }] })];
+    const entries = orderAds({ values: { spend: 95, goal: '关注', follows: 20, result: 26 }, postIds: ['w'], posts: ps });
+    expect(entries[0].ad.stage).toBe('');
+    placeOrder(ps, entries);
+    expect(ps[0].ads).toHaveLength(1);
+    expect(ps[0].ads[0]).toMatchObject({ stage: 'D+2', spend: 60, credit: 35, sourceText: '진행(60元)' });
+    expect(adTotals(ps)).toMatchObject({ spend: 60, credit: 35 });
+  });
+  it('reads "粉丝关注量 26 效果良好 / 预估转化 7~43" as a 关注 order', () => {
+    const r = parseAdOrder([[L('粉丝 关注 量 26 效果 良好 / 预 估 转 化 7 ~ 43')]]);
+    expect(r.fields.goal.value).toBe('关注');
+    expect(r.fields.result.value).toBe(26);
+    expect(r.fields.estimate.value).toEqual([7, 43]);
+  });
+  it('the status bar above the title bar is not the note title', () => {
+    const r = parseAdOrder([[L('10:38 六 HH 95 |'), L('订单 详情'), L('韩国人 在 海南 | 万宁 看海vlog')]]);
+    expect(r.fields.title.candidate).toContain('万宁');
+  });
+});

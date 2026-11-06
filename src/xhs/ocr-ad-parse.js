@@ -74,6 +74,10 @@ export function parseAdOrder(linesPerImage) {
       here = { img, box: boxOf([line]) };
       const text = squeeze(line.words.map((w) => w.text).join(''));
       const c = conf(line);
+      // Confidence of the number words only: a blurry label next to a clear "26" should not fail it.
+      const nums = line.words.filter((w) => /\d/.test(w.text));
+      const nc = nums.length ? Math.min(...nums.map((w) => w.confidence ?? 0)) : c;
+      if (/订单详情|详情|咨询/.test(text)) belowTitle = true;
       let m;
       if (/展开详情|收起详情|已消耗金额|订单信息/.test(text)) inNotes = false;
       if (inNotes) noteText.push(line.words.map((w) => w.text).join(''));
@@ -86,22 +90,27 @@ export function parseAdOrder(linesPerImage) {
       else if ((m = /(\d{4}-\d{2}-\d{2})(\d{2}:\d{2}):\d{2}/.exec(text)) && !/下单|创建|投放|开始|订单|快去/.test(text)) set('publishedAt', check(`${m[1]}T${m[2]}`, m[0], c, 'text'));
       // Order / delivery start time (shown in 订单管理 and the expanded order details).
       if ((m = /(?:下单时间|创建时间|投放时间|开始时间|推广时间|订单时间):?(\d{4}-\d{2}-\d{2})(\d{2}:\d{2})/.exec(text))) set('startedAt', judge(`${m[1]}T${m[2]}`, m[0], Math.max(c, 80)));
-      if (/vlog|Vlog|VLOG|viog|\|/.test(text) && !/作者|发布|互动|订单|消耗|保障/.test(text) && text.length > 6 && !f.title && noteCountSeen() <= 1) {
+      // The note title: below the 订单详情 title bar (the status bar "10:38 … 95 |" is not it), with Chinese text.
+      if (belowTitle && /vlog|Vlog|VLOG|viog|\|/.test(text) && (text.match(/[\u4e00-\u9fff]/g) ?? []).length >= 2 && !/作者|发布|互动|订单|消耗|保障/.test(text) && text.length > 6 && !f.title && noteCountSeen() <= 1) {
         set('title', check(line.words.map((w) => w.text).join('').replace(/^[^A-Za-z一-鿿]+/, '').replace(/^[全:o\s]+/, ''), text, c, 'text'));
       }
       // Result vs estimate: "点赞收藏量 27 / 预估转化 16 ~ 71", "点赞收藏量 60 效果极好 / 预估转化 11 ~ 53",
       // "赞藏量 61 / 目标区间 16~63" (the label is often misread, the numbers around "/" are what count).
-      if ((m = /(\d+)(?:效果[极很]?[好佳一般差]+)?\/(?:预估转化|目标区间)(\d+)~(\d+)/.exec(text))) {
-        set('result', judge(Number(m[1]), m[1], c));
-        set('estimate', judge([Number(m[2]), Number(m[3])], `${m[2]}~${m[3]}`, c));
-        const g = /^(点赞收藏量|关注量|阅读量|主页浏览量|新增关注)\d/.exec(text);
-        if (g) set('goal', ok(g[1], g[1], 100));
+      // "… 19 / 预估转化 15~51", "… 60 效果极好 / …", "粉丝关注量 26 效果良好 / 预估转化 7~43"
+      if ((m = /(\d+)(?:效果[^/\d]{0,4})?\/(?:预估转化|目标区间)(\d+)~(\d+)/.exec(text))) {
+        // Left-most number = the result, the others = the estimate: each judged by its own words.
+        const dw = [...nums].sort((a, b) => a.bbox.x0 - b.bbox.x0);
+        const cOf = (list) => (list.length ? Math.min(...list.map((w) => w.confidence ?? 0)) : nc);
+        set('result', judge(Number(m[1]), m[1], cOf(dw.slice(0, 1))));
+        set('estimate', judge([Number(m[2]), Number(m[3])], `${m[2]}~${m[3]}`, cOf(dw.slice(1))));
+        const g = /^(点赞收藏量|粉丝关注量|关注量|阅读量|主页浏览量|新增关注)\d/.exec(text);
+        if (g) set('goal', ok(/关注/.test(g[1]) ? '关注' : g[1], g[1], 100));
       } else if ((m = /^预估转化(\d+)~(\d+)个?/.exec(text))) set('estimate', judge([Number(m[1]), Number(m[2])], `${m[1]}~${m[2]}`, Math.max(c, 80)));
       // Order header and order info (the expanded "订单信息" / "金额信息" part).
       if ((m = /本订单共推广(\d+)篇笔记/.exec(text))) set('noteCount', ok(Number(m[1]), m[0], 100));
       if ((m = /订单编号:?([0-9a-f]{8}(?:-[0-9a-f]{1,4}){0,3})/i.exec(text))) set('orderNo', judge(m[1].toLowerCase(), m[1], Math.max(c, 80)));
-      if ((m = /订单金额:?(\d+(?:\.\d+)?)元/.exec(text))) set('orderAmount', judge(Number(m[1]), m[0], c));
-      if ((m = /实付金额:?(\d+(?:\.\d+)?)元/.exec(text))) set('paid', judge(Number(m[1]), m[0], c));
+      if ((m = /订单金额:?(\d+(?:\.\d+)?)元/.exec(text))) set('orderAmount', judge(Number(m[1]), m[0], nc));
+      if ((m = /实付金额:?(\d+(?:\.\d+)?)元/.exec(text))) set('paid', judge(Number(m[1]), m[0], nc));
       if ((m = /支付方式:?(\S+)$/.exec(text))) set('payMethod', judge(m[1].replace(/^薯[币市]/, '薯币'), m[0], c));
       if ((m = /预计推广时长:?(\d+(?:\.\d+)?)(天|小时|h)/.exec(text))) set('duration', judge(m[2] === '天' ? Number(m[1]) * 24 : Number(m[1]), m[0], Math.max(c, 80)));
       if ((m = /目标人群:?(\S+)$/.exec(text))) set('targeting', judge(m[1], m[0], c));
@@ -112,9 +121,9 @@ export function parseAdOrder(linesPerImage) {
       if ((m = /推广目标:?(点赞收藏量|关注|阅读量|主页浏览|私信开口)/.exec(text))) set('goal', ok(m[1], m[1], c));
       if ((m = /(?:互动率)?超(?:过|越)(\d+(?:\.\d+)?)%的同类笔记/.exec(text))) set('beatPct', judge(Number(m[1]) / 100, `${m[1]}%`, Math.max(c, 70)));
       // Spend: "当前已消耗金额 100/100 元"
-      if ((m = /已消耗金额[^\d]*([\d./|lI]+)元/.exec(text))) spendTexts.push({ raw: m[1], c, at: here });
+      if ((m = /已消耗金额[^\d]*([\d./|lI]+)元/.exec(text))) spendTexts.push({ raw: m[1], c: nc, at: here });
       // Coupon: "满 100.0 元 赠 40.0 元", expiry on the line before
-      if ((m = /满(\d+(?:\.\d+)?)元赠(\d+(?:\.\d+)?)元/.exec(text))) set('coupon', judge({ threshold: Number(m[1]), bonus: Number(m[2]) }, m[0], Math.max(c, 70)));
+      if ((m = /满(\d+(?:\.\d+)?)元赠(\d+(?:\.\d+)?)元/.exec(text))) set('coupon', judge({ threshold: Number(m[1]), bonus: Number(m[2]) }, m[0], Math.max(nc, 70)));
       if ((m = /^(\d{4}-\d{2}-\d{2})\d{2}:\d{2}:\d{2},?快去/.exec(text))) set('couponExpires', judge(m[1], m[1], 80));
       // Metric grid: a label row followed by a row of numbers in the same order.
       const labels = AD_METRICS.map(([key, names]) => ({ key, at: Math.min(...names.map((n) => (text.indexOf(n) < 0 ? Infinity : text.indexOf(n)))) })).filter((x) => x.at !== Infinity).sort((a, b) => a.at - b.at);

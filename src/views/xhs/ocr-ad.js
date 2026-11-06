@@ -7,7 +7,7 @@ import { icon } from '../../ui/icons.js';
 import { putMany } from '../../xhs/db.js';
 import { AD_METRICS, AD_REVIEW_FIELDS, completeBySum, knownName, nameGuess, parseAdOrder } from '../../xhs/ocr-ad-parse.js';
 import { ordered } from '../../xhs/stats.js';
-import { memoAds, memoToReplace, orderAds, placeOrder, rememberTitle, splitMoney } from '../../xhs/ad-orders.js';
+import { memoAds, memoMoney, memoToReplace, orderAds, placeOrder, rememberTitle, splitMoney } from '../../xhs/ad-orders.js';
 import { listPosts, savePosts, stageFromDates } from '../../xhs/store.js';
 import { xhsPage } from './shell.js';
 
@@ -255,6 +255,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
       await refineAudience(parsed, imgs.map((im) => im.file)).catch(() => 0);
       parsedGroups.push(parsed);
     }
+    const bonuses = couponBonuses();
     state.orders = groups.map((imgs, gi) => {
       const parsed = parsedGroups[gi];
       const f = parsed.fields;
@@ -265,7 +266,17 @@ export async function renderOcrAd([postId], { isCurrent }) {
       // One note: match by publish time + title. Several: suggest, never pick silently.
       const postIds = n === 1 ? [postId || match?.post.id || ''] : Array(n).fill('');
       const suggestions = n > 1 ? suggestPosts(posts, parsed.noteText, values.startedAt) : [];
-      return { imgs, parsed, values, postIds, match: n === 1 ? match : null, suggestions, stage: '', save: true };
+      const order = { imgs, parsed, values, postIds, match: n === 1 ? match : null, suggestions, stage: '', save: true };
+      // Consumed amount unsure, no 实付 shown: memo 60元 + a coupon bonus 35元 from an earlier order = 95 confirms it.
+      const c = f.spend?.status !== 'ok' ? f.spend?.candidate : null;
+      if (c != null && values.paid == null && values.orderAmount == null) {
+        const memo = memoTarget({ ...order, values: { ...values, spend: c } });
+        if (memo && typeof memo.spend === 'number' && bonuses.has(Math.round((c - memo.spend) * 100) / 100)) {
+          values.spend = c;
+          if (f.budget?.candidate === c) values.budget = c;
+        }
+      }
+      return order;
     });
     drawOrders();
   }
@@ -298,12 +309,25 @@ export async function renderOcrAd([postId], { isCurrent }) {
     return x;
   };
   /** D+n of an order: typed value wins, otherwise publish date of the chosen post vs ad start time. */
+  /** The memo record a single-note order replaces (chosen on screen, or the likely one). */
+  const memoTarget = (o) => {
+    if (o.postIds.length !== 1) return null;
+    const post = posts.find((x) => x.id === o.postIds[0]);
+    if (!post) return null;
+    if (o.replace !== undefined) return memoAds(post).find((a) => a.id === o.replace) ?? null;
+    const probe = orderAds({ values: o.values, postIds: o.postIds, posts, stage: o.stage })[0]?.ad;
+    return probe ? memoToReplace(post, probe) : null;
+  };
   const autoStage = (o, id = o.postIds[0]) => {
     const p = posts.find((x) => x.id === id);
     // One note: the publish time shown in the screenshot beats the workbook date.
     const published = o.postIds.length === 1 && o.values.publishedAt ? o.values.publishedAt : p?.date;
-    return stageFromDates(published, o.values.startedAt);
+    const fromDates = stageFromDates(published, o.values.startedAt);
+    // No start time (details not expanded): the replaced memo's D+n.
+    return fromDates || (!o.values.startedAt && o.postIds.length === 1 ? memoTarget(o)?.stage ?? '' : '');
   };
+  /** Coupons the user got with earlier orders (满60赠35): bonus amounts, to explain consumed − paid. */
+  const couponBonuses = () => new Set(posts.flatMap((p) => p.ads.map((a) => a.coupon?.bonus).filter((x) => typeof x === 'number')));
   /** Single-note order: date check, real money vs platform credit, and which memo record it replaces. */
   const singleExtras = (o, oi) => {
     const post = posts.find((x) => x.id === o.postIds[0]);
@@ -320,6 +344,11 @@ export async function renderOcrAd([postId], { isCurrent }) {
         ${memos.map((a) => `<option value="${esc(a.id)}" ${a.id === chosen ? 'selected' : ''}>${esc(t('oad.memoOption', { stage: a.stage || '?', spend: a.spend ?? '?', text: a.sourceText || a.memo || '' }))}</option>`).join('')}
         <option value="" ${chosen === '' ? 'selected' : ''}>${esc(t('oad.keepBoth'))}</option></select>
         <span class="text-[12px] text-muted">${esc(t('oad.replaceHelp'))}</span></label>`);
+      // Screenshots without 实付: the memo's amount is the real money, the rest platform credit.
+      const target = memos.find((a) => a.id === chosen);
+      const probe2 = orderAds({ values: o.values, postIds: o.postIds, posts, stage: o.stage })[0]?.ad;
+      const mm = target && probe2 ? memoMoney(target, probe2) : null;
+      if (mm) out.push(`<p class="mt-2 text-[13px]">${esc(t(couponBonuses().has(mm.credit) ? 'oad.memoMoneyCoupon' : 'oad.memoMoney', { consumed: o.values.spend, money: mm.spend, credit: mm.credit }))}</p>`);
     }
     return out.join('');
   };
@@ -336,6 +365,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
   function stageNote(o) {
     if (o.stage) return t('oad.stageTyped');
     const auto = autoStage(o);
+    if (auto && !o.values.startedAt) return t('oad.stageMemo', { stage: auto });
     return auto ? t('oad.stageAuto', { stage: auto }) : t('oad.stageNeedStart');
   }
   const refreshStage = (oi) => {

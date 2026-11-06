@@ -1284,4 +1284,8 @@ export default {
   "adr.needShotHelp": "仅由 Excel 备注记录的推广。上传该订单的薯条截图即可补齐推广带来的阅读、点赞和关注。",
   "adr.byPostNote": "推广效果按薯条订单报告（推广带来的阅读、点赞+收藏、关注）计算，与 D+n 无关。没有报告的推广（Excel 备注）上传截图后会补齐；在此之前仅对 D+1 推广参考显示 D+1→D+2 的观看变化。",
   "adr.c.validityD": "有帖子在发布当天（D）开始推广，但 D+1 仍标记为“有效”：{list}。D+1 数据可能混入了推广流量，请在数据表中确认是否改为“混入推广”。",
+
+  "oad.stageMemo": "截图中没有推广开始时间，使用 Excel 备注中的时机（{stage}）。展开“展开详情”的截图（下单时间）可得到准确时机。",
+  "oad.memoMoney": "截图中没有实付金额。以 Excel 备注的 {money}元 作为实际支出，已消耗 {consumed}元 中其余 {credit}元 作为平台赠送。",
+  "oad.memoMoneyCoupon": "截图中没有实付金额。备注 {money}元 + 之前订单获得的优惠券 {credit}元 = 已消耗 {consumed}元，正好吻合：实际支出 {money}元，平台赠送 {credit}元。",
 };

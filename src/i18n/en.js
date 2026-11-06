@@ -1284,4 +1284,8 @@ export default {
   "adr.needShotHelp": "Recorded from a workbook memo only. Upload that order's 薯条 screenshots to fill in the reads, likes and followers it brought.",
   "adr.byPostNote": "Ad results come from the 薯条 order reports (reads, likes+saves, followers the ads brought), whatever the D+n. Ads without a report (workbook memos) fill in once their screenshots are uploaded; until then only D+1 ads show the D+1→D+2 view change, for reference.",
   "adr.c.validityD": "Some posts have an ad started on the publishing day (D) but their D+1 is marked \"valid\": {list}. Their D+1 numbers may include ad traffic; check whether D+1 validity should be \"ad-mixed\" in the data table.",
+
+  "oad.stageMemo": "The screenshots have no ad start time, so the workbook memo's D+n ({stage}) is used. Screenshots with \"展开详情\" expanded (下单时间) give the exact one.",
+  "oad.memoMoney": "The screenshots show no amount paid (实付). The workbook memo's {money}元 is taken as the real spend, the rest of the {consumed}元 consumed ({credit}元) as platform credit.",
+  "oad.memoMoneyCoupon": "The screenshots show no amount paid (实付). Memo {money}元 + a coupon of {credit}元 from an earlier order = {consumed}元 consumed exactly, so: real spend {money}元, platform credit {credit}元.",
 };

@@ -78,6 +78,18 @@ export function splitMoney(v) {
   return { money: consumed, credit: null };
 }
 
+/**
+ * Real money from the memo when the screenshots do not show it: the workbook memo ("진행(60元)")
+ * records what was paid, so a larger consumed amount (95) is that money plus platform credit (35).
+ * null when the screenshots show 实付/订单金额, or the memo does not explain the difference.
+ */
+export function memoMoney(memo, ad) {
+  if (!memo || ad.paid != null || ad.orderAmount != null) return null;
+  const consumed = (ad.spend ?? 0) + (ad.credit ?? 0);
+  if (!(typeof memo.spend === 'number' && memo.spend > 0 && consumed > memo.spend)) return null;
+  return { spend: memo.spend, credit: Math.round((consumed - memo.spend) * 100) / 100 };
+}
+
 /** Records on a post that only come from a memo / manual entry (no order number, no report numbers). */
 export const memoAds = (post) => (post?.ads ?? []).filter((a) => a.executed !== false && !a.orderNo && !Object.values(a.order ?? {}).some((x) => typeof x === 'number'));
 
@@ -91,6 +103,8 @@ export function memoToReplace(post, ad) {
   const amounts = [ad.spend, ad.credit != null ? ad.spend + ad.credit : null].filter((x) => x != null);
   const sameStage = memos.find((a) => a.stage && a.stage === ad.stage);
   if (sameStage) return sameStage;
+  // No start time in the screenshots (details not expanded): the post's only memo is this ad.
+  if (!ad.stage && memos.length === 1) return memos[0];
   const noStage = memos.filter((a) => !a.stage && amounts.includes(a.spend));
   return noStage.length === 1 ? noStage[0] : null;
 }
@@ -128,7 +142,11 @@ export function placeOrder(posts, entries) {
     // ('' = keep both); not given = the most likely memo (same D+n, or the only one with that amount).
     const target = replace === undefined ? memoToReplace(p, ad) : memoAds(p).find((a) => a.id === replace);
     const memo = target ? p.ads.indexOf(target) : -1;
-    if (memo >= 0) p.ads[memo] = { ...ad, id: target.id, sourceText: target.sourceText, memo: target.memo || ad.memo };
+    if (memo >= 0) {
+      // Without a start time the memo's D+n stands; without 实付 the memo's amount is the real money.
+      const money = memoMoney(target, ad);
+      p.ads[memo] = { ...ad, ...(money ?? {}), stage: ad.stage || target.stage, id: target.id, sourceText: target.sourceText, memo: target.memo || ad.memo };
+    }
     else p.ads.push(ad);
     changed.add(p);
   }
