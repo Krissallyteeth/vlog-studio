@@ -97,7 +97,7 @@ export function parseAdOrder(linesPerImage) {
       // Result vs estimate: "点赞收藏量 27 / 预估转化 16 ~ 71", "点赞收藏量 60 效果极好 / 预估转化 11 ~ 53",
       // "赞藏量 61 / 目标区间 16~63" (the label is often misread, the numbers around "/" are what count).
       // "… 19 / 预估转化 15~51", "… 60 效果极好 / …", "粉丝关注量 26 效果良好 / 预估转化 7~43"
-      if ((m = /(\d+)(?:效果[^/\d]{0,4})?\/(?:预估转化|目标区间)(\d+)~(\d+)/.exec(text))) {
+      if ((m = /(\d+)[^/\d]{0,10}\/(?:预估转化|目标区间)(\d+)~(\d+)/.exec(text))) {
         // Left-most number = the result, the others = the estimate: each judged by its own words.
         const dw = [...nums].sort((a, b) => a.bbox.x0 - b.bbox.x0);
         const cOf = (list) => (list.length ? Math.min(...list.map((w) => w.confidence ?? 0)) : nc);
@@ -120,8 +120,8 @@ export function parseAdOrder(linesPerImage) {
       if ((m = /投放成本在(\d+(?:\.\d+)?)元/.exec(text))) set('costPerResult', judge(Number(m[1]), m[0], Math.max(c, 80)));
       if ((m = /(?:效果)?高于(\d+(?:\.\d+)?)%同质订单/.exec(text))) set('beatPct', judge(Number(m[1]) / 100, `${m[1]}%`, Math.max(c, 70)));
       if (/已完成全部预算消耗/.test(text)) budgetUsedUp = true;
-      if ((m = /推广目标:?(点赞收藏量|关注|阅读量|主页浏览|私信开口)/.exec(text))) set('goal', ok(m[1], m[1], c));
-      if ((m = /(?:互动率)?超(?:过|越)(\d+(?:\.\d+)?)%的同类笔记/.exec(text))) set('beatPct', judge(Number(m[1]) / 100, `${m[1]}%`, Math.max(c, 70)));
+      if ((m = /推广目标:?[,，]?(点赞收藏量|粉丝关注量|关注量?|阅读量|主页浏览量?|私信开口)/.exec(text))) set('goal', ok(/关注/.test(m[1]) ? '关注' : m[1], m[1], c));
+      if ((m = /超(?:过|越)(\d+(?:\.\d+)?)%的同类(?:笔记|订单)/.exec(text))) set('beatPct', judge(Number(m[1]) / 100, `${m[1]}%`, Math.max(nc, 70)));
       // Spend: "当前已消耗金额 100/100 元"
       if ((m = /已消耗金额[^\d]*([\d./|lI]+)元/.exec(text))) spendTexts.push({ raw: m[1], c: nc, at: here });
       // Coupon: "满 100.0 元 赠 40.0 元", expiry on the line before

@@ -440,3 +440,14 @@ describe('one order captured twice (collapsed + expanded details)', () => {
     expect(splitMoney({ spend: 95, orderAmount: 95, discount: 35 })).toEqual({ money: 60, credit: 35 });
   });
 });
+
+describe('more wording of order screens', () => {
+  it('粉丝关注量 goal, a long badge before "/", and "的同类订单"', () => {
+    const r = parseAdOrder([[L('推广 目标 粉丝 关注 量'), L('效果 极 好 ， 涨 粉 率 超过 60% 的 同类 订单'), L('粉丝 关注 量 36 [效果 极 好 ] | / 预 估 转 化 6 ~ 29'), L('超额 获 赠 7')]]);
+    expect(r.fields.goal.value).toBe('关注');
+    expect(r.fields.result.value ?? r.fields.result.candidate).toBe(36);
+    expect(r.fields.estimate.value).toEqual([6, 29]);
+    expect(r.fields.beatPct.value).toBe(0.6);
+    expect(r.fields.result).toMatchObject({ status: 'ok', value: 36 }); // 36 − 29 = bonus 7
+  });
+});
