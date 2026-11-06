@@ -187,7 +187,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
         </div>
         <div id="oad-thumbs" class="mt-3 flex flex-wrap gap-2"></div>
         <button type="button" class="btn btn-primary mt-3" id="oad-run" disabled>${icon('scan', 'size-5')}${esc(t('ocr.run'))}</button>
-        <p class="mt-2 text-[12px] text-muted">${esc(t('oad.help'))}</p>
+        <p class="mt-2 text-[12px] text-muted">${esc(t('oad.help'))} <span class="tabular-nums">· v${esc(__APP_VERSION__)}</span></p>
       </section>
       <div id="oad-result" class="mt-4 flex flex-col gap-4"></div>`,
   });
@@ -424,7 +424,9 @@ export async function renderOcrAd([postId], { isCurrent }) {
         })
         .join('') +
       `<datalist id="oad-stages">${['D', 'D+1', 'D+2', 'D+3', 'D+4', 'D+5', 'D+6', 'D+7'].map((x) => `<option>${x}</option>`).join('')}</datalist>
-       <div><button type="button" class="btn btn-primary" id="oad-save">${esc(t('oad.save'))}</button></div>`;
+       <div class="flex flex-wrap items-center gap-2"><button type="button" class="btn btn-primary" id="oad-save">${esc(t('oad.save'))}</button>
+         <button type="button" class="btn btn-ghost btn-sm" id="oad-dump">${esc(t('oad.dump'))}</button></div>
+       <p class="text-[12px] text-muted">${esc(t('oad.dumpHelp'))}</p>`;
   }
 
   async function save() {
@@ -564,6 +566,14 @@ export async function renderOcrAd([postId], { isCurrent }) {
     }
     if (e.target.closest('#oad-run')) return run();
     if (e.target.closest('#oad-save')) return save();
+    if (e.target.closest('#oad-dump')) {
+      // What OCR read (text, position, confidence) — no images — to paste into a support chat.
+      const dump = state.images
+        .filter((im) => im.lines)
+        .map((im, i) => `#${i + 1} ${im.w ?? '?'}x${im.h ?? '?'}\n` + im.lines.map((l) => l.words.map((w) => `${w.text}@${Math.round(w.bbox.x0)},${Math.round(w.bbox.y0)},${Math.round(w.bbox.x1)},${Math.round(w.bbox.y1)}:${Math.round(w.confidence)}`).join(' ')).join('\n'))
+        .join('\n\n');
+      return copyText(`vlog-studio ocr v${__APP_VERSION__}\n${dump}`).then((ok) => toast(t(ok ? 'oad.dumpDone' : 'menu.copyFailed')));
+    }
   });
   const drop = $('#oad-drop', root);
   drop.addEventListener('dragover', (e) => {

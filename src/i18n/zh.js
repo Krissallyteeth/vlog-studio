@@ -1271,4 +1271,7 @@ export default {
   "oad.audName": "未能识别名称 — 请对照截图输入（如：美食）",
   "oad.audienceOk": "观众画像 {n} 项 — 全部已确认",
   "oad.audienceCheck": "观众画像 {n} 项 — {k} 项需确认",
+  "oad.dump": "复制识别原文",
+  "oad.dumpHelp": "如有识别错误，请点此按钮并粘贴到对话中。只复制从截图中读到的文字和位置（不含图片）。",
+  "oad.dumpDone": "已复制识别原文，请粘贴到对话中。",
 };

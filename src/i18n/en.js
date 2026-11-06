@@ -1271,4 +1271,7 @@ export default {
   "oad.audName": "Name not readable — type it from the screenshot (e.g. 美食)",
   "oad.audienceOk": "Audience: {n} values — all confirmed",
   "oad.audienceCheck": "Audience: {n} values — {k} to check",
+  "oad.dump": "Copy recognition text",
+  "oad.dumpHelp": "If something was recognised wrongly, press this and paste it into the chat. Only the text and positions read from the screenshots are copied (no images).",
+  "oad.dumpDone": "Recognition text copied. Paste it into the chat.",
 };
