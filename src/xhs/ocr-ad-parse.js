@@ -221,6 +221,13 @@ export function parseAdOrder(linesPerImage) {
     confirm('bonus', 'result');
   }
   if (f.paid?.status === 'check' && f.orderAmount?.status === 'ok' && f.paid.candidate === f.orderAmount.value) confirm('paid', 'orderAmount');
+  // The goal result is the report's own count: 点赞收藏 = likes + saves, 关注 = new followers.
+  if (f.result && f.result.status !== 'ok') {
+    const goal = String(f.goal?.value ?? '');
+    const okv = (k) => (f[k]?.status === 'ok' ? f[k].value : null);
+    const fromReport = /点赞|收藏/.test(goal) && okv('likes') != null && okv('favorites') != null ? okv('likes') + okv('favorites') : /关注/.test(goal) ? okv('follows') : null;
+    if (fromReport != null && f.result.candidate === fromReport) confirm('result', 'report');
+  }
   return { fields: f, audience, noteText: noteText.join(' ') };
 }
 

@@ -335,3 +335,14 @@ describe('audience: number glued to the bar', () => {
     expect(Object.values(r.audience.interest).at(-1).candidate).toBe(0.418);
   });
 });
+
+describe('goal result confirmed by the report', () => {
+  it('点赞收藏量 19 (unsure) = likes 15 + saves 4 → confirmed', () => {
+    const r = parseAdOrder([[L('推广 目标 点 赞 收藏 量'), L('曝光 量 阅读 量 点 赞 量 收藏 量'), L('519 80 15 4'), L('点 赞 收藏 量 19 / 预 估 转 化 15 ~ 51', 40)]]);
+    expect(r.fields.result).toMatchObject({ status: 'ok', value: 19 });
+  });
+  it('a reading that does not add up stays to check', () => {
+    const r = parseAdOrder([[L('推广 目标 点 赞 收藏 量'), L('曝光 量 阅读 量 点 赞 量 收藏 量'), L('519 80 15 4'), L('点 赞 收藏 量 18 / 预 估 转 化 15 ~ 51', 40)]]);
+    expect(r.fields.result.status).toBe('check');
+  });
+});
