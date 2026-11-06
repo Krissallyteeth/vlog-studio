@@ -7,7 +7,7 @@ import { icon } from '../../ui/icons.js';
 import { putMany } from '../../xhs/db.js';
 import { AD_METRICS, AD_REVIEW_FIELDS, completeBySum, knownName, nameGuess, parseAdOrder } from '../../xhs/ocr-ad-parse.js';
 import { ordered } from '../../xhs/stats.js';
-import { memoAds, memoMoney, memoToReplace, orderAds, placeOrder, rememberTitle, splitMoney } from '../../xhs/ad-orders.js';
+import { memoAds, memoMoney, memoToReplace, mergeOrderGroups, orderAds, placeOrder, rememberTitle, splitMoney } from '../../xhs/ad-orders.js';
 import { listPosts, savePosts, stageFromDates } from '../../xhs/store.js';
 import { xhsPage } from './shell.js';
 
@@ -17,7 +17,9 @@ import { xhsPage } from './shell.js';
  * each order is matched to a post by publish time and title, and nothing is saved before review.
  */
 
-const NUMERIC = new Set(['spend', 'budget', 'result', 'beatPct', 'orderAmount', 'paid', 'bonus', 'costPerResult', 'duration', 'noteCount', ...AD_METRICS.map(([k]) => k)]);
+/** Why a field can be missing from a correct capture (shown under its box). */
+const MISS_HINT = { startedAt: 'oad.miss.expand', paid: 'oad.miss.expand', orderAmount: 'oad.miss.expand', bonus: 'oad.miss.bonus', costPerResult: 'oad.miss.cost', publishedAt: 'oad.miss.publish' };
+const NUMERIC = new Set(['spend', 'budget', 'result', 'beatPct', 'orderAmount', 'paid', 'discount', 'bonus', 'costPerResult', 'duration', 'noteCount', ...AD_METRICS.map(([k]) => k)]);
 
 /** Two-character pieces of a title (CJK / letters / digits only): robust against OCR noise. */
 const pieces = (s) => {
@@ -307,6 +309,9 @@ export async function renderOcrAd([postId], { isCurrent }) {
       if (starts || !groups.length) groups.push([]);
       groups.at(-1).push(im);
     }
+    // The same order captured twice (collapsed + "展开详情" expanded) starts two groups: merge them.
+    const merged = mergeOrderGroups(groups, (imgs) => parseAdOrder(imgs.map((im) => im.lines)).fields);
+    groups.splice(0, groups.length, ...merged);
     const parsedGroups = [];
     for (const imgs of groups) {
       const parsed = parseAdOrder(imgs.map((im) => im.lines));
@@ -469,7 +474,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
       <div class="flex min-w-0 flex-col gap-3">
         ${toCheck.length ? `<div><p class="text-[14px] font-semibold">${esc(t('oad.needCheckN', { n: toCheck.length }))}</p><div class="mt-2 grid gap-2 lg:grid-cols-2">${toCheck.map(checkItem).join('')}</div></div>` : `<p class="rounded-[12px] cf-good px-3 py-2 text-[14px]">${esc(t('oad.allOk'))}</p>`}
         <div><p class="text-[14px] font-semibold">${esc(t('oad.okValues', { n: done.length }))}</p><div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">${done.map(okItem).join('')}</div></div>
-        ${missing.length ? `<details><summary class="link-btn cursor-pointer text-[13px]">${esc(t('oad.missingN', { n: missing.length }))}</summary><div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">${missing.map(okItem).join('')}</div></details>` : ''}
+        ${missing.length ? `<details><summary class="link-btn cursor-pointer text-[13px]">${esc(t('oad.missingN', { n: missing.length }))}</summary><div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">${missing.map((k) => okItem(k).replace('</label>', `<span class="text-[11px] text-muted">${esc(t(MISS_HINT[k] ?? 'oad.miss.other'))}</span></label>`)).join('')}</div></details>` : ''}
         <details class="xl:hidden"><summary class="link-btn cursor-pointer text-[13px]">${esc(t('oad.originals', { n: o.imgs.length }))}</summary><div class="mt-2 flex flex-col gap-2">${o.imgs.map((im) => `<img src="${im.url}" alt="" class="w-full rounded-[10px] border border-line" />`).join('')}</div></details>
       </div>
       <div class="sticky top-4 hidden max-h-[85vh] flex-col gap-2 self-start overflow-y-auto xl:flex">${o.imgs.map((im) => `<img src="${im.url}" alt="" class="w-full rounded-[10px] border border-line" />`).join('')}</div>

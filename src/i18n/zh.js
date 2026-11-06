@@ -1290,4 +1290,10 @@ export default {
   "oad.memoMoneyCoupon": "截图中没有实付金额。备注 {money}元 + 之前订单获得的优惠券 {credit}元 = 已消耗 {consumed}元，正好吻合：实际支出 {money}元，平台赠送 {credit}元。",
 
   "ocr.why.mismatch": "实际结果与报告数据不一致 — 其中一个识别有误",
+
+  "oad.miss.expand": "仅在展开“展开详情”的截图中显示",
+  "oad.miss.bonus": "仅当实际结果超过预估范围时显示",
+  "oad.miss.cost": "仅部分订单页面显示",
+  "oad.miss.publish": "截图中没有笔记信息（发布时间）",
+  "oad.miss.other": "本次截图中没有该项",
 };

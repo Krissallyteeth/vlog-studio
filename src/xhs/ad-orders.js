@@ -73,7 +73,8 @@ export function orderAds({ values: v, postIds, posts, stage = '', audience = nul
  */
 export function splitMoney(v) {
   const consumed = v.spend ?? null;
-  const paid = v.paid ?? v.orderAmount ?? null;
+  // 实付 shown, else 订单金额 minus the discount used (优惠金额), else 订单金额.
+  const paid = v.paid ?? (v.orderAmount != null && v.discount != null ? Math.round((v.orderAmount - v.discount) * 100) / 100 : v.orderAmount ?? null);
   if (consumed != null && paid != null && consumed > paid) return { money: paid, credit: Math.round((consumed - paid) * 100) / 100 };
   return { money: consumed, credit: null };
 }
@@ -159,4 +160,27 @@ export function rememberTitle(post, title) {
   if (!tt || tt === post.title || (post.adTitles ?? []).includes(tt)) return false;
   post.adTitles = [...(post.adTitles ?? []), tt].slice(-10);
   return true;
+}
+
+/**
+ * Neighbouring screenshot groups that show the same note (same publish time, to the second) and no
+ * conflicting values are one order captured twice — e.g. once collapsed and once with "展开详情"
+ * expanded. Two real orders on the same note differ in order number or report numbers and stay apart.
+ */
+export function mergeOrderGroups(groups, fieldsOf) {
+  const out = [];
+  for (const g of groups) {
+    const prev = out.at(-1);
+    if (prev && sameOrderGroup(fieldsOf(prev), fieldsOf(g))) out[out.length - 1] = [...prev, ...g];
+    else out.push(g);
+  }
+  return out;
+}
+const CONFLICT_KEYS = ['orderNo', 'startedAt', 'exposure', 'reads', 'likes', 'favorites', 'comments', 'follows', 'result', 'noteCount'];
+export function sameOrderGroup(a, b) {
+  const pub = (f) => f.publishedAt?.text?.match(/\d{2}:\d{2}:\d{2}/)?.[0] && `${(f.publishedAt.value ?? f.publishedAt.candidate ?? '').slice(0, 10)} ${f.publishedAt.text.match(/\d{2}:\d{2}:\d{2}/)[0]}`;
+  const pa = pub(a);
+  if (!pa || pa !== pub(b)) return false;
+  const v = (f, k) => (f[k]?.status === 'ok' ? JSON.stringify(f[k].value) : null);
+  return CONFLICT_KEYS.every((k) => v(a, k) == null || v(b, k) == null || v(a, k) === v(b, k));
 }

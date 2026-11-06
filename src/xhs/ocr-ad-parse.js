@@ -114,6 +114,8 @@ export function parseAdOrder(linesPerImage) {
       if ((m = /支付方式:?(\S+)$/.exec(text))) set('payMethod', judge(m[1].replace(/^薯[币市]/, '薯币'), m[0], c));
       if ((m = /预计推广时长:?(\d+(?:\.\d+)?)(天|小时|h)/.exec(text))) set('duration', judge(m[2] === '天' ? Number(m[1]) * 24 : Number(m[1]), m[0], Math.max(c, 80)));
       if ((m = /目标人群:?(\S+)$/.exec(text))) set('targeting', judge(m[1], m[0], c));
+      // The discount used on this order (优惠类型 满赠券 / 优惠金额 35元): platform money, not the user's.
+      if ((m = /优惠金额:?(\d+(?:\.\d+)?)元/.exec(text))) set('discount', judge(Number(m[1]), m[0], nc));
       if ((m = /超额获赠(\d+)/.exec(text))) set('bonus', check(Number(m[1]), m[0], c, c < MIN_CONF ? 'confidence' : ''));
       if ((m = /投放成本在(\d+(?:\.\d+)?)元/.exec(text))) set('costPerResult', judge(Number(m[1]), m[0], Math.max(c, 80)));
       if ((m = /(?:效果)?高于(\d+(?:\.\d+)?)%同质订单/.exec(text))) set('beatPct', judge(Number(m[1]) / 100, `${m[1]}%`, Math.max(c, 70)));

@@ -425,3 +425,18 @@ describe('result and report counts must agree', () => {
     expect(r.fields.result).toMatchObject({ status: 'ok', value: 26 });
   });
 });
+
+describe('one order captured twice (collapsed + expanded details)', () => {
+  it('groups with the same publish time and no conflicting values are merged; different orders are not', async () => {
+    const { mergeOrderGroups } = await import('../src/xhs/ad-orders.js');
+    const collapsed = [[L('本 订单 共 推 广 1 篇 笔记 。'), L('发 布 时 间 : 2026-08-30 19:20:05'), L('曝光 量 阅读 量 点 赞 量 收藏 量'), L('1729 256 18 7')]];
+    const expanded = [[L('本 订单 共 推 广 1 篇 笔记 。'), L('发 布 时 间 : 2026-08-30 19:20:05'), L('下 单 时间 2026-09-01 09:03'), L('订单 金额 95 元'), L('实 付 金 额 60 元'), L('优惠 金额 35 元')]];
+    const other = [[L('本 订单 共 推 广 1 篇 笔记 。'), L('发 布 时 间 : 2026-08-30 19:20:05'), L('曝光 量 阅读 量 点 赞 量 收藏 量'), L('900 100 9 1')]];
+    const fieldsOf = (g) => parseAdOrder(g).fields;
+    expect(mergeOrderGroups([collapsed, expanded], fieldsOf)).toHaveLength(1);
+    expect(mergeOrderGroups([collapsed, other], fieldsOf)).toHaveLength(2); // different report numbers: another order
+  });
+  it('real money = 订单金额 − 优惠金额 when 实付 is missing', () => {
+    expect(splitMoney({ spend: 95, orderAmount: 95, discount: 35 })).toEqual({ money: 60, credit: 35 });
+  });
+});

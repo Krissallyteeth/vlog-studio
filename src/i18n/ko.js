@@ -1290,4 +1290,10 @@ export default {
   "oad.memoMoneyCoupon": "캡처에 실제 결제 금액(实付)이 없어요. 엑셀 메모의 {money}元 + 이전 주문에서 받은 쿠폰 {credit}元 = 소모 {consumed}元이 정확히 맞아서, 실제 지출 {money}元 · 플랫폼 서비스 {credit}元으로 나눠요.",
 
   "ocr.why.mismatch": "실제 결과와 보고서 수치가 서로 안 맞아요 — 하나가 잘못 읽혔어요",
+
+  "oad.miss.expand": "주문 상세의 \"展开详情\"을 펼친 캡처에만 있어요",
+  "oad.miss.bonus": "실제 결과가 예상 범위를 넘을 때만 나와요",
+  "oad.miss.cost": "일부 주문 화면에만 나오는 문구예요",
+  "oad.miss.publish": "노트 정보 부분(발행 시각)이 캡처에 없어요",
+  "oad.miss.other": "이번 캡처에 없는 항목이에요",
 };
