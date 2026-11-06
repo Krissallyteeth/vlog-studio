@@ -553,3 +553,19 @@ describe('single-note order screen: title, ages, names', () => {
     expect(nameGuess('家居', 'interest')).toEqual({ name: '家居', sure: true });
   });
 });
+
+describe('overlapping screenshots and a used-up budget', () => {
+  const A = (label, value, carriedImg) => ({ words: [{ text: label, confidence: 90, bbox: { x0: 70, y0: 0, x1: 160, y1: 20 } }, { text: '国', confidence: 0, bbox: { x0: 190, y0: 0, x1: 400, y1: 20 } }, { text: value, confidence: 80, bbox: { x0: 780, y0: 0, x1: 850, y1: 20 } }] });
+  it('an unnamed last region and the same row carried onto the next screenshot are one row (其他)', async () => {
+    const { parseAdOrder } = await import('../src/xhs/ocr-ad-parse.js');
+    const shot1 = [L('订单 详情'), L('城市 分 布'), A('广东', '13.0%'), A('上海', '12.4%'), A('浙江', '9.9%'), A('江苏', '6.8%'), A('北京', '6.8%'), A('其', '51196')];
+    const shot2 = [L('订单 详情'), A('北京', '6.8%'), A('其他', '511%'), L('观众 兴趣 分 布'), A('美食', '79.5%')];
+    const r = parseAdOrder([shot1, shot2]);
+    expect(Object.entries(r.audience.city).map(([k, v]) => [k, v.status, v.value])).toEqual([['广东', 'ok', 0.13], ['上海', 'ok', 0.124], ['浙江', 'ok', 0.099], ['江苏', 'ok', 0.068], ['北京', 'ok', 0.068], ['其他', 'ok', 0.511]]);
+  });
+  it('"已完成全部预算消耗" + 订单金额 95: a noisy consumed line "985195" is 95', async () => {
+    const { parseAdOrder } = await import('../src/xhs/ocr-ad-parse.js');
+    const r = parseAdOrder([[L('已 完成 全 部 预算 消耗 ， 推 广 结束'), L('订单 金额 95 元'), L('实 付 金 额 60 元'), L('当前 已 消耗 金额 @ 985195 元')]]);
+    expect(r.fields.spend).toMatchObject({ status: 'ok', value: 95 });
+  });
+});

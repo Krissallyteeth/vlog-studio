@@ -287,7 +287,9 @@ export function parseAdOrder(linesPerImage) {
     const entries = Object.entries(list);
     for (const [k, r] of entries) {
       const v = r.value ?? r.candidate;
-      if (r.carried && !knownName(k, sec) && v != null && entries.some(([k2, x]) => k2 !== k && (x.value ?? x.candidate) === v)) delete list[k];
+      // …or the other way round: an unnamed row and the same row carried onto the next screenshot
+      // with its name read ("其 51196" and "其他 511%"): the named one stays.
+      if (!knownName(k, sec) && v != null && entries.some(([k2, x]) => k2 !== k && k2 in list && (x.value ?? x.candidate) === v && (r.carried || (x.carried && knownName(k2, sec))))) delete list[k];
     }
   }
   // 城市分布 lists the top regions and ends with 其他 (everyone else): an unnamed last row is 其他.
@@ -330,6 +332,17 @@ export function parseAdOrder(linesPerImage) {
     }
     set('spend', sure ? judge(spend, raw, c) : check(spend, raw, c, 'format'));
     set('budget', sure ? judge(budget, raw, c) : check(budget, raw, c, 'format'));
+  }
+  // "已完成全部预算消耗": the whole budget was used, so consumed = budget = 订单金额. A consumed line
+  // read as noise ("95/95" as "985195") that still holds the amount agrees with it.
+  if (budgetUsedUp && f.orderAmount?.status === 'ok' && f.spend?.status !== 'ok') {
+    const amount = f.orderAmount.value;
+    const raws = spendTexts.map((x) => x.raw.replace(/[^\d]/g, ''));
+    if (!f.spend || f.spend.candidate == null || raws.some((d) => d.includes(String(amount)))) {
+      here = spendTexts[0]?.at ?? f.orderAmount.at ?? null;
+      f.spend = { ...ok(amount, spendTexts[0]?.raw ?? '', 80), at: here, confirmedBy: 'budgetUsedUp' };
+      if (f.budget?.status !== 'ok') f.budget = { ...ok(amount, spendTexts[0]?.raw ?? '', 80), at: here, confirmedBy: 'budgetUsedUp' };
+    }
   }
   // Values that confirm each other: cost per result × result ≈ spend; result − top of the estimate = bonus.
   const val = (k) => f[k]?.value ?? f[k]?.candidate;
