@@ -135,20 +135,20 @@ export function parseAdOrder(linesPerImage) {
           // Two shares that add up to exactly 100% confirm each other.
           audience.gender = sumOk ? { male: ok(male, `${g[1]}%`, c), female: ok(female, `${g[2]}%`, c) } : { male: check(male, `${g[1]}%`, c, 'sum'), female: check(female, `${g[2]}%`, c, 'sum') };
         }
-      } else if (section && (m = /^(.*?)(\d+(?:\.\d+)?)["%]?$/.exec(text)) && /%|"/.test(text)) {
-        const pct = Number(m[2]) / 100;
-        const label = m[1].replace(/[|()\[\]@®国图本和ED(EER)]+$/g, '').replace(/[A-Za-z|()\[\]@®。.]+/g, '');
-        const bad = pct > 1 || !/\./.test(m[2]);
-        const list = audience[section];
-        let key = label || `#${Object.keys(list).length + 1}`;
-        if (section === 'age') key = ageLabel(text) ?? AGE_LABELS[Object.keys(list).length] ?? key;
-        const guess = bad && /^\d{2,3}$/.test(m[2]) ? pctOf(m[2]) : null;
-        const r = bad ? check(guess != null && guess <= 1 ? guess : null, text, c, 'format') : judge(pct, `${m[2]}%`, c);
-        // The same section often appears on two screenshots: keep the clearer reading.
-        if (!list[key] || (list[key].status !== 'ok' && (r.status === 'ok' || list[key].candidate == null))) list[key] = r;
+      } else if (section && /\d/.test(text)) {
+        const row = audienceRow(line, section);
+        if (row) {
+          const list = audience[section];
+          let key = row.label || `#${Object.keys(list).length + 1}`;
+          if (section === 'age') key = ageLabel(text) ?? AGE_LABELS[Object.keys(list).length] ?? key;
+          const r = { ...row.result, at: here };
+          // The same section often appears on two screenshots: keep the clearer reading.
+          if (!list[key] || (list[key].status !== 'ok' && (r.status === 'ok' || list[key].candidate == null))) list[key] = r;
+        }
       }
     }
   }
+  for (const sec of ['age', 'city']) completeBySum(audience[sec], sec === 'age' ? AGE_LABELS.length : 0);
   // Spend "50/50 元": the slash is often read as "1" ("50150") or as "/1" ("50/150").
   here = null;
   for (const { raw, c, at } of spendTexts) {
@@ -198,6 +198,105 @@ export function parseAdOrder(linesPerImage) {
   }
   if (f.paid?.status === 'check' && f.orderAmount?.status === 'ok' && f.paid.candidate === f.orderAmount.value) confirm('paid', 'orderAmount');
   return { fields: f, audience, noteText: noteText.join(' ') };
+}
+
+// Names the 薯条 audience report uses: provinces (城市分布) and interest groups (观众兴趣分布).
+const PROVINCES = ['北京', '天津', '上海', '重庆', '河北', '山西', '辽宁', '吉林', '黑龙江', '江苏', '浙江', '安徽', '福建', '江西', '山东', '河南', '湖北', '湖南', '广东', '海南', '四川', '贵州', '云南', '陕西', '甘肃', '青海', '台湾', '内蒙古', '广西', '西藏', '宁夏', '新疆', '香港', '澳门', '其他'];
+const INTERESTS = ['生活记录', '娱乐', '美食', '情感', '影视', '时尚', '旅游', '宠物', '美妆', '护肤', '穿搭', '运动', '健身', '音乐', '游戏', '科技', '数码', '教育', '学习', '母婴', '家居', '家装', '汽车', '体育', '摄影', '读书', '二次元', '动漫', '搞笑', '职场', '财经', '健康', '婚嫁', '出行', '人文', '艺术', '手工', '绘画', '舞蹈', '明星', '综艺', '潮流', '户外', '露营', '咖啡', '探店', '美甲', '减肥', '亲子', '留学', '校园', '文化'];
+const WEAK = new Set(['人', '他', '其', '国', '本', '和', '的', '一', '大', '小', '上', '下']);
+
+/** Closest known name for a garbled label ("炽乐" → 娱乐, "川" → 四川); '' when nothing fits. */
+export const nameOf = (raw, section) => nameGuess(raw, section).name;
+
+/** { name, sure }: on a tie the more common name (earlier in the list) is offered, not trusted. */
+function nameGuess(raw, section) {
+  const vocab = section === 'city' ? PROVINCES : section === 'interest' ? INTERESTS : null;
+  const t = String(raw ?? '').replace(/[^\u4e00-\u9fff]/g, '');
+  if (!vocab || !t) return { name: '', sure: false };
+  const exact = vocab.find((v) => t.includes(v) || v === t);
+  if (exact) return { name: exact, sure: true };
+  let best = '';
+  let bestScore = 0;
+  let tie = false;
+  for (const v of vocab) {
+    const score = [...new Set(v)].filter((ch) => t.includes(ch) && !WEAK.has(ch)).length;
+    if (score > bestScore) [best, bestScore, tie] = [v, score, false];
+    else if (score && score === bestScore) tie = true;
+  }
+  return { name: bestScore ? best : '', sure: bestScore > 0 && !tie };
+}
+
+/**
+ * One row of an audience bar chart: the name is at the far left, the share at the far right, and
+ * the bar in between often reads as junk — so words are picked by position, and the confidence of
+ * the name and number words only is used (the bar's junk would otherwise fail every row).
+ */
+function audienceRow(line, section) {
+  const ws = line.words.filter((w) => w.bbox && String(w.text).trim());
+  if (!ws.length) return null;
+  const right = Math.max(...ws.map((w) => w.bbox.x1));
+  const valueWord = [...ws].reverse().find((w) => /\d/.test(w.text) && w.bbox.x0 > right * 0.6);
+  if (!valueWord) return null;
+  const labelWords = ws.filter((w) => w.bbox.x0 < right * 0.17 && w !== valueWord);
+  const rawLabel = labelWords.map((w) => w.text).join('');
+  let digits = String(valueWord.text).replace(/[^\d.%]/g, '');
+  // "11.1%" read as "11196": the % sign became "96".
+  if (!digits.includes('%') && /^\d{3,}96$/.test(digits)) digits = digits.slice(0, -2);
+  const num = digits.replace(/%/g, '');
+  if (!num) return null;
+  const c = Math.min(valueWord.confidence ?? 0, ...labelWords.map((w) => w.confidence ?? 100));
+  const hasDot = num.includes('.');
+  const value = hasDot ? Number(num) / 100 : pctOf(num);
+  const guess = section === 'age' ? { name: '', sure: true } : nameGuess(rawLabel, section);
+  const label = guess.name;
+  const ok1 = hasDot && value <= 1 && (section === 'age' || (label && guess.sure)) && c >= MIN_CONF;
+  const result = value > 1 || !Number.isFinite(value) ? check(null, line.words.map((w) => w.text).join(' '), c, 'format') : ok1 ? ok(value, `${num}%`, c) : check(value, `${num}%`, c, !hasDot ? 'format' : section !== 'age' && !(label && guess.sure) ? 'text' : 'confidence');
+  return { label: label || (section === 'age' ? '' : rawLabel.replace(/[^\u4e00-\u9fff]/g, '')), result };
+}
+
+/**
+ * Shares of one chart add up to 100%. All read → confirmed together. One unsure → it is what
+ * is left, when that agrees with the digits read ("11%" with 11.1% missing).
+ */
+function completeBySum(list, expectedCount = 0) {
+  const entries = Object.entries(list);
+  if (entries.length < 2 || (expectedCount && entries.length !== expectedCount)) return;
+  const val = (r) => r.value ?? r.candidate;
+  const unsure = entries.filter(([, r]) => r.status !== 'ok');
+  const total = entries.reduce((a, [, r]) => a + (val(r) ?? 0), 0);
+  if (entries.every(([, r]) => val(r) != null) && Math.abs(total - 1) < 0.0035) {
+    for (const [k, r] of unsure) list[k] = { ...ok(val(r), r.text, r.conf), at: r.at, confirmedBy: 'sum' };
+    return;
+  }
+  // Readings that lost their dot ("11%", "247%") are the doubtful ones; the others count toward the sum.
+  // Try each of them as "what is left" (the shortest reading first: "11%" is the ambiguous kind);
+  // accept when its digits agree and the others, as read, make up the rest.
+  const lost = entries.filter(([, r]) => r.status !== 'ok' && r.reason === 'format').sort((a, b) => String(a[1].text).length - String(b[1].text).length);
+  const digitsOf = (r) => String(r.text ?? '').replace(/[^\d]/g, '');
+  if (lost.length && lost.length <= 2 && entries.every(([, r]) => val(r) != null || r.reason === 'format')) {
+    for (const [k, r] of lost) {
+      const others = entries.filter(([key]) => key !== k);
+      if (others.some(([, x]) => val(x) == null)) continue;
+      const left = Math.round((1 - others.reduce((a, [, x]) => a + val(x), 0)) * 1000) / 1000;
+      const read = digitsOf(r);
+      const want = String(Math.round(left * 1000));
+      // Each other dot-less reading must be its own digits with the dot restored (e.g. "319" = 31.9%).
+      const othersFit = others.every(([, x]) => x.reason !== 'format' || String(Math.round(val(x) * 1000)) === digitsOf(x));
+      if (left > 0 && read.length >= 2 && want.startsWith(read.slice(0, 2)) && othersFit) {
+        list[k] = { ...ok(left, r.text, r.conf), at: r.at, confirmedBy: 'sum' };
+        for (const [key, x] of others) if (x.status !== 'ok') list[key] = { ...ok(val(x), x.text, x.conf), at: x.at, confirmedBy: 'sum' };
+        return;
+      }
+    }
+  }
+  if (unsure.length === 1) {
+    const [k, r] = unsure[0];
+    const rest = entries.filter(([key]) => key !== k).reduce((a, [, x]) => a + x.value, 0);
+    const left = Math.round((1 - rest) * 1000) / 1000;
+    const read = String(r.text ?? '').replace(/[^\d]/g, '');
+    const want = String(Math.round(left * 1000));
+    if (left > 0 && read && want.startsWith(read.slice(0, 2)) && (read.length <= want.length || read.startsWith(want))) list[k] = { ...ok(left, r.text, r.conf), at: r.at, confirmedBy: 'sum' };
+  }
 }
 
 /** Bounding box around some OCR lines (image pixels). */

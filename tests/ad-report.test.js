@@ -218,3 +218,25 @@ describe('goal result misread with an extra digit', () => {
     expect(r.fields.result.status).toBe('check');
   });
 });
+
+describe('audience charts', () => {
+  const A = (label, value, conf = 90) => ({ words: [{ text: label, confidence: conf, bbox: { x0: 70, y0: 0, x1: 160, y1: 20 } }, { text: '国国', confidence: 0, bbox: { x0: 190, y0: 0, x1: 400, y1: 20 } }, { text: value, confidence: conf, bbox: { x0: 780, y0: 0, x1: 850, y1: 20 } }] });
+  it('maps garbled names to known ones and ignores the bar between name and number', () => {
+    const r = parseAdOrder([[L('城市 分 布'), A('头州', '55.5%'), A('川', '3.9%'), A('其他', '40.6%'), L('观众 兴趣 分 布'), A('炽乐', '94.5%'), A('生活记录人', '99.4%')]]);
+    expect(Object.keys(r.audience.city)).toEqual(['贵州', '四川', '其他']);
+    expect(r.audience.city['贵州']).toMatchObject({ status: 'ok', value: 0.555 });
+    expect(Object.keys(r.audience.interest)).toEqual(['娱乐', '生活记录']);
+  });
+  it('shares that add up to 100% confirm each other; one missing dot is filled from the rest', () => {
+    const r = parseAdOrder([[L('年 龄 分 布'), A('18以下', '1.4%'), A('18~23', '11%', 50), A('24~30', '36.6%'), A('31~40', '31.9%'), A('41~50', '13.0%'), A('50以上', '6.0%')]]);
+    expect(r.audience.age['18~23']).toMatchObject({ status: 'ok', value: 0.111 });
+  });
+});
+
+describe('audience: two readings without a dot', () => {
+  const A = (label, value, conf = 50) => ({ words: [{ text: label, confidence: 90, bbox: { x0: 70, y0: 0, x1: 160, y1: 20 } }, { text: '国', confidence: 0, bbox: { x0: 190, y0: 0, x1: 400, y1: 20 } }, { text: value, confidence: conf, bbox: { x0: 780, y0: 0, x1: 850, y1: 20 } }] });
+  it('"11%" and "319%" are resolved so the six ages add up to 100%', () => {
+    const r = parseAdOrder([[L('年 龄 分 布'), A('18以下', '1.4%', 90), A('18~23', '11%'), A('24~30', '36.6%'), A('31~40', '319%'), A('41~50', '13.0%', 90), A('50以上', '6.0%')]]);
+    expect(Object.values(r.audience.age).map((x) => [x.status, x.value])).toEqual([['ok', 0.014], ['ok', 0.111], ['ok', 0.366], ['ok', 0.319], ['ok', 0.13], ['ok', 0.06]]);
+  });
+});

@@ -5,6 +5,8 @@ import { normalizeAd, normalizeStage } from '../src/xhs/store.js';
 import { matchPost } from '../src/views/xhs/ocr-ad.js';
 
 // Synthetic OCR lines (made-up numbers), shaped like a 薯条 order detail screen.
+// Audience rows as on screen: name at the far left, bar in the middle, share at the far right.
+const A = (label, value, conf = 92) => ({ words: [{ text: label, confidence: conf, bbox: { x0: 70, y0: 0, x1: 160, y1: 20 } }, { text: '▇', confidence: 0, bbox: { x0: 190, y0: 0, x1: 400, y1: 20 } }, { text: value, confidence: conf, bbox: { x0: 780, y0: 0, x1: 850, y1: 20 } }] });
 const L = (text, conf = 92) => ({ words: text.split(' ').map((w, i) => ({ text: w, confidence: conf, bbox: { x0: i * 40, y0: 0, x1: i * 40 + 30, y1: 20 } })) });
 
 describe('薯条 order parsing', () => {
@@ -17,7 +19,7 @@ describe('薯条 order parsing', () => {
     const r = parseAdOrder([
       [L('推广 完成'), L('发 布 时 间 : 2026-01-05 19:20:05'), L('点 赞 收藏 量 9 / 预 估 转 化 5 ~ 20', 60), L('满 50.0 元 赠 20.0 元')],
       [L('当前 已 消耗 金额 300/300 元'), L('曝光 量 阅读 量 点 赞 量 收藏 量'), L('500 60 8 2'), L('评论 量 新 增 关注 主页 浏览 私信 开口'), L('1 3 7 0')],
-      [L('性 别 分 布'), L('男性 40.0% 女性 60.0%'), L('年 龄 分 布'), L('18以下 2.0%'), L('18~23 268%')],
+      [L('性 别 分 布'), L('男性 40.0% 女性 60.0%'), L('年 龄 分 布'), A('18以下', '2.0%'), A('18~23', '268%')],
     ]);
     const f = r.fields;
     expect(f.status.value).toBe('done');
