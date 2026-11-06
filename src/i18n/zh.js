@@ -1318,4 +1318,8 @@ export default {
   "oad.newDate": "发布日期",
   "oad.newPostHelp": "截图中的标题：{title}。发布日期取自截图。保存后会新建笔记并关联此推广。浏览量等数据留空，可稍后补充。",
   "oad.newPostNeeds": "请输入新笔记的名称和发布日期（YYYY-MM-DD）。",
+
+  "ads.dupMemo": "此备注（{spend}元）看起来与截图录入的订单（{stage}，{start}）是同一次推广，保留会重复计算花费。",
+  "ads.dupDrop": "删除重复备注",
+  "ads.dupDropBody": "删除备注记录\"{text}\"，截图录入的订单保留。",
 };

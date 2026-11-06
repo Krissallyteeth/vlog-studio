@@ -101,3 +101,21 @@ describe('a multi-note order with a note whose post is not in the app', () => {
     expect(historyEntries(saved)[0]).toMatchObject({ multi: true, spend: 100, credit: 40, outside: 1 });
   });
 });
+
+describe('a memo written before the screenshots', () => {
+  it('a multi-note order replaces a memo of its whole real money a day off; a single note keeps exact D+n', async () => {
+    const { memoToReplace, memoDuplicateOf } = await import('../src/xhs/ad-orders.js');
+    const { normalizeAd } = await import('../src/xhs/store.js');
+    const memo = normalizeAd({ id: 'm', stage: 'D+2', spend: 100, sourceText: '진행(100元)' });
+    const share = normalizeAd({ id: 's', stage: 'D+3', spend: 20, credit: 8, orderSpend: 100, paid: 100, orderAmount: 140, noteCount: 5, groupKey: 'g', orderNo: 'o', order: { reads: 851 } });
+    const post = { ads: [memo, share] };
+    expect(memoToReplace({ ads: [memo] }, share)).toBe(memo);
+    expect(memoDuplicateOf(post, memo)).toBe(share);
+    const single = normalizeAd({ stage: 'D+2', spend: 60, orderNo: 'p', order: { reads: 300 } });
+    const memo60 = normalizeAd({ id: 'm1', stage: 'D+1', spend: 60 });
+    expect(memoToReplace({ ads: [memo60] }, single)).toBeNull();
+    expect(memoDuplicateOf({ ads: [memo60, single] }, memo60)).toBeNull();
+    const memoSame = normalizeAd({ id: 'm2', stage: 'D+2', spend: 60 });
+    expect(memoDuplicateOf({ ads: [memoSame, single] }, memoSame)).toBe(single);
+  });
+});

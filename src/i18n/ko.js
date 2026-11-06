@@ -1318,4 +1318,8 @@ export default {
   "oad.newDate": "발행일",
   "oad.newPostHelp": "캡처 속 제목: {title}. 발행일은 캡처에서 가져왔어요. 저장하면 게시물이 만들어지고 이 광고가 연결돼요. 조회수 같은 성과 값은 비워 두고, 나중에 데이터 화면이나 캡처로 채울 수 있어요.",
   "oad.newPostNeeds": "새 게시물의 이름과 발행일(YYYY-MM-DD)을 입력하세요.",
+
+  "ads.dupMemo": "이 메모({spend}元)는 캡처로 넣은 주문({stage}, {start})과 같은 광고로 보여요. 그대로 두면 광고비가 두 번 집계돼요.",
+  "ads.dupDrop": "중복 메모 지우기",
+  "ads.dupDropBody": "엑셀 메모 기록 \"{text}\"을 지워요. 캡처로 넣은 주문 기록은 그대로 남아요.",
 };

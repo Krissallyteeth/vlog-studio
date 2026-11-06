@@ -1318,4 +1318,8 @@ export default {
   "oad.newDate": "Publish date",
   "oad.newPostHelp": "Title in the screenshot: {title}. The date comes from the screenshot. Saving creates the post and links this ad. Its results (views etc.) stay blank until you fill them in.",
   "oad.newPostNeeds": "Enter the new post’s name and publish date (YYYY-MM-DD).",
+
+  "ads.dupMemo": "This memo ({spend}元) looks like the same ad as the order from screenshots ({stage}, {start}). Kept, its spend is counted twice.",
+  "ads.dupDrop": "Remove duplicate memo",
+  "ads.dupDropBody": "Removes the memo record \"{text}\". The order from the screenshots stays.",
 };

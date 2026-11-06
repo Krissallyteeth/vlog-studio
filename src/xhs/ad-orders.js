@@ -1,6 +1,6 @@
 import { uid } from '../lib/ids.js';
 import { AD_METRICS } from './ocr-ad-parse.js';
-import { normalizeAd, normalizeStage, stageFromDates } from './store.js';
+import { normalizeAd, normalizeStage, stageDay, stageFromDates } from './store.js';
 
 /*
  * Turning one recognised 薯条 order into ad records. Pure (no storage), so it can be tested.
@@ -99,6 +99,42 @@ export function memoMoney(memo, ad) {
   return { spend: memo.spend, credit: Math.round((consumed - memo.spend) * 100) / 100 };
 }
 
+/**
+ * Amounts a memo may have written down for this order: this note's share, or (multi-note) the
+ * whole order's real money, real money + credit, or order amount.
+ */
+export function orderAmounts(ad) {
+  const r = (x) => Math.round(x * 100) / 100;
+  const out = [ad.spend, ad.credit != null && ad.spend != null ? r(ad.spend + ad.credit) : null, ...wholeOrderAmounts(ad)];
+  return out.filter((x) => typeof x === 'number' && x > 0);
+}
+
+/** A multi-note order's own totals (real money, money + credit, order amount); none for one note. */
+export function wholeOrderAmounts(ad) {
+  if (!ad.groupKey) return [];
+  const r = (x) => Math.round(x * 100) / 100;
+  const out = [ad.orderSpend, ad.paid, ad.orderAmount];
+  if (ad.orderSpend != null && ad.credit != null) out.push(r(ad.orderSpend + ad.credit * (ad.noteCount || 1)));
+  return out.filter((x) => typeof x === 'number' && x > 0);
+}
+
+const nearStage = (a, b) => {
+  const x = stageDay(a);
+  const y = stageDay(b);
+  return x != null && y != null && Math.abs(x - y) <= 1;
+};
+
+/**
+ * A memo record that is already covered by an order report on the same post (same amount, D+n the
+ * same or a day off): the memo was written before the screenshots were added and is now a double.
+ */
+export function memoDuplicateOf(post, memo) {
+  if (!memoAds(post).includes(memo) || typeof memo.spend !== 'number') return null;
+  const reports = (post.ads ?? []).filter((a) => a !== memo && (a.orderNo || Object.values(a.order ?? {}).some((x) => typeof x === 'number')));
+  const hits = reports.filter((a) => (a.stage === memo.stage && orderAmounts(a).includes(memo.spend)) || (nearStage(a.stage, memo.stage) && wholeOrderAmounts(a).includes(memo.spend)));
+  return hits.length === 1 ? hits[0] : null;
+}
+
 /** Records on a post that only come from a memo / manual entry (no order number, no report numbers). */
 export const memoAds = (post) => (post?.ads ?? []).filter((a) => a.executed !== false && !a.orderNo && !Object.values(a.order ?? {}).some((x) => typeof x === 'number'));
 
@@ -109,9 +145,16 @@ export const memoAds = (post) => (post?.ads ?? []).filter((a) => a.executed !== 
  */
 export function memoToReplace(post, ad) {
   const memos = memoAds(post);
-  const amounts = [ad.spend, ad.credit != null ? ad.spend + ad.credit : null].filter((x) => x != null);
+  const amounts = orderAmounts(ad);
   const sameStage = memos.find((a) => a.stage && a.stage === ad.stage);
   if (sameStage) return sameStage;
+  // Multi-note order: a memo of the whole order's money (not a note's share) a day off (the order
+  // placed early the next morning) is this order. Single notes keep the exact D+n: a D+1 and a D+2
+  // memo of 60元 each are usually two ads.
+  if (ad.groupKey) {
+    const near = memos.filter((a) => nearStage(a.stage, ad.stage) && wholeOrderAmounts(ad).includes(a.spend));
+    if (near.length === 1) return near[0];
+  }
   // No start time in the screenshots (details not expanded): the post's only memo is this ad.
   if (!ad.stage && memos.length === 1) return memos[0];
   const noStage = memos.filter((a) => !a.stage && amounts.includes(a.spend));
@@ -153,7 +196,7 @@ export function placeOrder(posts, entries) {
     const memo = target ? p.ads.indexOf(target) : -1;
     if (memo >= 0) {
       // Without a start time the memo's D+n stands; without 实付 the memo's amount is the real money.
-      const money = memoMoney(target, ad);
+      const money = ad.groupKey ? null : memoMoney(target, ad);
       p.ads[memo] = { ...ad, ...(money ?? {}), stage: ad.stage || target.stage, id: target.id, sourceText: target.sourceText, memo: target.memo || ad.memo };
     }
     else p.ads.push(ad);

@@ -9,6 +9,7 @@ import { METRICS, METRIC, VALIDITY } from '../../xhs/metrics.js';
 import { judge, ordered, stage } from '../../xhs/stats.js';
 import { activeBaseline, deletePost, getPost, getSettings, listPosts, normalizeAd, normalizeStage, onXhsChange, savePosts } from '../../xhs/store.js';
 import { AD_METRICS } from '../../xhs/ocr-ad-parse.js';
+import { memoDuplicateOf } from '../../xhs/ad-orders.js';
 import { relativeNote, xhsPage } from './shell.js';
 
 const CF = { good: 'cf-good', mid: 'cf-mid', bad: 'cf-bad' };
@@ -88,12 +89,20 @@ export async function renderPost([id], { isCurrent }) {
     return parts.join('');
   };
 
+  // A memo already covered by an order report on this post (written before the screenshots): offer to remove it.
+  const dupHtml = (a, i) => {
+    const order = memoDuplicateOf(post, a);
+    if (!order) return '';
+    return `<div class="mt-2 notice flex flex-wrap items-center gap-2 text-[12px]"><span class="flex-1">${esc(t('ads.dupMemo', { stage: order.stage || '?', start: (order.start || '').replace('T', ' '), spend: a.spend }))}</span><button type="button" class="btn btn-secondary btn-sm" data-drop-memo="${i}">${esc(t('ads.dupDrop'))}</button></div>`;
+  };
+
   const adsHtml = () => `
     ${post.ads.length ? `<ul class="flex flex-col gap-2">${post.ads.map((a, i) => `<li class="rounded-[12px] bg-surface-2 p-3 text-[13px]">
       <div class="flex items-start justify-between gap-2"><div><b>${esc(a.stage || '–')}</b> · ${esc(a.executed ? t('ads.executed') : t('ads.notExecuted'))} · ${esc(yuan(a.spend) || '–')}${a.credit ? ` + ${esc(t('ads.credit'))} ${esc(yuan(a.credit))}` : ''}${a.needsReview ? ` <span class="badge cf-mid">${esc(t('ads.review'))}</span>` : ''}</div>
       <button type="button" class="link-btn" data-edit-ad="${i}">${esc(t('ads.edit'))}</button></div>
       <p class="mt-1 text-muted">${esc([a.goal, a.hours ? t('ads.hoursN', { n: a.hours }) : '', a.start, a.result, a.memo].filter(Boolean).join(' · '))}</p>
       ${a.sourceText ? `<p class="mt-1 text-[12px] text-muted">${esc(t('ads.from', { text: a.sourceText }))}</p>` : ''}
+      ${dupHtml(a, i)}
       ${orderHtml(a)}</li>`).join('')}</ul>` : `<p class="text-[14px] text-muted">${esc(t('ads.none'))}</p>`}
     <div class="mt-3 flex flex-wrap gap-2"><button type="button" class="btn btn-secondary btn-sm" data-edit-ad="new">${icon('plus', 'size-4')}${esc(t('ads.add'))}</button><a class="btn btn-secondary btn-sm" href="#/ocr-ad/${encodeURIComponent(post.id)}">${icon('scan', 'size-4')}${esc(t('oad.fromShots'))}</a></div>
     ${eff.unknownStage ? `<p class="mt-2 text-[12px] cf-mid rounded-[8px] px-2 py-1">${esc(t('ads.unknownStage', { n: eff.unknownStage }))}</p>` : ''}
@@ -144,6 +153,15 @@ export async function renderPost([id], { isCurrent }) {
     if (e.target.id === 'p-validity') save({ validity: e.target.value });
   });
   root.addEventListener('click', async (e) => {
+    const drop = e.target.closest('[data-drop-memo]');
+    if (drop) {
+      const i = Number(drop.dataset.dropMemo);
+      const memo = post.ads[i];
+      if (!memo || !memoDuplicateOf(post, memo)) return;
+      const ok = await confirmDialog({ title: t('ads.dupDrop'), message: t('ads.dupDropBody', { text: memo.sourceText || memo.stage }), confirmText: t('common.delete'), danger: true });
+      if (!ok) return;
+      return save({ ads: post.ads.filter((_, k) => k !== i) });
+    }
     const ad = e.target.closest('[data-edit-ad]');
     if (ad) {
       const idx = ad.dataset.editAd === 'new' ? -1 : Number(ad.dataset.editAd);
