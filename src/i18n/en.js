@@ -1171,7 +1171,7 @@ export default {
   "oad.f.noteCount": "Notes in the order",
   "oad.f.orderAmount": "Order amount (元) · 订单金额",
   "oad.f.paid": "Paid (元) · 实付金额 · used in statistics",
-  "oad.f.bonus": "Bonus over target · 超额获赠 (result − top of estimate)",
+  "oad.f.bonus": "Above estimate · how much more than the top of the estimate (actual − top)",
   "oad.f.costPerResult": "Cost per goal result (元)",
   "oad.f.duration": "Planned duration (hours)",
   "oad.f.targeting": "Audience",

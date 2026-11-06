@@ -1171,7 +1171,7 @@ export default {
   "oad.f.noteCount": "주문에 포함된 노트 수",
   "oad.f.orderAmount": "주문 금액(元) · 订单金额",
   "oad.f.paid": "실제 결제(元) · 实付金额 · 통계 기준",
-  "oad.f.bonus": "초과 달성 보너스 · 超额获赠 (실제 결과 − 예상 상단)",
+  "oad.f.bonus": "초과 달성 · 예상 범위보다 더 얻은 수 (실제 결과 − 예상 상단)",
   "oad.f.costPerResult": "목표 1건당 비용(元)",
   "oad.f.duration": "예상 기간(시간)",
   "oad.f.targeting": "타깃",

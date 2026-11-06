@@ -1171,7 +1171,7 @@ export default {
   "oad.f.noteCount": "订单中的笔记数",
   "oad.f.orderAmount": "订单金额（元）",
   "oad.f.paid": "实付金额（元）· 统计依据",
-  "oad.f.bonus": "超额获赠（结果 − 预估上限）",
+  "oad.f.bonus": "超出预估 · 比预估上限多获得的数量（实际结果 − 预估上限）",
   "oad.f.costPerResult": "单个目标成本（元）",
   "oad.f.duration": "预计时长（小时）",
   "oad.f.targeting": "目标人群",
