@@ -32,7 +32,11 @@ export async function renderOcr([postId], { isCurrent }) {
       return true;
     }
   })();
-  const state = { postId: postId && posts.some((p) => p.id === postId) ? postId : list[0]?.id ?? 'new', stage: 'd1', images: [], merged: null, choice: {} };
+  const state = { postId: postId === 'new' ? 'new' : postId && posts.some((p) => p.id === postId) ? postId : list[0]?.id ?? 'new', stage: 'd1', images: [], merged: null, choice: {} };
+  // A new post from its D+1 screenshots: published yesterday, at the time I usually post.
+  const yesterday = new Date(Date.now() - 86400000 + new Date().getTimezoneOffset() * -60000).toISOString().slice(0, 10);
+  const times = posts.map((p) => p.time).filter(Boolean);
+  const usualTime = times.sort((a, b) => times.filter((x) => x === b).length - times.filter((x) => x === a).length)[0] ?? '19:20';
   const post = () => posts.find((p) => p.id === state.postId) ?? null;
   // Default stage: D+2 once D+1 is filled in.
   if (post() && Object.values(post().d1).some((v) => v != null)) state.stage = 'd2';
@@ -55,8 +59,8 @@ export async function renderOcr([postId], { isCurrent }) {
         </div>
         <div id="ocr-new" class="mt-3 hidden grid gap-3 sm:grid-cols-3">
           <label class="field"><span class="field-label">배포내용</span><input class="input" id="ocr-new-title" /></label>
-          <label class="field"><span class="field-label">배포일자</span><input class="input" type="date" id="ocr-new-date" /></label>
-          <label class="field"><span class="field-label">배포시간</span><input class="input" type="time" id="ocr-new-time" value="19:20" /></label>
+          <label class="field"><span class="field-label">배포일자</span><input class="input" type="date" id="ocr-new-date" value="${yesterday}" /></label>
+          <label class="field"><span class="field-label">배포시간</span><input class="input" type="time" id="ocr-new-time" value="${esc(usualTime)}" /></label>
         </div>
         <div class="drop-target mt-3 rounded-[14px] border-2 border-dashed border-line p-4 text-center" id="ocr-drop">
           <div class="drop-overlay" aria-hidden="true">${icon('upload', 'size-6')}<span>${esc(t('ocr.dropHere'))}</span></div>

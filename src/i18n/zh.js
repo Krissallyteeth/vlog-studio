@@ -1398,4 +1398,8 @@ export default {
   "chart.adPer": " · 每粉丝{v}",
 
   "xg.adColHelp": "根据全部推广记录（备注、截图订单、合投分摊）自动计算，点击查看该笔记的推广。",
+
+  "cont.addByShot": "用D+1截图新建笔记",
+  "cont.d1Shot": "上传D+1截图",
+  "cont.d2Shot": "上传D+2截图",
 };

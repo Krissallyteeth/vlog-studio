@@ -1398,4 +1398,8 @@ export default {
   "chart.adPer": " · {v} per follower",
 
   "xg.adColHelp": "Calculated from every ad record (memo, screenshot order, multi-note share). Click to open the post’s ads.",
+
+  "cont.addByShot": "New post from D+1 screenshots",
+  "cont.d1Shot": "Add D+1 screenshots",
+  "cont.d2Shot": "Add D+2 screenshots",
 };

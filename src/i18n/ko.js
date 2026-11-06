@@ -1398,4 +1398,8 @@ export default {
   "chart.adPer": " · 팔로워당 {v}",
 
   "xg.adColHelp": "모든 광고 기록(엑셀 메모·캡처 주문·묶음 주문의 몫)에서 자동 계산돼요. 누르면 게시물 광고로 이동해요.",
+
+  "cont.addByShot": "D+1 캡처로 새 게시물",
+  "cont.d1Shot": "D+1 캡처 올리기",
+  "cont.d2Shot": "D+2 캡처 올리기",
 };

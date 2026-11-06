@@ -23,11 +23,15 @@ export async function renderContents({ isCurrent }) {
   const list = ordered(posts).reverse();
   const projectName = (id) => projects.find((p) => p.id === id)?.name ?? '';
   const keys = ['views', 'ctr', 'retain5s', 'completion'];
+  // Recent posts (7 days) whose D+1 or D+2 numbers are still missing: one tap to their screenshots.
+  const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  const filled = (x) => Object.values(x ?? {}).some((v) => v != null);
+  const nextShot = (p) => (p.date && p.date >= since ? (!filled(p.d1) ? 'd1' : !filled(p.d2) ? 'd2' : '') : '');
   const root = xhsPage({
     nav: 'contents',
     title: t('cont.title'),
     sub: t('cont.sub'),
-    actions: `<a href="#/data/posts" class="btn btn-secondary btn-sm">${icon('table', 'size-4')}${esc(t('nav.data'))}</a>`,
+    actions: `<a href="#/ocr/new" class="btn btn-primary btn-sm">${icon('scan', 'size-4')}${esc(t('cont.addByShot'))}</a><a href="#/data/posts" class="btn btn-secondary btn-sm">${icon('table', 'size-4')}${esc(t('nav.data'))}</a>`,
     body: list.length
       ? `<ul class="flex flex-col gap-2.5">${list
           .map(
@@ -36,7 +40,7 @@ export async function renderContents({ isCurrent }) {
           <p class="mt-1 text-[16px] font-semibold">${esc(p.title || t('xg.untitled'))}</p>
           ${p.projectId ? `<p class="text-[12px] text-muted">${icon('idea', 'size-3.5 inline')} ${esc(projectName(p.projectId))}</p>` : ''}
           <div class="mt-2 grid grid-cols-4 gap-1.5 text-[12px]">${keys.map((k) => `<div class="rounded-[8px] px-2 py-1 ${CF[judge(k, stage(p)[k], baseline?.medians[k], p.validity)] ?? 'bg-surface-2'}"><p class="opacity-75">${esc(METRIC[k].zh)}</p><p class="font-semibold tabular-nums">${esc(fmt(k, stage(p)[k]) || '–')}</p></div>`).join('')}</div>
-        </a></li>`,
+        </a>${nextShot(p) ? `<a class="btn btn-secondary btn-sm mt-1.5" href="#/ocr/${encodeURIComponent(p.id)}">${icon('scan', 'size-4')}${esc(t(nextShot(p) === 'd1' ? 'cont.d1Shot' : 'cont.d2Shot'))}</a>` : ''}</li>`,
           )
           .join('')}</ul><div class="mt-3">${relativeNote()}</div>`
       : `<div class="empty card"><div class="empty-icon">${icon('list', 'size-6')}</div><p class="font-semibold">${esc(t('dash.empty'))}</p><a href="#/import" class="btn btn-primary mt-4">${esc(t('data.import'))}</a></div>`,
