@@ -265,12 +265,15 @@ function audienceRow(line, section) {
   const ws = line.words.filter((w) => w.bbox && String(w.text).trim());
   if (!ws.length) return null;
   const right = Math.max(...ws.map((w) => w.bbox.x1));
-  const valueWord = [...ws].reverse().find((w) => /\d/.test(w.text) && w.bbox.x0 > right * 0.6);
+  // The share sits at the right edge. OCR sometimes glues the bar to it ("(2.4\"" from x=264 to the
+  // edge), so the word is found by where it ends, not where it starts.
+  const valueWord = [...ws].reverse().find((w) => /\d/.test(w.text) && (w.bbox.x0 > right * 0.6 || w.bbox.x1 > right * 0.95));
   if (!valueWord) return null;
+  const glued = valueWord.bbox.x0 <= right * 0.6;
   // The name: the leftmost run of Chinese words, up to where the bar starts (a gap or non-Chinese junk).
   const labelWords = [];
   for (const w of [...ws].sort((a, b) => a.bbox.x0 - b.bbox.x0)) {
-    if (w === valueWord || w.bbox.x0 > right * 0.3) break;
+    if (w === valueWord || w.bbox.x0 > right * 0.2) break; // the bar starts at about 16–22% of the width
     // A heading read on the same line as the first row ("观众兴趣分布 娱乐 … 92.4%"): skip its words.
     if (/分布|画像|观众|兴趣|城市|年龄|性别/.test(w.text)) continue;
     const prev = labelWords.at(-1);
@@ -285,15 +288,16 @@ function audienceRow(line, section) {
   let digits = String(valueWord.text).replace(/[^\d.%]/g, '');
   // "11.1%" read as "11196": the % sign became "96".
   if (!digits.includes('%') && /^\d{3,}96$/.test(digits)) digits = digits.slice(0, -2);
-  const num = digits.replace(/%/g, '');
+  // The number right before "%" ("418%6" → 418), else the last number in the word ("(2.4\"" → 2.4).
+  const num = (/(\d+(?:\.\d+)?)%/.exec(digits) ?? /(\d+(?:\.\d+)?)\D*$/.exec(digits))?.[1] ?? '';
   if (!num) return null;
   const c = Math.min(valueWord.confidence ?? 0, ...labelWords.map((w) => w.confidence ?? 100));
   const hasDot = num.includes('.');
   const value = hasDot ? Number(num) / 100 : pctOf(num);
   const guess = section === 'age' ? { name: '', sure: true } : nameGuess(rawLabel, section);
   const label = guess.name;
-  const ok1 = hasDot && value <= 1 && (section === 'age' || (label && guess.sure)) && c >= MIN_CONF;
-  const result = value > 1 || !Number.isFinite(value) ? check(null, line.words.map((w) => w.text).join(' '), c, 'format') : ok1 ? ok(value, `${num}%`, c) : check(value, `${num}%`, c, !hasDot ? 'format' : section !== 'age' && !(label && guess.sure) ? 'text' : 'confidence');
+  const ok1 = !glued && hasDot && value <= 1 && (section === 'age' || (label && guess.sure)) && c >= MIN_CONF;
+  const result = value > 1 || !Number.isFinite(value) ? check(null, line.words.map((w) => w.text).join(' '), c, 'format') : ok1 ? ok(value, `${num}%`, c) : check(value, `${num}%`, c, !hasDot || glued ? 'format' : section !== 'age' && !(label && guess.sure) ? 'text' : 'confidence');
   return { label: label || (section === 'age' ? '' : rawLabel.replace(/[^\u4e00-\u9fff]/g, '')), result };
 }
 

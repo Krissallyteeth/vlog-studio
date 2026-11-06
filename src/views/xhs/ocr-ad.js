@@ -132,7 +132,8 @@ export async function refineAudience(parsed, sources) {
     const pad = 8;
     const y0 = Math.max(0, r.at.box.y0 - pad);
     const y1 = Math.min(bmp.height, r.at.box.y1 + pad);
-    let name = knownName(job.key, sec) ? job.key : '';
+    // A known name read with certainty is kept; a guessed one (a tie, reason "text") is read again.
+    let name = knownName(job.key, sec) && r.reason !== 'text' ? job.key : '';
     // A few tries at different sizes (small text reads differently at each).
     for (const scale of [2, 1, 3]) {
       if (name) break;
@@ -141,20 +142,24 @@ export async function refineAudience(parsed, sources) {
       const g = read ? nameGuess(read.text, sec) : { name: '' };
       if (g.name && g.sure) name = g.name;
     }
+    const nameSure = !!name;
+    if (!name && knownName(job.key, sec)) name = job.key; // re-reading did not help: keep the guess, unconfirmed
     let value = r.status === 'ok' ? r.value : null;
     if (value == null) {
       const read = await recognizeLine(clean(bmp, W * 0.75, y0, W, y1)).catch(() => null);
       const m = /(\d{1,3}\.\d)\s*%?/.exec(read?.text ?? '');
       if (m && Number(m[1]) <= 100) value = Math.round(Number(m[1]) * 10) / 1000;
-      else if (r.candidate != null && name && r.reason === 'text') value = r.candidate; // only the name was unsure
+      else if (r.candidate != null && nameSure && r.reason === 'text') value = r.candidate; // only the name was unsure
     }
     if (!name || value == null) continue;
     value = Math.round(value * 1000) / 1000;
+    if (nameSure) fixed++;
     const list = parsed.audience[sec];
-    const entries = Object.entries(list).map(([k, v]) => (k === job.key ? [name, { ...v, status: 'ok', value, candidate: undefined, reason: undefined, confirmedBy: 'reread' }] : [k, v]));
+    // Confirmed only when the name was read for certain; a kept guess stays "to check" (with its value).
+    const updated = nameSure ? { ...r, status: 'ok', value, candidate: undefined, reason: undefined, confirmedBy: 'reread' } : { ...r, status: 'check', value: undefined, candidate: value, reason: 'text' };
+    const entries = Object.entries(list).map(([k, v]) => (k === job.key ? [name, updated] : [k, v]));
     // The same row read on two screenshots: keep one.
     parsed.audience[sec] = Object.fromEntries(entries.filter(([k], i) => entries.findIndex(([k2]) => k2 === k) === i));
-    fixed++;
   }
   // Charts show at most 6 regions (top 5 + 其他) and 8 interests: once those are named, rows still
   // without a name are page noise (a banner, a button) and are dropped.

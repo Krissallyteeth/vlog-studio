@@ -316,3 +316,22 @@ describe('audience: first interest row output before its heading', () => {
     expect(r.audience.interest['#1']).toMatchObject({ status: 'check', candidate: 0.924 });
   });
 });
+
+describe('audience: number glued to the bar', () => {
+  const W = (text, x0, x1, y, conf = 90) => ({ text, confidence: conf, bbox: { x0, y0: y, x1, y1: y + 40 } });
+  it('a word from the bar start to the right edge still gives the row (to be re-read); "418%6" is 41.8', () => {
+    const r = parseAdOrder([[
+      { words: [W('观众', 88, 186, 0), W('兴趣', 185, 252, 0), W('分', 269, 293, 0), W('布', 311, 335, 0)] },
+      { words: [W('炽', 88, 155, 100, 27), W('乐', 149, 224, 100, 0), W('(2.4"', 264, 1089, 100, 32)] },
+      { words: [W('生活', 89, 171, 200), W('记录', 174, 228, 200), W('(人', 264, 908, 200, 28), W('91.8%', 997, 1090, 200)] },
+      { words: [W('wr', 88, 157, 300, 0), W('(人', 264, 817, 300, 8), W('78.8%', 990, 1089, 300, 75)] },
+      { words: [W('关', 88, 157, 400), W('站。', 138, 246, 400, 0), W('(3', 264, 557, 400, 0), W('418%6', 994, 1089, 400, 58)] },
+    ]]);
+    const keys = Object.keys(r.audience.interest);
+    expect(keys).toHaveLength(4); // every row kept, none lost
+    expect(keys[0]).toBe('娱乐');
+    expect(r.audience.interest['娱乐'].status).toBe('check'); // glued word → read again from the image
+    expect(keys).not.toContain('人'); // bar junk is not a name
+    expect(Object.values(r.audience.interest).at(-1).candidate).toBe(0.418);
+  });
+});
