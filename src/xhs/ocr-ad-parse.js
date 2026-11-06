@@ -65,6 +65,8 @@ export function parseAdOrder(linesPerImage) {
   let budgetUsedUp = false;
   const noteCountSeen = () => f.noteCount?.value ?? 1;
   const noteText = []; // text under the thumbnails of a multi-note order (titles, often garbled)
+  let titleInNotes = false;
+  const noteLines = []; // the same lines, with positions (a single note's title sits right of its thumbnail)
   let carrySection = ''; // a chart can continue at the top of the next screenshot
   for (const [img, lines] of linesPerImage.entries()) {
     // Rows above this screenshot's first chart heading are the end of the chart before it (the
@@ -101,7 +103,10 @@ export function parseAdOrder(linesPerImage) {
       if (/订单详情|详情|咨询/.test(text)) belowTitle = true;
       let m;
       if (/展开详情|收起详情|已消耗金额|订单信息/.test(text)) inNotes = false;
-      if (inNotes) noteText.push(line.words.map((w) => w.text).join(''));
+      if (inNotes) {
+        noteText.push(line.words.map((w) => w.text).join(''));
+        noteLines.push(line);
+      }
       if (/本订单共推广/.test(text)) inNotes = true;
       // Status / title / publish time
       if (/推广完成|推广结束/.test(text)) set('status', ok('done', text, 100));
@@ -112,8 +117,9 @@ export function parseAdOrder(linesPerImage) {
       // Order / delivery start time (shown in 订单管理 and the expanded order details).
       if ((m = /(?:下单时间|创建时间|投放时间|开始时间|推广时间|订单时间):?(\d{4}-\d{2}-\d{2})(\d{2}:\d{2})/.exec(text))) set('startedAt', judge(`${m[1]}T${m[2]}`, m[0], Math.max(c, 80)));
       // The note title: below the 订单详情 title bar (the status bar "10:38 … 95 |" is not it), with Chinese text.
-      if (belowTitle && /vlog|Vlog|VLOG|viog|\|/.test(text) && (text.match(/[\u4e00-\u9fff]/g) ?? []).length >= 2 && !/作者|发布|互动|订单|消耗|保障/.test(text) && text.length > 6 && !f.title && noteCountSeen() <= 1) {
+      if (belowTitle && /vlog|Vlog|VLOG|viog|\|/.test(text) && !/%|关注薯条|小助手|推广技巧|课堂|帮助/.test(text) && (text.match(/[\u4e00-\u9fff]/g) ?? []).length >= 2 && !/作者|发布|互动|订单|消耗|保障/.test(text) && text.length > 6 && !f.title && noteCountSeen() <= 1) {
         set('title', check(line.words.map((w) => w.text).join('').replace(/^[^A-Za-z一-鿿]+/, '').replace(/^[全:o\s]+/, ''), text, c, 'text'));
+        titleInNotes = inNotes;
       }
       // Result vs estimate: "点赞收藏量 27 / 预估转化 16 ~ 71", "点赞收藏量 60 效果极好 / 预估转化 11 ~ 53",
       // "赞藏量 61 / 目标区间 16~63" (the label is often misread, the numbers around "/" are what count).
@@ -370,6 +376,20 @@ export function parseAdOrder(linesPerImage) {
     }
   }
   markMismatch(f);
+  // A single note without "vlog" or "|" in its title: the lines right of the thumbnail, up to the
+  // 笔记作者 line ("韩国人在海南🏠布置新家、10h上" + "海旅行").
+  if (!(f.title && titleInNotes) && (f.noteCount?.value ?? 1) === 1 && noteLines.length) {
+    const right = Math.max(...noteLines.flatMap((l) => l.words.map((w) => w.bbox?.x1 ?? 0)));
+    const parts = [];
+    for (const l of noteLines) {
+      const tx = squeeze(l.words.map((w) => w.text).join(''));
+      if (/作者|发布|时间/.test(tx)) break;
+      const ws = l.words.filter((w) => w.bbox && w.bbox.x0 > right * 0.27);
+      if (ws.length) parts.push(ws.map((w) => w.text).join(''));
+    }
+    const title = parts.join('').trim();
+    if ((title.match(/[\u4e00-\u9fff]/g) ?? []).length >= 4) f.title = check(title, title, 50, 'text');
+  }
   return { fields: f, audience, noteText: noteText.join(' ') };
 }
 
@@ -411,7 +431,12 @@ export function nameGuess(raw, section) {
   const t = String(raw ?? '').replace(/[^\u4e00-\u9fff]/g, '');
   if (!vocab || !t) return { name: '', sure: false };
   const exact = [...vocab].sort((a, b) => b.length - a.length).find((v) => t.includes(v)); // "体育运动" before "运动"
-  if (exact) return { name: exact, sure: true };
+  if (exact) {
+    // A longer name that the reading has with one character misread ("家居家关" → 家居家装, not 家居).
+    const near = vocab.filter((v) => v.length > exact.length && v.includes(exact) && [...Array(Math.max(0, t.length - v.length + 1)).keys()].some((i) => [...v].filter((ch, j) => t[i + j] !== ch).length <= 1));
+    if (near.length === 1) return { name: near[0], sure: true };
+    return { name: exact, sure: true };
+  }
   let best = '';
   let bestScore = 0;
   let tie = false;
@@ -559,6 +584,34 @@ export function completeBySum(list, expectedCount = 0) {
       // Each other dot-less reading must be its own digits with the dot restored (e.g. "319" = 31.9%).
       const othersFit = others.every(([, x]) => x.reason !== 'format' || String(Math.round(val(x) * 1000)) === digitsOf(x));
       if (((left > 0 && read.length >= 2 && want.startsWith(read.slice(0, 2))) || (left === 0 && /^0+$/.test(read))) && othersFit) {
+        list[k] = { ...ok(left, r.text, r.conf), at: r.at, guessName: r.guessName, confirmedBy: 'sum' };
+        for (const [key, x] of others) if (x.status !== 'ok') list[key] = { ...ok(val(x), x.text, x.conf), at: x.at, guessName: x.guessName, carried: x.carried, confirmedBy: 'sum' };
+        return;
+      }
+    }
+  }
+  // One reading lost its first digit ("1.3%" for 11.3%): when exactly one entry becomes what is left
+  // by putting a digit in front, and the others are as read, that is the reading.
+  if (entries.every(([, r]) => val(r) != null)) {
+    // (Shares are rounded, so the six may add up to 99.9–100.1%.)
+    const fits = [];
+    for (const [k, r] of entries) {
+      const read = digitsOf(r);
+      if (!read) continue;
+      const rest = entries.filter(([key]) => key !== k).reduce((a, [, x]) => a + val(x), 0);
+      for (let d = 1; d <= 9; d++) {
+        const v = Number(`${d}${read}`) / 1000;
+        // Reading "41%" as 14.1 needs a lost digit and a lost dot; "1.3%" as 11.3 only the digit.
+        if (Math.abs(rest + v - 1) < 0.0015) fits.push([k, r, v, /\./.test(r.text ?? '') ? 1 : 2]);
+      }
+    }
+    const fewest = Math.min(...fits.map((x) => x[3]));
+    const best = fits.filter((x) => x[3] === fewest);
+    if (best.length === 1) {
+      const [k, r, left] = best[0];
+      const others = entries.filter(([key]) => key !== k);
+      const othersFit = others.every(([, x]) => x.reason !== 'format' || String(Math.round(val(x) * 1000)) === digitsOf(x));
+      if (othersFit) {
         list[k] = { ...ok(left, r.text, r.conf), at: r.at, guessName: r.guessName, confirmedBy: 'sum' };
         for (const [key, x] of others) if (x.status !== 'ok') list[key] = { ...ok(val(x), x.text, x.conf), at: x.at, guessName: x.guessName, carried: x.carried, confirmedBy: 'sum' };
         return;

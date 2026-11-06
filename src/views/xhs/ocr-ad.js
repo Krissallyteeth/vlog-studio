@@ -8,7 +8,7 @@ import { putMany } from '../../xhs/db.js';
 import { AD_METRICS, AD_REVIEW_FIELDS, checkOrder, completeBySum, knownName, nameGuess, parseAdOrder } from '../../xhs/ocr-ad-parse.js';
 import { ordered } from '../../xhs/stats.js';
 import { LATER, memoAds, memoMoney, memoToReplace, mergeOrderGroups, orderAds, placeOrder, rememberTitle, splitMoney } from '../../xhs/ad-orders.js';
-import { listPosts, savePosts, stageFromDates } from '../../xhs/store.js';
+import { listPosts, normalizePost, savePosts, stageFromDates } from '../../xhs/store.js';
 import { xhsPage } from './shell.js';
 
 /*
@@ -563,6 +563,9 @@ export async function renderOcrAd([postId], { isCurrent }) {
   }
 
   const recentPosts = (o) => recentBefore(posts, o.values.startedAt, o.postIds);
+  // A post made here for a note not in the app yet (title typed, date from the screenshot).
+  const drafts = new Map();
+  const draftOf = (o) => drafts.get(o.postIds[0]) ?? null;
   function drawOrders() {
     if (!state.orders.length) {
       result.innerHTML = `<p class="card text-[14px] text-muted">${esc(t('oad.none'))}</p>`;
@@ -590,7 +593,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
                 <details class="mt-1 text-[12px] text-muted"><summary>${esc(t('oad.readNotesShow'))}</summary>${esc(t('oad.readNotes', { text: o.parsed.noteText || '?' }))}</details>
                 <p class="mt-1 text-[12px] text-muted">${esc(t(o.values.startedAt ? 'oad.multiStage' : 'oad.stageNeedStart'))}</p></div>`
                 : `<div class="mt-2 grid gap-3 sm:grid-cols-[2fr_1fr]">
-              <label class="field"><span class="field-label">${esc(t('ocr.post'))}</span><select class="input" data-post="${oi}" data-slot="0"><option value="">${esc(t('oad.choosePost'))}</option>${posts.map((p) => `<option value="${esc(p.id)}" ${p.id === o.postIds[0] ? 'selected' : ''}>${esc(`${p.date} · ${p.title}`)}</option>`).join('')}</select>
+              <label class="field"><span class="field-label">${esc(t('ocr.post'))}</span><select class="input" data-post="${oi}" data-slot="0"><option value="">${esc(t('oad.choosePost'))}</option><option value="@new">${esc(t('oad.newPost'))}</option>${posts.map((p) => `<option value="${esc(p.id)}" ${p.id === o.postIds[0] ? 'selected' : ''}>${esc(`${p.date} · ${p.title}`)}</option>`).join('')}</select>${draftOf(o) ? `<span class="mt-2 grid grid-cols-[2fr_1fr] gap-2"><input class="input" data-newtitle="${oi}" value="${esc(draftOf(o).title)}" placeholder="${esc(t('oad.newTitlePh'))}" aria-label="${esc(t('xg.title'))}" /><input class="input tabular-nums" data-newdate="${oi}" value="${esc(draftOf(o).date)}" placeholder="YYYY-MM-DD" aria-label="${esc(t('oad.newDate'))}" /></span><span class="text-[12px] text-muted">${esc(t('oad.newPostHelp', { title: o.values.title ?? o.parsed.fields.title?.candidate ?? '?' }))}</span>` : ''}
                 <span class="text-[12px] text-muted">${esc(o.match ? t(o.match.byStart ? 'oad.matchedStart' : o.match.sameDay ? 'oad.matched' : 'oad.matchedNear', { title: o.match.post.title, date: o.match.post.date }) : t('oad.noMatch'))} · ${esc(t('oad.read', { title: f.title?.value ?? f.title?.candidate ?? '?', at: (f.publishedAt?.value ?? f.publishedAt?.candidate ?? '?').replace('T', ' ') }))}</span></label>
               <label class="field"><span class="field-label">${esc(t('ads.stage'))}</span><input class="input" data-stage="${oi}" list="oad-stages" value="${esc(o.stage)}" placeholder="${esc(autoStage(o) || 'D+n')}" /><span class="text-[12px] text-muted" data-stage-note="${oi}">${esc(stageNote(o))}</span></label>
             </div>${singleExtras(o, oi)}`
@@ -627,6 +630,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
     const linked = (o) => o.postIds.filter((id) => id !== LATER);
     const problems = chosen.filter((o) => o.postIds.some((id) => !id) || !linked(o).length || new Set(linked(o)).size !== linked(o).length || o.values.spend == null);
     if (problems.length) return toast(t('oad.missingRequired', { n: problems.length }), { tone: 'error' });
+    if (chosen.some((o) => draftOf(o) && (!draftOf(o).title || !/^\d{4}-\d{2}-\d{2}$/.test(draftOf(o).date)))) return toast(t('oad.newPostNeeds'), { tone: 'error' });
     const list = chosen.map((o) => {
       const audience = { gender: {}, age: {}, city: {}, interest: {} };
       for (const inp of result.querySelectorAll(`[data-aud^="${state.orders.indexOf(o)}|"]`)) {
@@ -663,6 +667,14 @@ export async function renderOcrAd([postId], { isCurrent }) {
     if (!ok) return;
     const fresh = await listPosts();
     const changed = new Set();
+    // New posts made on this screen are saved together with their orders.
+    for (const o of chosen) {
+      const d = draftOf(o);
+      if (d && !fresh.some((p) => p.id === d.id)) {
+        fresh.push(d);
+        changed.add(d);
+      }
+    }
     for (const { o, entries } of list) {
       const shots = [];
       for (const im of o.imgs) {
@@ -690,7 +702,14 @@ export async function renderOcrAd([postId], { isCurrent }) {
     }
     if (e.target.dataset.post) {
       const o = state.orders[Number(e.target.dataset.post)];
-      o.postIds[Number(e.target.dataset.slot ?? 0)] = e.target.value;
+      let v = e.target.value;
+      if (v === '@new') {
+        const d = normalizePost({ id: uid(), no: Math.max(0, ...posts.map((p) => p.no ?? 0)) + 1, title: '', date: String(o.values.publishedAt ?? o.values.startedAt ?? '').slice(0, 10), validity: '유효' });
+        drafts.set(d.id, d);
+        posts.unshift(d);
+        v = d.id;
+      }
+      o.postIds[Number(e.target.dataset.slot ?? 0)] = v;
       o.replace = undefined;
       keepEdits(Number(e.target.dataset.post));
       drawOrders();
@@ -710,6 +729,12 @@ export async function renderOcrAd([postId], { isCurrent }) {
     }
   });
   root.addEventListener('input', (e) => {
+    const nt = e.target.dataset.newtitle ?? e.target.dataset.newdate;
+    if (nt != null) {
+      const d = draftOf(state.orders[Number(nt)]);
+      if (d && e.target.dataset.newtitle != null) d.title = e.target.value.trim();
+      if (d && e.target.dataset.newdate != null && /^\d{4}-\d{2}-\d{2}$/.test(e.target.value.trim())) d.date = e.target.value.trim();
+    }
     if (e.target.dataset.stage) {
       state.orders[Number(e.target.dataset.stage)].stage = e.target.value;
       refreshStage(Number(e.target.dataset.stage));

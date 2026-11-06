@@ -1313,4 +1313,9 @@ export default {
   "oad.later": "不在应用中的笔记（无数据）",
   "oad.laterHelp": "{n} 篇笔记不在应用中：其分摊花费计入订单总额和月度统计，但不分配给任何笔记。",
   "oad.laterN": "含 {n} 篇不在应用中的笔记",
+  "oad.newPost": "+ 新建笔记（应用中还没有）",
+  "oad.newTitlePh": "笔记名称（例：上海）",
+  "oad.newDate": "发布日期",
+  "oad.newPostHelp": "截图中的标题：{title}。发布日期取自截图。保存后会新建笔记并关联此推广。浏览量等数据留空，可稍后补充。",
+  "oad.newPostNeeds": "请输入新笔记的名称和发布日期（YYYY-MM-DD）。",
 };

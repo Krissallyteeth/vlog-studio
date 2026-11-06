@@ -1313,4 +1313,9 @@ export default {
   "oad.later": "Post not in the app (no data)",
   "oad.laterHelp": "{n} note(s) not in the app: their share of the spend counts in the order total and monthly figures, but goes to no post.",
   "oad.laterN": "incl. {n} note(s) not in the app",
+  "oad.newPost": "+ Add as a new post (not in the app yet)",
+  "oad.newTitlePh": "Post name (e.g. 上海)",
+  "oad.newDate": "Publish date",
+  "oad.newPostHelp": "Title in the screenshot: {title}. The date comes from the screenshot. Saving creates the post and links this ad. Its results (views etc.) stay blank until you fill them in.",
+  "oad.newPostNeeds": "Enter the new post’s name and publish date (YYYY-MM-DD).",
 };

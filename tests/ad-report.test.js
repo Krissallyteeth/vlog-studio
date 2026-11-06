@@ -533,3 +533,23 @@ describe('interest chart read on two screenshots', () => {
     expect(out['影视'].status).toBe('ok');
   });
 });
+
+describe('single-note order screen: title, ages, names', () => {
+  const A = (label, value, conf = 90) => ({ words: [{ text: label, confidence: 90, bbox: { x0: 70, y0: 0, x1: 160, y1: 20 } }, { text: '国', confidence: 0, bbox: { x0: 190, y0: 0, x1: 400, y1: 20 } }, { text: value, confidence: conf, bbox: { x0: 780, y0: 0, x1: 850, y1: 20 } }] });
+  const W = (text, x0, x1) => ({ text, confidence: 90, bbox: { x0, y0: 0, x1, y1: 30 } });
+  it('a title without "vlog" is read right of the thumbnail, not from an age row "18以下 | 10%"', async () => {
+    const { parseAdOrder } = await import('../src/xhs/ocr-ad-parse.js');
+    const r = parseAdOrder([[L('订单 详情'), L('本 订单 共 推 广 1 篇 笔记 。'), { words: [W('—', 135, 173), W('韩国人在海南', 266, 495), W('布置新家、10h上', 562, 826)] }, { words: [W('上', 87, 175), W('海旅行', 278, 373)] }, { words: [W('笔记', 276, 329), W('作者', 330, 384)] }, L('发 布 时 间 : 2026-09-27 19:20:06'), L('订单 信息'), L('年 龄 分 布'), A('18以下|', '10%')]]);
+    expect(r.fields.title.candidate).toBe('韩国人在海南布置新家、10h上海旅行');
+  });
+  it('one age lost its first digit ("1.3%" for 11.3%) and the six add up to 99.9%', async () => {
+    const { parseAdOrder } = await import('../src/xhs/ocr-ad-parse.js');
+    const r = parseAdOrder([[L('年 龄 分 布'), A('18以下', '10%', 75), A('18~23', '41%', 72), A('24~30', '25.8%', 64), A('31~40', '53.6%'), A('41~50', '1.3%', 54), A('50以上', '41%6', 66)]]);
+    expect(Object.values(r.audience.age).map((x) => [x.status, x.value])).toEqual([['ok', 0.01], ['ok', 0.041], ['ok', 0.258], ['ok', 0.536], ['ok', 0.113], ['ok', 0.041]]);
+  });
+  it('a longer interest name with one character misread wins over the short one inside it', async () => {
+    const { nameGuess } = await import('../src/xhs/ocr-ad-parse.js');
+    expect(nameGuess('家居家关', 'interest')).toEqual({ name: '家居家装', sure: true });
+    expect(nameGuess('家居', 'interest')).toEqual({ name: '家居', sure: true });
+  });
+});
