@@ -233,6 +233,57 @@ export async function refineNumbers(parsed, sources) {
   return keys.length;
 }
 
+/**
+ * Every number of the report grid is read a second time on its own (word cut out, cleaned,
+ * enlarged, digits only). OCR can be confidently wrong ("86" read as "80" at 91%): a second
+ * reading that disagrees turns the value into a choice between both readings, shown with its
+ * screenshot strip. Agreeing readings stay confirmed.
+ */
+export async function verifyReportNumbers(parsed, sources) {
+  const f = parsed.fields;
+  const keys = AD_METRICS.map(([k]) => k).filter((k) => f[k]?.status === 'ok' && f[k].at?.word && /[0689]/.test(String(f[k].value)));
+  if (!keys.length || typeof document === 'undefined') return 0;
+  const { shapeCheck } = await import('../../xhs/digit-shape.js');
+  const bitmaps = new Map();
+  let flagged = 0;
+  for (const k of keys) {
+    const { img, word } = f[k].at;
+    if (!bitmaps.has(img)) {
+      const src = sources[img];
+      const blob = typeof src === 'string' ? await (await fetch(src)).blob() : src;
+      bitmaps.set(img, await createImageBitmap(blob).catch(() => null));
+    }
+    const bmp = bitmaps.get(img);
+    if (!bmp) continue;
+    const pad = 6;
+    const S = 3;
+    const x0 = Math.max(0, word.x0 - pad);
+    const y0 = Math.max(0, word.y0 - pad);
+    const w = Math.min(bmp.width, word.x1 + pad) - x0;
+    const h = Math.min(bmp.height, word.y1 + pad) - y0;
+    if (w <= 0 || h <= 0) continue;
+    const c = document.createElement('canvas');
+    c.width = w * S;
+    c.height = h * S;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(bmp, x0, y0, w, h, 0, 0, c.width, c.height);
+    const a = g.getImageData(0, 0, c.width, c.height).data;
+    const ink = new Uint8Array(c.width * c.height);
+    for (let i = 0, j = 0; i < a.length; i += 4, j++) {
+      const mx = Math.max(a[i], a[i + 1], a[i + 2]);
+      ink[j] = mx < 150 && mx - Math.min(a[i], a[i + 1], a[i + 2]) < 45 ? 1 : 0;
+    }
+    // The digit shapes (holes of 0/6/8/9) disagree with the read: offer both, never pick silently.
+    const n = shapeCheck(String(f[k].value), ink, c.width, c.height);
+    if (n != null && n !== f[k].value) {
+      f[k] = { status: 'conflict', options: [{ ...f[k], value: n, text: `${n}` }, { ...f[k] }], text: f[k].text, at: f[k].at, reason: 'reread' };
+      flagged++;
+    }
+  }
+  return flagged;
+}
+
 export async function renderOcrAd([postId], { isCurrent }) {
   const posts = ordered(await listPosts()).reverse();
   if (!isCurrent()) return null;
@@ -317,6 +368,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
       const parsed = parseAdOrder(imgs.map((im) => im.lines));
       await refineAudience(parsed, imgs.map((im) => im.file)).catch(() => 0);
       await refineNumbers(parsed, imgs.map((im) => im.file)).catch(() => 0);
+      await verifyReportNumbers(parsed, imgs.map((im) => im.file)).catch(() => 0);
       parsedGroups.push(parsed);
     }
     const bonuses = couponBonuses();

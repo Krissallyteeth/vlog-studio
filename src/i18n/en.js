@@ -1298,4 +1298,5 @@ export default {
   "oad.miss.other": "Not in these screenshots",
 
   "ocr.why.derived": "Not readable; calculated as top of the estimate + amount above it",
+  "ocr.why.reread": "The digit shapes (holes of 0·6·8·9) suggest a different number — compare with the crop and pick",
 };

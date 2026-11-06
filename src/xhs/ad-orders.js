@@ -179,8 +179,11 @@ export function mergeOrderGroups(groups, fieldsOf) {
 const CONFLICT_KEYS = ['orderNo', 'startedAt', 'exposure', 'reads', 'likes', 'favorites', 'comments', 'follows', 'result', 'noteCount'];
 export function sameOrderGroup(a, b) {
   const pub = (f) => f.publishedAt?.text?.match(/\d{2}:\d{2}:\d{2}/)?.[0] && `${(f.publishedAt.value ?? f.publishedAt.candidate ?? '').slice(0, 10)} ${f.publishedAt.text.match(/\d{2}:\d{2}:\d{2}/)[0]}`;
-  const pa = pub(a);
-  if (!pa || pa !== pub(b)) return false;
+  const ok = (f, k) => (f[k]?.status === 'ok' ? JSON.stringify(f[k].value) : null);
+  // Same order when it is the same note (publish time to the second), or — for orders promoting
+  // several notes, which show no publish time — the same order number or the same order time.
+  const same = (x, y) => x != null && x === y;
+  if (!(same(pub(a), pub(b)) || same(ok(a, 'orderNo'), ok(b, 'orderNo')) || same(ok(a, 'startedAt'), ok(b, 'startedAt')))) return false;
   const v = (f, k) => (f[k]?.status === 'ok' ? JSON.stringify(f[k].value) : null);
   return CONFLICT_KEYS.every((k) => v(a, k) == null || v(b, k) == null || v(a, k) === v(b, k));
 }

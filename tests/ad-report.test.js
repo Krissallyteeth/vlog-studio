@@ -450,6 +450,24 @@ describe('more wording of order screens', () => {
     expect(r.fields.beatPct.value).toBe(0.6);
     expect(r.fields.result).toMatchObject({ status: 'ok', value: 36 }); // 36 − 29 = bonus 7
   });
+  it('"成本领先 N% 的同类订单"', () => {
+    const r = parseAdOrder([[L('效果 极 好 ， 成本 领先 70% 的 同类 订单')]]);
+    expect(r.fields.beatPct.value).toBe(0.7);
+  });
+});
+
+describe('a multi-note order captured in several screenshots (no publish time)', () => {
+  it('groups with the same 下单时间 and no conflicting values are one order', async () => {
+    const { mergeOrderGroups } = await import('../src/xhs/ad-orders.js');
+    const head = [[L('本 订单 共 推 广 3 篇 笔记 。'), L('下 单 时间 2026-05-02 21:10'), L('推广 目标 粉丝 关注 量')]];
+    const money = [[L('下 单 时间 2026-05-02 21:10'), L('订单 金额 30 元'), L('实 付 金 额 30 元')]];
+    const report = [[L('曝光 量 阅读 量 点 赞 量 收藏 量'), L('700 120 11 3')]];
+    const other = [[L('本 订单 共 推 广 3 篇 笔记 。'), L('下 单 时间 2026-05-09 08:00')]];
+    const fieldsOf = (g) => parseAdOrder(g).fields;
+    expect(mergeOrderGroups([head, money], fieldsOf)).toHaveLength(1);
+    expect(mergeOrderGroups([head, other], fieldsOf)).toHaveLength(2);
+    expect(mergeOrderGroups([head, money, report], fieldsOf).length).toBeLessThanOrEqual(2);
+  });
 });
 
 describe('result line without its "/"', () => {

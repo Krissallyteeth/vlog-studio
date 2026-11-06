@@ -1298,4 +1298,5 @@ export default {
   "oad.miss.other": "本次截图中没有该项",
 
   "ocr.why.derived": "未能识别，按预估上限 + 超额部分计算",
+  "ocr.why.reread": "按数字形状（0·6·8·9 的孔）判断与识别结果不同，请对照截图选择",
 };
