@@ -184,6 +184,14 @@ export function parseAdOrder(linesPerImage) {
     confirm('spend', 'costPerResult');
     if (budgetUsedUp && val('budget') === val('spend')) confirm('budget', 'spend'); // "已完成全部预算消耗"
   }
+  // "59 效果极好" read as "598": top of the estimate + bonus = the result, and the reading starts with it.
+  if (val('bonus') != null && val('result') != null && Array.isArray(val('estimate'))) {
+    const expected = val('estimate')[1] + val('bonus');
+    const read = String(val('result'));
+    if (read !== String(expected) && read.length > String(expected).length && read.startsWith(String(expected)) && f.result.status !== 'ok') {
+      f.result = { ...check(expected, f.result.text, f.result.conf, 'format'), at: f.result.at };
+    }
+  }
   if (val('bonus') != null && val('result') != null && Array.isArray(val('estimate')) && val('result') - val('estimate')[1] === val('bonus')) {
     confirm('result', 'bonus');
     confirm('bonus', 'result');

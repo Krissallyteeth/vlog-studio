@@ -206,3 +206,15 @@ describe('order → post without a readable publish time', () => {
     expect(r.fields.startedAt.at).toMatchObject({ img: 0 }); // where it was read (shown on the review screen)
   });
 });
+
+describe('goal result misread with an extra digit', () => {
+  it('"59 效果极好" read as "598" is corrected by estimate top + bonus (56 + 3)', () => {
+    const r = parseAdOrder([[L('点 赞 收藏 量 598 / 预 估 转 化 17 ~ 56', 40), L('超额 获 赠 3', 40)]]);
+    expect(r.fields.result).toMatchObject({ status: 'ok', value: 59 });
+    expect(r.fields.bonus).toMatchObject({ status: 'ok', value: 3 });
+  });
+  it('a reading that does not fit is left for checking', () => {
+    const r = parseAdOrder([[L('点 赞 收藏 量 71 / 预 估 转 化 17 ~ 56', 40), L('超额 获 赠 3', 40)]]);
+    expect(r.fields.result.status).toBe('check');
+  });
+});
