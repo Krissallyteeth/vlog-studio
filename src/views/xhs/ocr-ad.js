@@ -136,7 +136,8 @@ export async function refineAudience(parsed, sources) {
     // A few tries at different sizes (small text reads differently at each).
     for (const scale of [2, 1, 3]) {
       if (name) break;
-      const read = await recognizeLine(clean(bmp, Math.max(0, r.at.box.x0 - pad), y0, W * 0.25, y1, scale)).catch(() => null);
+      // Always from the left edge of the card: the row may have been read without its name.
+      const read = await recognizeLine(clean(bmp, Math.min(Math.max(0, r.at.box.x0 - pad), W * 0.04), y0, W * 0.25, y1, scale)).catch(() => null);
       const g = read ? nameGuess(read.text, sec) : { name: '' };
       if (g.name && g.sure) name = g.name;
     }

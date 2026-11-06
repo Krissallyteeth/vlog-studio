@@ -64,6 +64,7 @@ export function parseAdOrder(linesPerImage) {
   for (const [img, lines] of linesPerImage.entries()) {
     let section = '';
     let inNotes = false;
+    let pendingName = null; // a chart name read as its own line ("娱乐"), waiting for its number line
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       if (!line?.words?.length) continue;
@@ -137,8 +138,14 @@ export function parseAdOrder(linesPerImage) {
           // Two shares that add up to exactly 100% confirm each other.
           audience.gender = sumOk ? { male: ok(male, `${g[1]}%`, c), female: ok(female, `${g[2]}%`, c) } : { male: check(male, `${g[1]}%`, c, 'sum'), female: check(female, `${g[2]}%`, c, 'sum') };
         }
+      } else if (section && section !== 'gender' && !/\d/.test(text) && /^[\u4e00-\u9fff]{1,6}$/.test(text) && !/分布|画像/.test(text)) {
+        pendingName = line; // OCR split the row: the number comes on the next line
       } else if (section && /\d/.test(text)) {
-        const row = audienceRow(line, section);
+        // Name and number on separate lines at the same height: put them back together.
+        const ln = pendingName && sameRow(pendingName, line) && !hasLeftName(line) ? { words: [...pendingName.words, ...line.words] } : line;
+        pendingName = null;
+        if (ln !== line) here = { img, box: boxOf([ln]) };
+        const row = audienceRow(ln, section);
         if (row) {
           const list = audience[section];
           let key = row.label || `#${Object.keys(list).length + 1}`;
@@ -157,6 +164,15 @@ export function parseAdOrder(linesPerImage) {
     audience.city = Object.fromEntries(Object.entries(audience.city).map(([k, v]) => [k === lastCity ? '其他' : k, v]));
   }
   for (const sec of ['age', 'city']) completeBySum(audience[sec], sec === 'age' ? AGE_LABELS.length : 0);
+  // OCR sometimes outputs the first interest row before its heading, so it lands under 城市分布. When
+  // the named regions already add up to 100%, an extra unnamed "region" is that interest row.
+  const named = Object.entries(audience.city).filter(([k]) => PROVINCES.includes(k));
+  const namedSum = named.reduce((a, [, r]) => a + (r.value ?? r.candidate ?? 0), 0);
+  const strays = Object.entries(audience.city).filter(([k]) => !PROVINCES.includes(k));
+  if (strays.length && named.length >= 3 && Math.abs(namedSum - 1) < 0.0035) {
+    audience.city = Object.fromEntries(named);
+    audience.interest = Object.fromEntries([...strays.map(([, r], i) => [`#${i + 1}`, { ...r, status: 'check', candidate: r.value ?? r.candidate, value: undefined, reason: 'text' }]), ...Object.entries(audience.interest)]);
+  }
   // Spend "50/50 元": the slash is often read as "1" ("50150") or as "/1" ("50/150").
   here = null;
   for (const { raw, c, at } of spendTexts) {
@@ -324,6 +340,21 @@ export function completeBySum(list, expectedCount = 0) {
     const want = String(Math.round(left * 1000));
     if (left > 0 && read && want.startsWith(read.slice(0, 2)) && (read.length <= want.length || read.startsWith(want))) list[k] = { ...ok(left, r.text, r.conf), at: r.at, confirmedBy: 'sum' };
   }
+}
+
+/** Two OCR lines on the same row of a chart (their vertical centres within a line height). */
+function sameRow(a, b) {
+  const A = boxOf([a]);
+  const B = boxOf([b]);
+  if (!A || !B) return false;
+  return Math.abs((A.y0 + A.y1) / 2 - (B.y0 + B.y1) / 2) < Math.max(A.y1 - A.y0, B.y1 - B.y0) * 1.2 && A.x1 < B.x0;
+}
+/** True when a line starts with Chinese text at the far left (it carries its own name). */
+function hasLeftName(line) {
+  const ws = line.words.filter((w) => w.bbox);
+  if (!ws.length) return false;
+  const right = Math.max(...ws.map((w) => w.bbox.x1));
+  return ws.some((w) => /[\u4e00-\u9fff]/.test(w.text) && w.bbox.x0 < right * 0.3);
 }
 
 /** Bounding box around some OCR lines (image pixels). */

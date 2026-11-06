@@ -287,3 +287,32 @@ describe('audience: page noise and merged lines', () => {
     expect(Object.keys(r.audience.interest)).toEqual(['娱乐', '生活记录']);
   });
 });
+
+describe('audience: a row split into two OCR lines', () => {
+  const W = (text, x0, y0, conf = 90) => ({ text, confidence: conf, bbox: { x0, y0, x1: x0 + 60, y1: y0 + 20 } });
+  it('"娱乐" on one line and "92.4%" on the next (same height) are one row', () => {
+    const r = parseAdOrder([[
+      { words: [W('观众兴趣分布', 70, 0)] },
+      { words: [W('娱乐', 70, 40)] },
+      { words: [W('国', 300, 41, 0), W('92.4%', 780, 41)] },
+      { words: [W('生活记录', 70, 80), W('国', 300, 80, 0), W('91.8%', 780, 80)] },
+    ]]);
+    expect(r.audience.interest['娱乐']).toMatchObject({ status: 'ok', value: 0.924 });
+    expect(Object.keys(r.audience.interest)).toEqual(['娱乐', '生活记录']);
+  });
+});
+
+describe('audience: first interest row output before its heading', () => {
+  const W = (text, x0, y0, conf = 90) => ({ text, confidence: conf, bbox: { x0, y0, x1: x0 + 60, y1: y0 + 20 } });
+  const row = (n, v, y) => ({ words: [W(n, 70, y), W('国', 300, y, 0), W(v, 780, y)] });
+  it('is moved from the regions (already 100%) to the top of the interests', () => {
+    const r = parseAdOrder([[
+      { words: [W('城市分布', 70, 0)] }, row('贵州', '60.0%', 40), row('广东', '30.0%', 80), row('其他', '10.0%', 120),
+      { words: [W('x', 70, 200, 10), W('国', 300, 200, 0), W('92.4%', 780, 200)] }, // 娱乐 row, name unreadable, before the heading
+      { words: [W('观众兴趣分布', 70, 160)] }, row('美食', '87.0%', 240),
+    ]]);
+    expect(Object.keys(r.audience.city)).toEqual(['贵州', '广东', '其他']);
+    expect(Object.keys(r.audience.interest)).toEqual(['#1', '美食']);
+    expect(r.audience.interest['#1']).toMatchObject({ status: 'check', candidate: 0.924 });
+  });
+});
