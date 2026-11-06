@@ -1267,4 +1267,6 @@ export default {
   "oad.matchedStart": "未能识别发布时间，已选择推广开始前最后发布的帖子。请确认：{title}（{date}）",
 
   "adr.c.monthSpend": "{cur} 实际推广花费 {spend}（上期 {prev}：{spendPrev}）。",
+
+  "oad.audName": "未能识别名称 — 请对照截图输入（如：美食）",
 };

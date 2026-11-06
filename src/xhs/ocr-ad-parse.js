@@ -148,6 +148,12 @@ export function parseAdOrder(linesPerImage) {
       }
     }
   }
+  // 城市分布 lists the top regions and ends with 其他 (everyone else): an unnamed last row is 其他.
+  const cityKeys = Object.keys(audience.city);
+  const lastCity = cityKeys.at(-1);
+  if (cityKeys.length >= 3 && lastCity && !PROVINCES.includes(lastCity) && !cityKeys.includes('其他')) {
+    audience.city = Object.fromEntries(Object.entries(audience.city).map(([k, v]) => [k === lastCity ? '其他' : k, v]));
+  }
   for (const sec of ['age', 'city']) completeBySum(audience[sec], sec === 'age' ? AGE_LABELS.length : 0);
   // Spend "50/50 元": the slash is often read as "1" ("50150") or as "/1" ("50/150").
   here = null;
@@ -205,11 +211,14 @@ const PROVINCES = ['北京', '天津', '上海', '重庆', '河北', '山西', '
 const INTERESTS = ['生活记录', '娱乐', '美食', '情感', '影视', '时尚', '旅游', '宠物', '美妆', '护肤', '穿搭', '运动', '健身', '音乐', '游戏', '科技', '数码', '教育', '学习', '母婴', '家居', '家装', '汽车', '体育', '摄影', '读书', '二次元', '动漫', '搞笑', '职场', '财经', '健康', '婚嫁', '出行', '人文', '艺术', '手工', '绘画', '舞蹈', '明星', '综艺', '潮流', '户外', '露营', '咖啡', '探店', '美甲', '减肥', '亲子', '留学', '校园', '文化'];
 const WEAK = new Set(['人', '他', '其', '国', '本', '和', '的', '一', '大', '小', '上', '下']);
 
+/** True when an audience label is one of the known names of its chart. */
+export const knownName = (name, section) => (section === 'city' ? PROVINCES : section === 'interest' ? INTERESTS : []).includes(name);
+
 /** Closest known name for a garbled label ("炽乐" → 娱乐, "川" → 四川); '' when nothing fits. */
 export const nameOf = (raw, section) => nameGuess(raw, section).name;
 
 /** { name, sure }: on a tie the more common name (earlier in the list) is offered, not trusted. */
-function nameGuess(raw, section) {
+export function nameGuess(raw, section) {
   const vocab = section === 'city' ? PROVINCES : section === 'interest' ? INTERESTS : null;
   const t = String(raw ?? '').replace(/[^\u4e00-\u9fff]/g, '');
   if (!vocab || !t) return { name: '', sure: false };
@@ -219,9 +228,12 @@ function nameGuess(raw, section) {
   let bestScore = 0;
   let tie = false;
   for (const v of vocab) {
-    const score = [...new Set(v)].filter((ch) => t.includes(ch) && !WEAK.has(ch)).length;
+    const hits = [...new Set(v)].filter((ch) => t.includes(ch) && !WEAK.has(ch));
+    if (!hits.length) continue;
+    // A matching character in the same place counts a little more ("影饮" → 影视, not 摄影).
+    const score = hits.length + hits.filter((ch) => t.indexOf(ch) === v.indexOf(ch)).length * 0.5;
     if (score > bestScore) [best, bestScore, tie] = [v, score, false];
-    else if (score && score === bestScore) tie = true;
+    else if (score === bestScore) tie = true;
   }
   return { name: bestScore ? best : '', sure: bestScore > 0 && !tie };
 }
@@ -237,7 +249,18 @@ function audienceRow(line, section) {
   const right = Math.max(...ws.map((w) => w.bbox.x1));
   const valueWord = [...ws].reverse().find((w) => /\d/.test(w.text) && w.bbox.x0 > right * 0.6);
   if (!valueWord) return null;
-  const labelWords = ws.filter((w) => w.bbox.x0 < right * 0.17 && w !== valueWord);
+  // The name: the leftmost run of Chinese words, up to where the bar starts (a gap or non-Chinese junk).
+  const labelWords = [];
+  for (const w of [...ws].sort((a, b) => a.bbox.x0 - b.bbox.x0)) {
+    if (w === valueWord || w.bbox.x0 > right * 0.3) break;
+    const prev = labelWords.at(-1);
+    if (prev && w.bbox.x0 - prev.bbox.x1 > 24) break;
+    if (!/[\u4e00-\u9fff]/.test(w.text) && !(section === 'age' && /\d/.test(w.text))) {
+      if (labelWords.length) break;
+      continue;
+    }
+    labelWords.push(w);
+  }
   const rawLabel = labelWords.map((w) => w.text).join('');
   let digits = String(valueWord.text).replace(/[^\d.%]/g, '');
   // "11.1%" read as "11196": the % sign became "96".
@@ -258,7 +281,7 @@ function audienceRow(line, section) {
  * Shares of one chart add up to 100%. All read → confirmed together. One unsure → it is what
  * is left, when that agrees with the digits read ("11%" with 11.1% missing).
  */
-function completeBySum(list, expectedCount = 0) {
+export function completeBySum(list, expectedCount = 0) {
   const entries = Object.entries(list);
   if (entries.length < 2 || (expectedCount && entries.length !== expectedCount)) return;
   const val = (r) => r.value ?? r.candidate;

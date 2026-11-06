@@ -5,7 +5,7 @@ import { navigate } from '../../router.js';
 import { $, copyText, esc, openSheet, toast } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { putMany } from '../../xhs/db.js';
-import { AD_METRICS, AD_REVIEW_FIELDS, parseAdOrder } from '../../xhs/ocr-ad-parse.js';
+import { AD_METRICS, AD_REVIEW_FIELDS, completeBySum, knownName, nameGuess, parseAdOrder } from '../../xhs/ocr-ad-parse.js';
 import { ordered } from '../../xhs/stats.js';
 import { memoAds, memoToReplace, orderAds, placeOrder, rememberTitle, splitMoney } from '../../xhs/ad-orders.js';
 import { listPosts, savePosts, stageFromDates } from '../../xhs/store.js';
@@ -76,6 +76,87 @@ export function suggestPosts(posts, text, startedAt) {
 async function copyCandidate(text) {
   if (!text) return;
   toast((await copyText(text)) ? t('ocr.candCopied', { v: text }) : t('ocr.candUsed', { v: text }));
+}
+
+/**
+ * Second look at audience rows whose name (or share) was not read: the name part of the row is cut
+ * out, the coloured bar removed (only dark grey text is kept), enlarged and read again as a single
+ * line. Mutates parsed.audience; returns how many rows were fixed.
+ */
+export async function refineAudience(parsed, sources) {
+  const jobs = [];
+  for (const sec of ['city', 'interest']) {
+    for (const [key, r] of Object.entries(parsed.audience[sec] ?? {})) {
+      if (r.at?.box && (!knownName(key, sec) || r.status !== 'ok')) jobs.push({ sec, key, r });
+    }
+  }
+  if (!jobs.length || typeof document === 'undefined') return 0;
+  const { recognizeLine } = await import('../../xhs/ocr-engine.js');
+  const bitmaps = new Map();
+  const bitmapOf = async (i) => {
+    if (!bitmaps.has(i)) {
+      const src = sources[i];
+      const blob = typeof src === 'string' ? await (await fetch(src)).blob() : src;
+      bitmaps.set(i, await createImageBitmap(blob));
+    }
+    return bitmaps.get(i);
+  };
+  /** Crop → 2× → keep only dark, neutral pixels (text) as black on white. */
+  const clean = (bmp, x0, y0, x1, y1, scale = 2) => {
+    const w = Math.max(1, Math.round(x1 - x0));
+    const h = Math.max(1, Math.round(y1 - y0));
+    const c = document.createElement('canvas');
+    c.width = w * scale;
+    c.height = h * scale;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.fillStyle = '#fff';
+    g.fillRect(0, 0, c.width, c.height);
+    g.drawImage(bmp, x0, y0, w, h, 0, 0, c.width, c.height);
+    const d = g.getImageData(0, 0, c.width, c.height);
+    const a = d.data;
+    for (let i = 0; i < a.length; i += 4) {
+      const mx = Math.max(a[i], a[i + 1], a[i + 2]);
+      const mn = Math.min(a[i], a[i + 1], a[i + 2]);
+      const ink = mx < 150 && mx - mn < 45; // dark grey/black text; the red bar and grey track are not
+      a[i] = a[i + 1] = a[i + 2] = ink ? 0 : 255;
+    }
+    g.putImageData(d, 0, 0);
+    return c;
+  };
+  let fixed = 0;
+  for (const job of jobs) {
+    const { sec, r } = job;
+    const bmp = await bitmapOf(r.at.img).catch(() => null);
+    if (!bmp) continue;
+    const W = bmp.width;
+    const pad = 8;
+    const y0 = Math.max(0, r.at.box.y0 - pad);
+    const y1 = Math.min(bmp.height, r.at.box.y1 + pad);
+    let name = knownName(job.key, sec) ? job.key : '';
+    // A few tries at different sizes (small text reads differently at each).
+    for (const scale of [2, 1, 3]) {
+      if (name) break;
+      const read = await recognizeLine(clean(bmp, Math.max(0, r.at.box.x0 - pad), y0, W * 0.25, y1, scale)).catch(() => null);
+      const g = read ? nameGuess(read.text, sec) : { name: '' };
+      if (g.name && g.sure) name = g.name;
+    }
+    let value = r.status === 'ok' ? r.value : null;
+    if (value == null) {
+      const read = await recognizeLine(clean(bmp, W * 0.75, y0, W, y1)).catch(() => null);
+      const m = /(\d{1,3}\.\d)\s*%?/.exec(read?.text ?? '');
+      if (m && Number(m[1]) <= 100) value = Math.round(Number(m[1]) * 10) / 1000;
+      else if (r.candidate != null && name && r.reason === 'text') value = r.candidate; // only the name was unsure
+    }
+    if (!name || value == null) continue;
+    value = Math.round(value * 1000) / 1000;
+    const list = parsed.audience[sec];
+    const entries = Object.entries(list).map(([k, v]) => (k === job.key ? [name, { ...v, status: 'ok', value, candidate: undefined, reason: undefined, confirmedBy: 'reread' }] : [k, v]));
+    // The same row read on two screenshots: keep one.
+    parsed.audience[sec] = Object.fromEntries(entries.filter(([k], i) => entries.findIndex(([k2]) => k2 === k) === i));
+    fixed++;
+  }
+  completeBySum(parsed.audience.city);
+  return fixed;
 }
 
 export async function renderOcrAd([postId], { isCurrent }) {
@@ -154,8 +235,14 @@ export async function renderOcrAd([postId], { isCurrent }) {
       if (starts || !groups.length) groups.push([]);
       groups.at(-1).push(im);
     }
-    state.orders = groups.map((imgs) => {
+    const parsedGroups = [];
+    for (const imgs of groups) {
       const parsed = parseAdOrder(imgs.map((im) => im.lines));
+      await refineAudience(parsed, imgs.map((im) => im.file)).catch(() => 0);
+      parsedGroups.push(parsed);
+    }
+    state.orders = groups.map((imgs, gi) => {
+      const parsed = parsedGroups[gi];
       const f = parsed.fields;
       const match = matchPost(posts, f.publishedAt?.value ?? f.publishedAt?.candidate, f.title?.value ?? f.title?.candidate, f.startedAt?.value ?? f.startedAt?.candidate);
       const values = {};
@@ -317,7 +404,13 @@ export async function renderOcrAd([postId], { isCurrent }) {
             }
             ${fieldsHtml(o, oi)}
             ${audRows.length ? `<details class="mt-3"><summary class="link-btn cursor-pointer">${esc(t('oad.audience', { n: audRows.length }))}</summary>
-              <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">${audRows.map(({ sec, label, r }) => `<label class="flex flex-col gap-0.5 rounded-[10px] px-2 py-1.5 ${r.status === 'ok' ? 'bg-surface-2' : 'cf-mid'}"><span class="text-[11px] opacity-75">${esc(t(`oad.sec.${sec}`))} · ${esc(label)}</span><span class="flex items-center gap-1"><input class="input !h-8 min-w-0 flex-1 tabular-nums" inputmode="decimal" data-aud="${oi}|${sec}|${esc(label)}" value="${r.status === 'ok' ? Math.round(r.value * 1000) / 10 : ''}" placeholder="${r.candidate != null ? Math.round(r.candidate * 1000) / 10 : '?'}" />%</span></label>`).join('')}</div>
+              <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">${audRows.map(({ sec, label, r }) => {
+                const unnamed = sec !== 'gender' && sec !== 'age' && (label.startsWith('#') || r.reason === 'text');
+                return `<div class="flex flex-col gap-0.5 rounded-[10px] px-2 py-1.5 ${r.status === 'ok' && !unnamed ? 'bg-surface-2' : 'cf-mid'}"><span class="text-[11px] opacity-75">${esc(t(`oad.sec.${sec}`))}${unnamed ? '' : ` · ${esc(label)}`}</span>
+                  ${unnamed ? `<input class="input !h-8 min-w-0" data-aud-name="${oi}|${sec}|${esc(label)}" value="${label.startsWith('#') ? '' : esc(label)}" placeholder="${esc(t('oad.audName'))}" />` : ''}
+                  <span class="flex items-center gap-1"><input class="input !h-8 min-w-0 flex-1 tabular-nums" inputmode="decimal" data-aud="${oi}|${sec}|${esc(label)}" value="${r.status === 'ok' ? Math.round(r.value * 1000) / 10 : ''}" placeholder="${r.candidate != null ? Math.round(r.candidate * 1000) / 10 : '?'}" />%</span>
+                  ${r.status !== 'ok' || unnamed ? crop(o, r.at) : ''}</div>`;
+              }).join('')}</div>
               <p class="mt-1 text-[12px] text-muted">${esc(t('oad.audHelp'))}</p></details>` : ''}
           </section>`;
         })
@@ -343,7 +436,9 @@ export async function renderOcrAd([postId], { isCurrent }) {
       for (const inp of result.querySelectorAll(`[data-aud^="${state.orders.indexOf(o)}|"]`)) {
         const [, sec, label] = inp.dataset.aud.split('|');
         const n = Number(inp.value);
-        if (inp.value.trim() && Number.isFinite(n)) audience[sec][label] = n / 100;
+        // A name typed for an unreadable label replaces "#3" etc.
+        const named = result.querySelector(`[data-aud-name="${CSS.escape(inp.dataset.aud)}"]`)?.value.trim();
+        if (inp.value.trim() && Number.isFinite(n)) audience[sec][named || label] = n / 100;
       }
       return { o, entries: orderAds({ values: o.values, postIds: o.postIds, posts, stage: o.stage, audience, replace: o.replace }) };
     });

@@ -1267,4 +1267,6 @@ export default {
   "oad.matchedStart": "발행 시각을 못 읽어서, 광고 시작 직전에 발행된 게시물을 골라 두었어요. 맞는지 확인해 주세요: {title} ({date})",
 
   "adr.c.monthSpend": "{cur} 실제 광고비는 {spend}예요(지난 {prev}: {spendPrev}).",
+
+  "oad.audName": "이름을 못 읽었어요 — 캡처 보고 입력 (예: 美食)",
 };

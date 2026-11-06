@@ -257,3 +257,20 @@ describe('comment texts', () => {
     }
   });
 });
+
+describe('city chart: unnamed last row', () => {
+  const A = (label, value) => ({ words: [{ text: label, confidence: 90, bbox: { x0: 70, y0: 0, x1: 160, y1: 20 } }, { text: '国', confidence: 0, bbox: { x0: 190, y0: 0, x1: 400, y1: 20 } }, { text: value, confidence: 90, bbox: { x0: 780, y0: 0, x1: 850, y1: 20 } }] });
+  it('the last row of 城市分布 without a readable name is 其他', () => {
+    const r = parseAdOrder([[L('城市 分 布'), A('广东', '13.6%'), A('浙江', '6.5%'), A('四川', '6.0%'), A('具', '73.9%')]]);
+    expect(Object.keys(r.audience.city)).toEqual(['广东', '浙江', '四川', '其他']);
+    expect(r.audience.city['其他']).toMatchObject({ status: 'ok', value: 0.739 }); // the four add up to 100%
+  });
+});
+
+describe('audience names from a second reading', () => {
+  it('a character in the same place breaks a tie ("影饮" → 影视, not 摄影)', async () => {
+    const { nameGuess } = await import('../src/xhs/ocr-ad-parse.js');
+    expect(nameGuess('影 饮', 'interest')).toEqual({ name: '影视', sure: true });
+    expect(nameGuess('具他', 'city').name).toBe(''); // 他 alone is too common to decide
+  });
+});

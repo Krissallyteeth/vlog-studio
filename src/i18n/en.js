@@ -1267,4 +1267,6 @@ export default {
   "oad.matchedStart": "The publish time could not be read, so the post published last before the ad started was chosen. Please check: {title} ({date})",
 
   "adr.c.monthSpend": "{cur}: real ad spend {spend} (previous {prev}: {spendPrev}).",
+
+  "oad.audName": "Name not readable — type it from the screenshot (e.g. 美食)",
 };
