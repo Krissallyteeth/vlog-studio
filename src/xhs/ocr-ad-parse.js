@@ -67,8 +67,20 @@ export function parseAdOrder(linesPerImage) {
   const noteText = []; // text under the thumbnails of a multi-note order (titles, often garbled)
   let carrySection = ''; // a chart can continue at the top of the next screenshot
   for (const [img, lines] of linesPerImage.entries()) {
-    let section = carrySection;
+    // Rows above this screenshot's first chart heading are the end of the chart before it (the
+    // overlap with the previous screenshot): "浙江 1.8% · 其他 17.0%" above 观众兴趣分布 are regions.
+    const SECS = ['gender', 'age', 'city', 'interest'];
+    const HEAD = { gender: /性别分布/, age: /年龄分布/, city: /城市分布/, interest: /兴趣分布/ };
+    const firstHead = lines.map((l) => squeeze((l?.words ?? []).map((w) => w.text).join(''))).map((tx) => SECS.find((k) => HEAD[k].test(tx))).find(Boolean);
+    let section = carrySection && firstHead ? (SECS[SECS.indexOf(firstHead) - 1] ?? '') : carrySection;
+    if (section === 'gender') section = '';
     let headingSeen = false;
+    // A chart whose heading shows again here starts again from its first row: row j of this
+    // screenshot is row j already read, not a new one.
+    const earlier = Object.fromEntries(SECS.map((k) => [k, Object.keys(audience[k])]));
+    const headY = {}; // where each chart heading sits on this screenshot
+    // Chart rows are evenly spaced, about 9.2% of the screenshot width apart.
+    const pitch = Math.max(...lines.flatMap((l) => (l?.words ?? []).map((w) => w.bbox?.x1 ?? 0)), 1) * 0.0923;
     let belowTitle = false; // the phone status bar (time, battery "53") sits above the 订单详情 title
     let inNotes = false;
     let lastAge = -1; // index of the last age row read on this screenshot
@@ -161,6 +173,7 @@ export function parseAdOrder(linesPerImage) {
       }
       else if (/城市分布/.test(text)) section = 'city';
       else if (/兴趣分布/.test(text)) section = 'interest';
+      if (/(城市|兴趣)分布/.test(text)) headY[section] = midY(line);
       if (section === 'gender') {
         const g = /男性(\d+(?:\.\d+)?)%.*女性(\d+(?:\.\d+)?)%/.exec(text);
         if (g && !(audience.gender.male?.status === 'ok')) {
@@ -189,8 +202,20 @@ export function parseAdOrder(linesPerImage) {
             if (AGE_LABELS.includes(key)) lastAge = AGE_LABELS.indexOf(key);
           }
           const r = { ...row.result, at: here, carried: !headingSeen }; // carried: above any heading of this screenshot
+          const j = headY[section] != null ? Math.round((midY(ln) - headY[section]) / pitch) - 1 : -1;
+          const same = j >= 0 ? earlier[section][j] : undefined;
+          if (same && list[same]) audience[section] = mergeRow(list, same, row.label, r, section);
           // The same section often appears on two screenshots: keep the clearer reading.
-          if (!list[key] || (list[key].status !== 'ok' && (r.status === 'ok' || list[key].candidate == null))) list[key] = r;
+          else if (!list[key] || (list[key].status !== 'ok' && (r.status === 'ok' || list[key].candidate == null))) list[key] = r;
+        }
+      } else if ((section === 'city' || section === 'interest') && headY[section] != null && isChartRow(line, pitch / 0.0923)) {
+        // A row whose share was read as letters ("美食 … zc"): kept, unread, so it is read again from
+        // the image instead of disappearing from the chart.
+        const j = Math.round((midY(line) - headY[section]) / pitch) - 1;
+        const list = audience[section];
+        if (j >= earlier[section].length) {
+          const key = `#${Object.keys(list).length + 1}`;
+          list[key] = { ...check(null, text, 0, 'format'), at: here };
         }
       }
     }
@@ -198,16 +223,7 @@ export function parseAdOrder(linesPerImage) {
   }
   // Interests are listed from the largest share down: of two that break the order, the less certain
   // reading is marked for a second look ("36" above "80.8").
-  const ints = Object.entries(audience.interest);
-  for (let i = 0; i + 1 < ints.length; i++) {
-    const [ka, a] = ints[i];
-    const [kb, b] = ints[i + 1];
-    const va = a.value ?? a.candidate;
-    const vb = b.value ?? b.candidate;
-    if (va == null || vb == null || va >= vb) continue;
-    const [k, r] = (a.status === 'ok' ? 1 : 0) + (a.conf ?? 0) / 1000 <= (b.status === 'ok' ? 1 : 0) + (b.conf ?? 0) / 1000 ? [ka, a] : [kb, b];
-    audience.interest[k] = { ...r, status: 'check', candidate: r.value ?? r.candidate, value: undefined, reason: 'format' };
-  }
+  audience.interest = checkOrder(audience.interest);
   // "371%" with its dot lost can only be 37.1% (shares have one decimal). When the row has a sure
   // name and sits in the descending order between its neighbours, that reading is confirmed.
   const ints2 = Object.entries(audience.interest);
@@ -418,6 +434,61 @@ function audienceRow(line, section) {
   // the row is read again from the image.
   if (section !== 'age' && !(label && guess.sure)) result.guessName = label || rawLabel.replace(/[^\u4e00-\u9fff]/g, '');
   return { label: section === 'age' ? '' : label && guess.sure ? label : '', result };
+}
+
+/**
+ * The same chart row read on two screenshots. Its key becomes the sure name if either reading has
+ * one; two clear readings that disagree are left for a check, never silently picked.
+ */
+/** A chart row: a name at the left edge and something at the right edge (the share). */
+function isChartRow(line, right) {
+  const ws = line.words.filter((w) => w.bbox);
+  if (ws.length < 2) return false;
+  const left = ws.reduce((a, w) => (w.bbox.x0 < a.bbox.x0 ? w : a));
+  const last = ws.reduce((a, w) => (w.bbox.x1 > a.bbox.x1 ? w : a));
+  return left.bbox.x0 < right * 0.15 && last.bbox.x1 > right * 0.9 && last.bbox.x0 > right * 0.75 && /[\u4e00-\u9fff]/.test(left.text) && !/分布|画像|关注薯条|小助手|推广|帮助/.test(ws.map((w) => w.text).join(''));
+}
+
+function midY(line) {
+  const ws = line.words.filter((w) => w.bbox);
+  return ws.length ? (Math.min(...ws.map((w) => w.bbox.y0)) + Math.max(...ws.map((w) => w.bbox.y1))) / 2 : 0;
+}
+
+function mergeRow(list, oldKey, label, r, section) {
+  const prev = list[oldKey];
+  const key = knownName(oldKey, section) || !label || !knownName(label, section) || (label !== oldKey && label in list) ? oldKey : label;
+  const pv = prev.value ?? prev.candidate;
+  const rv = r.value ?? r.candidate;
+  let merged;
+  if (prev.status === 'ok' && r.status === 'ok') merged = pv === rv ? prev : { ...prev, status: 'check', candidate: (prev.conf ?? 0) >= (r.conf ?? 0) ? pv : rv, value: undefined, reason: 'text' };
+  else if (r.status === 'ok' || (pv == null && rv != null)) merged = { ...r, ...(prev.guessName && !r.guessName ? { guessName: prev.guessName } : {}) };
+  else merged = prev;
+  if (key !== oldKey) {
+    delete merged.guessName;
+  }
+  return Object.fromEntries(Object.entries(list).map(([k, v]) => (k === oldKey ? [key, merged] : [k, v])));
+}
+
+/**
+ * Interests are listed from the largest share down. Of two rows that break the order, the less
+ * certain reading (a second reading counts as less certain than a first clear one) goes back to
+ * "check": a value is never confirmed against the order of the chart.
+ */
+export function checkOrder(list) {
+  const out = { ...list };
+  const ints = Object.entries(out);
+  for (let i = 0; i + 1 < ints.length; i++) {
+    const [ka, a] = ints[i];
+    const [kb, b] = ints[i + 1];
+    const va = a.value ?? a.candidate;
+    const vb = b.value ?? b.candidate;
+    if (va == null || vb == null || va >= vb) continue;
+    const score = (r) => (r.status === 'ok' ? 1 : 0) - (r.confirmedBy ? 0.5 : 0) + (r.conf ?? 0) / 1000;
+    const [k, r] = score(a) <= score(b) ? [ka, a] : [kb, b];
+    out[k] = { ...r, status: 'check', candidate: r.value ?? r.candidate, value: undefined, reason: 'format', confirmedBy: undefined };
+    ints[ints.findIndex(([x]) => x === k)][1] = out[k];
+  }
+  return out;
 }
 
 /**

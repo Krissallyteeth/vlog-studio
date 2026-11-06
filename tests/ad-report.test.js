@@ -512,3 +512,24 @@ describe('ad history: one entry per order', () => {
     expect(h[0].items.map((x) => x.p.id)).toEqual(['p2', 'p1']);
   });
 });
+
+describe('interest chart read on two screenshots', () => {
+  // Rows 100px apart on a 1090px-wide capture, like the real order screen.
+  const Y = (label, value, y, conf = 90) => ({ words: [{ text: label, confidence: 90, bbox: { x0: 89, y0: y, x1: 160, y1: y + 33 } }, { text: '国', confidence: 0, bbox: { x0: 264, y0: y - 10, x1: 600, y1: y + 40 } }, { text: value, confidence: conf, bbox: { x0: 990, y0: y, x1: 1090, y1: y + 28 } }] });
+  const H = (text, y) => ({ words: text.split(' ').map((w, i) => ({ text: w, confidence: 95, bbox: { x0: 89 + i * 80, y0: y, x1: 160 + i * 80, y1: y + 37 } })) });
+  it('rows of a heading shown again are the same rows, not new ones; regions above it stay regions', async () => {
+    const { parseAdOrder } = await import('../src/xhs/ocr-ad-parse.js');
+    const shot1 = [H('城市 分 布', 1170), Y('海南', '70.4%', 1276), Y('浙江', '1.8%', 1376), Y('其他', '27.8%', 1476), H('观众 兴趣 分 布', 1941), Y('生活记录', '99.2%', 2048), Y('娱乐', '96.0%', 2148)];
+    const shot2 = [Y('浙江', '1.8%', 369), Y('其他', '27.8%', 470), H('观众 兴趣 分 布', 633), Y('二次元', '99.2%', 739), Y('娱乐', '96.0%', 839), Y('影视', '88.5%', 939), { words: [{ text: '关廊', confidence: 30, bbox: { x0: 88, y0: 1039, x1: 156, y1: 1072 } }, { text: 'zc', confidence: 16, bbox: { x0: 995, y0: 1041, x1: 1089, y1: 1069 } }] }];
+    const r = parseAdOrder([shot1, shot2]);
+    expect(Object.keys(r.audience.city)).toEqual(['海南', '浙江', '其他']);
+    expect(Object.keys(r.audience.interest)).toEqual(['生活记录', '娱乐', '影视', '#4']);
+    expect(r.audience.interest['#4']).toMatchObject({ status: 'check', candidate: null }); // read again from the image
+  });
+  it('a second reading that breaks the descending order is not confirmed', async () => {
+    const { checkOrder } = await import('../src/xhs/ocr-ad-parse.js');
+    const out = checkOrder({ 影视: { status: 'ok', value: 0.885, conf: 90 }, 二次元: { status: 'ok', value: 0.992, conf: 90, confirmedBy: 'reread' }, 宠物: { status: 'ok', value: 0.498, conf: 90 } });
+    expect(out['二次元']).toMatchObject({ status: 'check', candidate: 0.992 });
+    expect(out['影视'].status).toBe('ok');
+  });
+});

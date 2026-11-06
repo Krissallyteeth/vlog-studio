@@ -5,7 +5,7 @@ import { navigate } from '../../router.js';
 import { $, copyText, esc, openSheet, toast } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { putMany } from '../../xhs/db.js';
-import { AD_METRICS, AD_REVIEW_FIELDS, completeBySum, knownName, nameGuess, parseAdOrder } from '../../xhs/ocr-ad-parse.js';
+import { AD_METRICS, AD_REVIEW_FIELDS, checkOrder, completeBySum, knownName, nameGuess, parseAdOrder } from '../../xhs/ocr-ad-parse.js';
 import { ordered } from '../../xhs/stats.js';
 import { memoAds, memoMoney, memoToReplace, mergeOrderGroups, orderAds, placeOrder, rememberTitle, splitMoney } from '../../xhs/ad-orders.js';
 import { listPosts, savePosts, stageFromDates } from '../../xhs/store.js';
@@ -167,9 +167,18 @@ export async function refineAudience(parsed, sources) {
     const list = parsed.audience[sec];
     // Confirmed only when the name was read for certain; a kept guess stays "to check" (with its value).
     const updated = nameSure ? { ...r, status: 'ok', value, candidate: undefined, reason: undefined, confirmedBy: 'reread' } : { ...r, status: 'check', value: undefined, candidate: value, reason: 'text' };
-    const entries = Object.entries(list).map(([k, v]) => (k === job.key ? [name, updated] : [k, v]));
-    // The same row read on two screenshots: keep one.
-    parsed.audience[sec] = Object.fromEntries(entries.filter(([k], i) => entries.findIndex(([k2]) => k2 === k) === i));
+    // The name is already another row's: the same row twice (same share) is dropped; with a different
+    // share one of the two readings is wrong, so this one stays to check.
+    if (name !== job.key && name in list) {
+      const other = list[name].value ?? list[name].candidate;
+      if (other === value) {
+        delete list[job.key];
+        continue;
+      }
+      list[job.key] = { ...r, status: 'check', value: undefined, candidate: value, reason: 'text', guessName: name };
+      continue;
+    }
+    parsed.audience[sec] = Object.fromEntries(Object.entries(list).map(([k, v]) => (k === job.key ? [name, updated] : [k, v])));
   }
   // Charts show at most 6 regions (top 5 + 其他) and 8 interests: once those are named, rows still
   // without a name are page noise (a banner, a button) and are dropped.
@@ -179,6 +188,7 @@ export async function refineAudience(parsed, sources) {
     if (named.length >= max) parsed.audience[sec] = Object.fromEntries(Object.entries(list).filter(([k]) => knownName(k, sec)));
   }
   completeBySum(parsed.audience.city);
+  if (parsed.audience.interest) parsed.audience.interest = checkOrder(parsed.audience.interest);
   return fixed;
 }
 
