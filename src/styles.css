@@ -771,6 +771,15 @@
   .chart-line { fill: none; stroke: var(--series-1); stroke-width: 2; stroke-linejoin: round; }
   .chart-dot { fill: var(--series-1); stroke: var(--surface); stroke-width: 2; }
   .chart-dot-ad { fill: var(--surface); stroke: var(--series-1); stroke-width: 2; }
+  /* The natural part of a count (ad traffic taken out): orange, dashed, square dots — shape and dash, not colour alone. */
+  .chart-host { --series-2: #c2610f; }
+  .dark .chart-host { --series-2: #e08a3c; }
+  .chart-line-2 { fill: none; stroke: var(--series-2); stroke-width: 2; stroke-dasharray: 4 3; }
+  .chart-dot-2 { fill: var(--series-2); stroke: var(--surface); stroke-width: 1.5; }
+  .lg-nat { @apply inline-block h-0 w-4; border-top: 2px dashed #c2610f; }
+  /* A card's bottom line ("결론"). */
+  .conclusion { @apply rounded-[10px] bg-surface-2 px-3 py-2 text-[13px] leading-relaxed; border-left: 4px solid var(--warm); }
+  .conclusion-label { @apply text-[12px] font-bold; color: var(--warm); }
   .chart-base { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; }
   .chart-base-label { fill: var(--muted); font-size: 10.5px; font-weight: 600; }
   .chart-cross { stroke: var(--muted); stroke-width: 1; }

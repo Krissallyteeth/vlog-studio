@@ -326,3 +326,25 @@ export function postAdSummary(post) {
   const s = sum(fol, (a) => a.spend);
   return { spend: Math.round(spend * 100) / 100, perFollow: f > 0 ? Math.round((s / f) * 100) / 100 : null, count: ads.length };
 }
+
+/**
+ * Ads that ran before a stage's data was cut (D+1: midnight after the publish day; D+2: the next
+ * midnight), with what their order reports say they brought. `natural` = the stage's own count
+ * minus that — an estimate: a report covers the whole order, which can run past the cut, so the
+ * natural part may come out smaller than it was (never below 0).
+ */
+export function adInWindow(post, which = 'd1') {
+  const cutDay = which === 'd2' ? 2 : 1;
+  const ads = (post.ads ?? []).filter((a) => a.executed !== false).filter((a) => {
+    if (a.start && post.date) return Date.parse(`${a.start.slice(0, 10)}T00:00:00Z`) < Date.parse(`${post.date}T00:00:00Z`) + cutDay * 86400000;
+    const n = stageDay(a.stage);
+    return n != null && n < cutDay;
+  });
+  const share = (a) => (isNum(a.share) ? a.share : 1);
+  const part = (k) => (ads.some((a) => isNum(a.order?.[k])) ? Math.round(sum(ads, (a) => (isNum(a.order?.[k]) ? a.order[k] * share(a) : null))) : null);
+  const reads = part('reads');
+  const follows = part('follows');
+  const s = stageOf(post, which);
+  const natural = (total, ad) => (isNum(total) && isNum(ad) ? Math.max(0, total - ad) : null);
+  return { any: ads.length > 0, spend: sum(ads, (a) => a.spend), reads, follows, naturalViews: natural(s.views, reads), naturalFollowers: natural(s.newFollowers, follows) };
+}

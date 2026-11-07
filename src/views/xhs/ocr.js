@@ -174,7 +174,7 @@ export async function renderOcr([postId], { isCurrent }) {
           <p class="mt-1 text-[12px] text-muted">${esc(t('ocr.legend'))}</p>
           ${errors.length ? `<p class="form-error mt-2">${esc(t('ocr.failed', { n: errors.length, msg: errors[0].error }))}</p>` : ''}
           <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t('crit.metric'))}</th><th>${esc(t('ocr.recognised'))}</th><th>${esc(t('ocr.toSave'))}</th><th class="num">${esc(t('ocr.inApp'))}</th><th>${esc(t('imp.th.status'))}</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
-          ${noteMetaHtml(state.extras, p, state.stage === 'd1' ? 'D+1' : 'D+2')}
+          ${noteMetaHtml(state.extras, p, state.stage === 'd1' ? 'D+1' : 'D+2', { posts, edit: true })}
           <div class="mt-3 flex flex-wrap gap-2"><button type="button" class="btn btn-primary" id="ocr-save">${esc(t('ocr.save'))}</button><button type="button" class="btn btn-secondary" id="ocr-text">${esc(t('ocr.showText'))}</button></div>
         </section>
         <aside class="card xl:sticky xl:top-4 self-start"><h3 class="text-[14px] font-semibold">${esc(t('ocr.original'))}</h3>
@@ -190,6 +190,18 @@ export async function renderOcr([postId], { isCurrent }) {
       const v = parseInput(inp.dataset.val, inp.value);
       if (v === undefined) bad++;
       else if (v !== null) values[inp.dataset.val] = v;
+    });
+    // Channel values as corrected in the review table (blank = not read).
+    result.querySelectorAll('[data-ch]').forEach((inp) => {
+      const [k, f] = inp.dataset.ch.split('.');
+      const raw = inp.value.trim().replace(',', '.').replace(/[%秒s초]$/, '');
+      const v = raw === '' ? null : Number(raw);
+      if (raw !== '' && !(v >= 0)) return bad++;
+      const ch = (state.extras.channels ??= {});
+      ch[k] ??= {};
+      if (v == null) delete ch[k][f];
+      else ch[k][f] = inp.dataset.kind === 'pct' ? Number((v / 100).toPrecision(10)) : v;
+      if (!Object.keys(ch[k]).length) delete ch[k];
     });
     if (bad) return toast(t('ocr.badInput', { n: bad }), { tone: 'error' });
     const pending = Object.keys(state.merged ?? {}).filter((k) => !(k in values) && ['check', 'conflict'].includes(state.merged[k].status));

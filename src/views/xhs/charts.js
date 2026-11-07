@@ -6,6 +6,7 @@ import { esc } from '../../ui/dom.js';
  *  - series colour: reference palette slot 1 (blue), stepped for dark mode via CSS variables
  *  - natural posts: filled dots; ad-mixed posts: hollow rings (shape, not colour alone)
  *  - fixed median: dashed grey reference line, direct-labelled
+ *  - optional second series `y2` (the natural part of a count, ad traffic taken out): dashed, same axis
  *  - hover/focus: crosshair snaps to the nearest post, tooltip lists title, value, vs baseline
  */
 
@@ -24,7 +25,7 @@ function draw(host) {
   const W = Math.max(260, host.clientWidth || 600);
   const H = height;
   const pad = { l: 46, r: 14, t: 14, b: 24 };
-  const vals = points.map((p) => p.y).filter((v) => typeof v === 'number');
+  const vals = points.flatMap((p) => [p.y, p.y2]).filter((v) => typeof v === 'number');
   if (!vals.length) {
     host.innerHTML = `<p class="py-3 text-center text-[13px] text-muted sm:py-10">${esc(t('chart.noData'))}</p>`;
     return;
@@ -51,6 +52,19 @@ function draw(host) {
     path.push(`${pen ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.y).toFixed(1)}`);
     pen = true;
   });
+  // The natural part: only drawn where an ad took some away (elsewhere it is the line itself).
+  const path2 = [];
+  let pen2 = false;
+  points.forEach((p, i) => {
+    const v = typeof p.y2 === 'number' ? p.y2 : typeof p.y === 'number' && !p.admixed ? p.y : null;
+    if (v == null) {
+      pen2 = false;
+      return;
+    }
+    path2.push(`${pen2 ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`);
+    pen2 = true;
+  });
+  const hasY2 = points.some((p) => typeof p.y2 === 'number');
   const every = Math.ceil(points.length / Math.max(2, Math.floor((W - pad.l) / 70)));
   host.innerHTML = `
     <svg class="chart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(title)}">
@@ -58,6 +72,7 @@ function draw(host) {
       ${points.map((p, i) => (i % every === 0 || i === points.length - 1 ? `<text class="chart-tick" x="${x(i)}" y="${H - 6}" text-anchor="middle">${esc(p.label)}</text>` : '')).join('')}
       ${typeof baseline === 'number' ? `<line class="chart-base" x1="${pad.l}" x2="${W - pad.r}" y1="${y(baseline)}" y2="${y(baseline)}"/><text class="chart-base-label" x="${W - pad.r}" y="${y(baseline) - 5}" text-anchor="end">${esc(baselineLabel)} ${esc(format(baseline))}</text>` : ''}
       <path class="chart-line" d="${path.join('')}"/>
+      ${hasY2 ? `<path class="chart-line-2" d="${path2.join('')}"/>${points.map((p, i) => (typeof p.y2 === 'number' ? `<rect class="chart-dot-2" x="${x(i) - 3.5}" y="${y(p.y2) - 3.5}" width="7" height="7"/>` : '')).join('')}` : ''}
       ${points
         .map((p, i) =>
           typeof p.y === 'number'
@@ -90,6 +105,12 @@ function draw(host) {
     meta.className = 'text-muted';
     meta.textContent = [p.date, p.admixed ? t('xg.admixed') : '', typeof baseline === 'number' && typeof p.y === 'number' && baseline !== 0 ? `${t('chart.vsBase')} ${((p.y / baseline - 1) * 100).toFixed(0)}%` : ''].filter(Boolean).join(' · ');
     tip.append(strong, name, meta);
+    if (typeof p.y2 === 'number') {
+      const nat = document.createElement('span');
+      nat.className = 'block text-[11px]';
+      nat.textContent = t('chart.split', { natural: format(p.y2), ad: format(Math.max(0, p.y - p.y2)) });
+      tip.append(nat);
+    }
     if (p.note) {
       const note = document.createElement('span');
       note.className = 'block text-[11px]';
@@ -124,4 +145,4 @@ function draw(host) {
 }
 
 /** Legend shared by the charts: shape-coded, text in text colours. */
-export const chartLegend = () => `<div class="chart-legend"><span><i class="lg-dot"></i>${esc(t('chart.natural'))}</span><span><i class="lg-ring"></i>${esc(t('chart.adMixed'))}</span><span><i class="lg-base"></i>${esc(t('chart.baseline'))}</span></div>`;
+export const chartLegend = () => `<div class="chart-legend"><span><i class="lg-dot"></i>${esc(t('chart.natural'))}</span><span><i class="lg-ring"></i>${esc(t('chart.adMixed'))}</span><span><i class="lg-nat"></i>${esc(t('chart.naturalEst'))}</span><span><i class="lg-base"></i>${esc(t('chart.baseline'))}</span></div>`;

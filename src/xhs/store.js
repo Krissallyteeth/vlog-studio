@@ -174,7 +174,19 @@ function noteMeta(raw) {
     duration: num(raw.duration),
     // The platform's own written analysis, as read (Chinese).
     ai: noteAi(raw.ai),
+    // 此渠道详细数据 per traffic channel (home, videoRec, search …).
+    channels: noteChannels(raw.channels),
   };
+}
+
+const CHANNEL_FIELDS = ['conv', 'interactionRate', 'exposure', 'views', 'shareExposure', 'shareViews', 'avgWatch', 'likes', 'comments', 'favs'];
+function noteChannels(raw) {
+  if (!raw || typeof raw !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(raw)
+      .filter(([k, v]) => /^(home|videoRec|search|followPage|other)$/.test(k) && v && typeof v === 'object')
+      .map(([k, v]) => [k, Object.fromEntries(CHANNEL_FIELDS.map((f) => [f, num(v[f])]).filter(([, x]) => x != null))]),
+  );
 }
 
 export function normalizeIncome(raw = {}, now = Date.now()) {

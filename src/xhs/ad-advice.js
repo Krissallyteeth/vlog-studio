@@ -32,7 +32,9 @@ export function adviceAt(post, posts, baseline, which = 'd1') {
   let score = 0;
   // 1. Natural views at this point against my usual level.
   const rel = relDiff(d.views, medView, 1);
-  score += d.views >= medView ? 1 : -1;
+  // Clearly above/below (±20%) counts in full; close to my median only half, so a post a little
+  // under it is not ruled out by that alone.
+  score += rel >= 0.2 ? 1 : rel <= -0.2 ? -1 : d.views >= medView ? 0.5 : -0.5;
   reasons.push({ key: d.views >= medView ? 'viewsHigh' : 'viewsLow', vars: { v: d.views, med: Math.round(medView), pct: Math.round(Math.abs(rel) * 100) } });
   // 2. The cover: an ad buys exposure; a cover people do not click wastes it.
   const ctrRel = relDiff(d.ctr, baseline?.medians?.ctr, METRIC.ctr.dir);

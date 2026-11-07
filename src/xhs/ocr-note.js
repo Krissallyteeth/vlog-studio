@@ -168,12 +168,78 @@ export function noteExtras(linesPerImage, { year = new Date().getFullYear() } = 
   const ints = Object.entries(out.audience.interest);
   out.audience.interest = Object.fromEntries(ints.filter(([, v], i) => !ints.slice(i + 1).some(([, w]) => w > v)));
   out.ai = aiTexts(linesPerImage);
+  // 此渠道详细数据: which channel a block is for is not readable (the picker is faint), but its
+  // "占总观看" equals that channel's share in the source list.
+  const channels = {};
+  for (const b of channelBlocks(linesPerImage)) {
+    const key = Object.entries(out.sources).find(([, v]) => isNum(b.shareViews) && Math.abs(v - b.shareViews) < 0.0015)?.[0];
+    if (!key) continue;
+    channels[key] = { ...b, ...channels[key] };
+  }
+  if (Object.keys(channels).length) out.channels = channels;
   // The platform cuts D+1 data at midnight after the publish day (shown the next morning at 9).
   if (!out.snapshotAt && out.publishedAt) {
     out.snapshotAt = `${new Date(Date.parse(`${out.publishedAt.slice(0, 10)}T00:00:00Z`) + 86400000).toISOString().slice(0, 10)}T00:00`;
     out.snapshotDerived = true;
   }
   return out;
+}
+
+const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+
+/**
+ * The detail blocks under "此渠道详细数据": 转化率 · 互动率 · 曝光数/观看数 · 占总曝光/占总观看 ·
+ * 平均观看时长/点赞 · 评论/收藏. The last two are a label row over a value row in two columns; a value
+ * not under its label (a smeared read) is left out.
+ */
+export function channelBlocks(linesPerImage) {
+  const blocks = [];
+  for (const lines of linesPerImage) {
+    let b = null;
+    lines.forEach((l, i) => {
+      const tx = lineText(l);
+      if (/此渠道详细数据|渠道详细/.test(tx)) {
+        if (b) blocks.push(b);
+        b = {};
+        return;
+      }
+      if (!b) return;
+      if (/搜索热词|观众画像|性别分布/.test(tx)) {
+        blocks.push(b);
+        b = null;
+        return;
+      }
+      let m;
+      if ((m = /转化率(\d+(?:\.\d+)?)%/.exec(tx))) b.conv ??= p100(m[1]);
+      if ((m = /互动率(\d+(?:\.\d+)?)%/.exec(tx))) b.interactionRate ??= p100(m[1]);
+      if ((m = /曝光数(\d+)观看数(\d+)/.exec(tx))) {
+        b.exposure ??= Number(m[1]);
+        b.views ??= Number(m[2]);
+      }
+      if ((m = /占总曝光(\d+(?:\.\d+)?)%占总观看(\d+(?:\.\d+)?)%/.exec(tx))) {
+        b.shareExposure ??= p100(m[1]);
+        b.shareViews ??= p100(m[2]);
+      }
+      const pair = /平均观看时长.*点赞/.test(tx) ? ['avgWatch', 'likes', '点赞'] : /评论.*收藏/.test(tx) ? ['comments', 'favs', '收藏'] : null;
+      if (pair && lines[i + 1]) {
+        const lw = l.words.filter((w) => w.bbox);
+        const leftX = lw[0]?.bbox.x0;
+        const rightX = lw.find((w) => w.text.includes(pair[2][0]))?.bbox.x0;
+        if (!isNum(leftX) || !isNum(rightX)) return;
+        for (const w of lines[i + 1].words.filter((x) => x.bbox)) {
+          const v = /^(\d+(?:\.\d+)?)/.exec(w.text.replace(/[^\d.]/g, ''));
+          if (!v) continue;
+          // 平均观看时长 is in seconds even when "秒" is read as "%".
+          if (Math.abs(w.bbox.x0 - leftX) < 60) b[pair[0]] ??= Number(v[1]);
+          else if (Math.abs(w.bbox.x0 - rightX) < 60) b[pair[1]] ??= Number(v[1]);
+        }
+      }
+    });
+    if (b) blocks.push(b);
+  }
+  return blocks
+    .map((b) => (isNum(b.exposure) && isNum(b.views) && b.exposure > 0 && b.conv == null && b.views < b.exposure ? { ...b, conv: Number((b.views / b.exposure).toPrecision(4)) } : b))
+    .filter((b) => Object.keys(b).length);
 }
 
 /** The platform's segment headline, or '' when it was read as noise (mostly not Chinese). */

@@ -12,8 +12,10 @@ import { adAnalysisSection } from './ads.js';
 import { insightList } from './insight-text.js';
 import { experimentResults, opsBrief } from '../../xhs/insights.js';
 import { adviceRecord } from '../../xhs/ad-advice.js';
+import { adConclusion, expConclusion, opsConclusion } from '../../xhs/conclusions.js';
+import { emph } from './insight-text.js';
 import { verdictBadge } from './ad-flow.js';
-import { postRows } from '../../xhs/ad-report.js';
+import { adInWindow, postRows } from '../../xhs/ad-report.js';
 
 const CHARTS = [
   { key: 'views' },
@@ -43,6 +45,23 @@ export async function renderDashboard({ isCurrent, keepY }) {
   const inKind = income.reduce((s, x) => s + (x.inKindKRW ?? 0), 0);
 
   const brief = opsBrief(posts, baseline, { recent, experiments: settings.experiments });
+  // The bottom line of a card: what it all means, what to do.
+  const conclusion = (lines) => (lines.length ? `<div class="conclusion mt-3"><p class="conclusion-label">${esc(t('dash.conclusion'))}</p><ul class="mt-1 flex flex-col gap-1">${lines.map((x) => `<li>${emph(x)}</li>`).join('')}</ul></div>` : '');
+  const money = (v) => (v == null ? '–' : yuan(v));
+  const adLines = (rec) =>
+    adConclusion(rec).map((c) => {
+      const v = { ...c.vars };
+      for (const k of ['a', 'b', 'cost']) if (k in v) v[k] = money(v[k]);
+      return [t(`adv.c.${c.key}${c.key === 'nowGo' && c.vars.cost != null ? 'Cost' : ''}`, v), c.dear ? t('adv.c.dear') : '', c.ref ? t('adv.c.ref') : ''].filter(Boolean).join(' ');
+    });
+  const expLines = (res) =>
+    expConclusion(res, settings.experiments).map((c) => {
+      if (c.kind === 'need') return t('xp.c.need', { name: c.vars.name, list: c.vars.short.map((x) => t('xp.c.needItem', { opt: x.opt, n: x.need })).join(', ') });
+      const m = c.metric ? METRIC[c.metric].zh : '';
+      return t(c.kind === 'mixed' ? `xp.c.mixed.${c.vars.why}` : `xp.c.${c.kind}`, { ...c.vars, m });
+    });
+  const opsLines = () =>
+    opsConclusion(brief).map((c) => (c.key === 'fix' ? t('ops.c.fix', { m: METRIC[c.metric].zh, act: t(`ops.c.act.${c.metric}`) }) : t(`ops.c.${c.key}`, c.vars ?? {})));
   // Ad decisions: posts waiting for one, and how following (or not) the advice turned out.
   const rec = adviceRecord(posts, baseline);
   const adviceCard = () => {
@@ -52,6 +71,8 @@ export async function renderDashboard({ isCurrent, keepY }) {
       ${pend.length ? `<ul class="mt-2 flex flex-col gap-1.5 text-[13px]">${pend.map((r) => { const a = r.tl.d2 ?? r.tl.d1; return `<li class="flex flex-wrap items-center gap-2"><a class="link-btn" href="#/c/${encodeURIComponent(r.post.id)}">${esc(r.post.title)}</a>${verdictBadge(a)}<span class="text-[12px] text-muted">${esc(r.tl.d2 ? t('adv.d2') : t('adv.d1'))}${a.expect ? ` · ${esc(t('adv.expectShort', { cost: yuan(a.expect.cost) }))}` : ''}</span></li>`; }).join('')}</ul>` : `<p class="mt-2 text-[13px] text-muted">${esc(t('adv.noPending'))}</p>`}
       <p class="mt-3 text-[13px] font-semibold">${esc(t('adv.history'))}</p>
       <ul class="mt-1 flex list-disc flex-col gap-1 pl-5 text-[13px]">${line(rec.followed, 'adv.h.followed')}${line(rec.against, 'adv.h.against')}${rec.notRun ? `<li>${esc(t('adv.h.notRun', { n: rec.notRun }))}</li>` : ''}</ul>
+      ${conclusion(adLines(rec))}
+      <details class="mt-2 text-[12px]"><summary class="cursor-pointer font-semibold">${esc(t('adv.basisTitle'))}</summary><ul class="mt-1 flex list-disc flex-col gap-0.5 pl-5 text-muted">${[1, 2, 3, 4, 5, 6].map((i) => `<li>${esc(t(`adv.basis.${i}`))}</li>`).join('')}</ul></details>
       <p class="mt-2 text-[12px] text-muted">${esc(t('adv.cardNote'))}</p></section>`;
   };
   // Experiments: per item, the options compared on the metrics they are meant to move.
@@ -65,7 +86,7 @@ export async function renderDashboard({ isCurrent, keepY }) {
       return `<li class="text-[13px]"><b>${esc(r.name)}</b> · ${esc(METRIC[r.metric].zh)} <span class="text-muted">${esc(g)}</span> ${tag}</li>`;
     });
     return `<section class="card" id="exp-card"><h3 class="text-[15px] font-semibold">${esc(t('xp.results'))}</h3>
-      ${tagged ? `<ul class="mt-2 flex flex-col gap-1.5">${rows.join('')}</ul>` : `<p class="mt-2 text-[13px] text-muted">${esc(t('xp.none'))}</p>`}
+      ${tagged ? `<ul class="mt-2 flex flex-col gap-1.5">${rows.join('')}</ul>${conclusion(expLines(expRes))}` : `<p class="mt-2 text-[13px] text-muted">${esc(t('xp.none'))}</p>`}
       <p class="mt-2 text-[12px] text-muted">${esc(t('xp.note'))}</p></section>`;
   };
   const analysis = adAnalysisSection({ posts, income, settings, baseline }, () => navigate('/xhs', { replace: true }));
@@ -103,7 +124,8 @@ export async function renderDashboard({ isCurrent, keepY }) {
       <div class="mt-2 flex flex-wrap items-center justify-between gap-2">${relativeNote()}${chartLegend()}</div>
 
       <div class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,460px)]">
-        <div class="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
+        <div class="grid min-w-0 grid-cols-1 content-start gap-3 md:grid-cols-2">
+          <div class="flex flex-wrap items-center gap-2 md:col-span-2"><div class="segmented segmented-2 !w-auto" role="tablist" aria-label="${esc(t('dash.stagePick'))}">${['d1', 'd2'].map((w) => `<button type="button" role="tab" class="seg px-4" data-chart-stage="${w}">${w === 'd1' ? 'D+1' : 'D+2'}</button>`).join('')}</div><p class="text-[12px] text-muted" id="chart-stage-note"></p></div>
           ${CHARTS.map((c) => `<section class="card"><h3 class="text-[14px] font-semibold">${esc(METRIC[c.key].zh)} <span class="font-normal text-muted">${esc(t(`m.${c.key}`))}${METRIC[c.key].dir < 0 ? ` · ${esc(t('dash.lowerBetter'))}` : ''}</span></h3><div class="mt-2" data-chart="${c.key}"></div></section>`).join('')}
           <section class="card"><h3 class="text-[14px] font-semibold">粉丝 <span class="font-normal text-muted">${esc(t('dash.fans'))}</span></h3><div class="mt-2" data-chart="followers"></div></section>
           <section class="card"><h3 class="text-[14px] font-semibold">涨粉丝 <span class="font-normal text-muted">${esc(t('dash.newFans'))}</span></h3><div class="mt-2" data-chart="newFollowers"></div></section>
@@ -112,6 +134,7 @@ export async function renderDashboard({ isCurrent, keepY }) {
           ${adviceCard()}
           ${expCard()}
           <section class="card" id="ops-brief"><h3 class="text-[15px] font-semibold">${esc(t('ops.title'))}</h3>
+            ${conclusion(opsLines())}
             ${insightList('ops', brief, { empty: t('ops.none') })}
             <p class="mt-2 text-[12px] text-muted">${esc(t('ops.note'))}</p></section>
           <section class="card">
@@ -137,12 +160,49 @@ export async function renderDashboard({ isCurrent, keepY }) {
   });
 
   if (!empty) {
-    const points = (key) => list.map((p) => ({ y: stage(p)[key], admixed: p.validity === '광고혼입', label: `#${p.no ?? ''}`, title: p.title, date: p.date, note: adNote(p) }));
-    for (const c of CHARTS) {
-      lineChart($(`[data-chart="${c.key}"]`, root), { points: points(c.key), baseline: baseline?.medians[c.key] ?? null, baselineLabel: `V${baseline?.version ?? ''}`, format: (v) => fmt(c.key, v), title: METRIC[c.key].zh });
+    // D+1 or D+2 (remembered). A point is "with ads" when an ad ran before that stage's data cut;
+    // for counts the natural part (ad report numbers taken out) is drawn as a second, dashed line.
+    const drawCharts = (which) => {
+      root.querySelectorAll('[data-chart-stage]').forEach((b) => {
+        b.classList.toggle('is-active', b.dataset.chartStage === which);
+        b.setAttribute('aria-selected', String(b.dataset.chartStage === which));
+      });
+      $('#chart-stage-note', root).textContent = t(which === 'd1' ? 'dash.stageNote1' : 'dash.stageNote2');
+      const win = new Map(list.map((p) => [p.id, adInWindow(p, which)]));
+      const withAd = (p) => win.get(p.id).any || (which === 'd1' && p.validity === '광고혼입');
+      const natural = { views: 'naturalViews', newFollowers: 'naturalFollowers' };
+      const points = (key) =>
+        list.map((p) => {
+          const w = win.get(p.id);
+          const ad = withAd(p);
+          return { y: stage(p, which)[key], y2: ad && natural[key] ? w[natural[key]] : null, admixed: ad, label: `#${p.no ?? ''}`, title: p.title, date: p.date, note: adNote(p) };
+        });
+      // D+2 has no fixed baseline: its reference is the median of the posts without ads by then.
+      const ref = (key) => (which === 'd1' ? baseline?.medians[key] ?? null : median(list.filter((p) => !withAd(p)).map((p) => stage(p, 'd2')[key]).filter((v) => typeof v === 'number')));
+      const refLabel = which === 'd1' ? `V${baseline?.version ?? ''}` : t('dash.d2Median');
+      for (const c of CHARTS) {
+        lineChart($(`[data-chart="${c.key}"]`, root), { points: points(c.key), baseline: ref(c.key), baselineLabel: refLabel, format: (v) => fmt(c.key, v), title: METRIC[c.key].zh });
+      }
+      lineChart($('[data-chart="followers"]', root), { points: list.map((p) => ({ y: p.followers, admixed: withAd(p), label: `#${p.no ?? ''}`, title: p.title, date: p.date })), format: (v) => Math.round(v).toLocaleString('en-US'), title: '粉丝' });
+      lineChart($('[data-chart="newFollowers"]', root), { points: points('newFollowers'), format: (v) => String(Math.round(v * 10) / 10), title: '涨粉丝' });
+    };
+    let chartStage = 'd1';
+    try {
+      chartStage = localStorage.getItem('xhs-chart-stage') === 'd2' ? 'd2' : 'd1';
+    } catch {
+      /* ignore */
     }
-    lineChart($('[data-chart="followers"]', root), { points: list.map((p) => ({ y: p.followers, admixed: p.validity === '광고혼입', label: `#${p.no ?? ''}`, title: p.title, date: p.date })), format: (v) => Math.round(v).toLocaleString('en-US'), title: '粉丝' });
-    lineChart($('[data-chart="newFollowers"]', root), { points: points('newFollowers'), format: (v) => String(Math.round(v * 10) / 10), title: '涨粉丝' });
+    drawCharts(chartStage);
+    root.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-chart-stage]');
+      if (!b) return;
+      try {
+        localStorage.setItem('xhs-chart-stage', b.dataset.chartStage);
+      } catch {
+        /* ignore */
+      }
+      drawCharts(b.dataset.chartStage);
+    });
   }
   if (!empty) analysis.bind(root);
   // Opened from Data → 광고기록 "see the analysis": go to that section.

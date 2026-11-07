@@ -1,3 +1,4 @@
+import { channelBrief } from './channels.js';
 import { METRIC } from './metrics.js';
 import { adOrders, goalType } from './ad-report.js';
 import { isValid, median, ordered, relDiff, stage } from './stats.js';
@@ -245,6 +246,8 @@ export function opsBrief(posts, baseline, { today = new Date().toISOString().sli
   // 3b. An experiment that clearly paid off (two options with enough posts, nothing else changed).
   const exp = experimentResults(posts, experiments).filter((r) => r.verdict?.clear && !r.verdict.mixed).sort((a, b) => b.verdict.rel - a.verdict.rel)[0];
   if (exp) out.push({ key: 'expWin', tone: 'good', ref: exp.verdict.ref, metric: exp.metric, vars: { name: exp.name, best: exp.verdict.best, worst: exp.verdict.worst, m: METRIC[exp.metric].zh, pct: Math.round(exp.verdict.rel * 100) } });
+  // 3c. Traffic channels: which feed brings views, what experiments did to the opening's hold.
+  for (const x of channelBrief(posts, experiments)) out.push({ ...x, key: `ch.${x.key}` });
   // 4. Posting rhythm.
   const dates = ordered(posts).map((p) => p.date).filter(Boolean);
   if (dates.length >= 4) {
