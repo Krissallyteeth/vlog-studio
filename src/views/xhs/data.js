@@ -62,6 +62,10 @@ export async function renderData([tab = 'posts', focus], { isCurrent, keepY }) {
       <div id="data-body"></div>`,
   });
   const body = $('#data-body', root);
+  // Phones: the tab row scrolls sideways; keep the open tab in sight.
+  const tabsEl = $('.segmented-tabs', root);
+  const activeTab = $('.seg.is-active', root);
+  if (tabsEl && activeTab && tabsEl.scrollWidth > tabsEl.clientWidth) tabsEl.scrollLeft = activeTab.offsetLeft - (tabsEl.clientWidth - activeTab.offsetWidth) / 2;
   const ctx = { posts, income, baseline, settings, docs, baselines, root };
   let view;
   if (tab === 'posts') view = renderPosts(body, ctx, focus);

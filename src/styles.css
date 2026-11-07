@@ -908,8 +908,15 @@
     @apply grid-cols-4;
   }
   /* Data tabs: 2 × 2 on phones so the labels are never cut off. */
+  /* Data tabs: always one row; on narrow phones the row scrolls sideways rather than wrapping. */
   .segmented-tabs {
-    @apply grid-cols-2 sm:grid-cols-4;
+    @apply flex overflow-x-auto;
+    scrollbar-width: none;
+  }
+  .segmented-tabs::-webkit-scrollbar { display: none; }
+  .segmented-tabs > .seg {
+    @apply min-h-10 flex-1 px-2.5 text-[12px] sm:text-[13px];
+    flex-shrink: 0;
   }
   .seg {
     @apply relative flex min-h-11 items-center justify-center gap-1 rounded-[11px] px-1 text-[13px] font-semibold text-muted transition whitespace-nowrap;
