@@ -12,6 +12,7 @@ import { AD_METRICS } from '../../xhs/ocr-ad-parse.js';
 import { memoDuplicateOf } from '../../xhs/ad-orders.js';
 import { postFocus } from '../../xhs/insights.js';
 import { insightList } from './insight-text.js';
+import { noteMetaHtml } from './note-meta.js';
 import { relativeNote, xhsPage } from './shell.js';
 
 const CF = { good: 'cf-good', mid: 'cf-mid', bad: 'cf-bad' };
@@ -149,6 +150,7 @@ export async function renderPost([id], { isCurrent }) {
       <section class="card mt-3"><h2 class="section-step">4 · ${esc(t('post.s.ads'))}</h2><div class="mt-2" id="p-ads">${adsHtml()}</div></section>
       <section class="card mt-3"><h2 class="section-step">5 · ${esc(t('post.s.analysis'))}</h2>
         <div class="mt-2 rounded-[12px] border border-line p-3"><h3 class="text-[14px] font-semibold">${esc(t('pf.title'))}</h3>${insightList('pf', focus.items)}</div>
+        ${noteMetaHtml(post.d1Meta, post, 'D+1')}${noteMetaHtml(post.d2Meta, post, 'D+2')}
         <div class="mt-3">${reportHtml()}</div></section>
       <button type="button" class="btn btn-ghost text-danger mt-4" id="p-delete">${icon('trash', 'size-4')}${esc(t('post.delete'))}</button>`,
   });

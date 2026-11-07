@@ -8,6 +8,8 @@ import { deleteOne, getAll, putMany } from '../../xhs/db.js';
 import { fmt, parseInput, toEditText } from '../../xhs/format.js';
 import { INPUT_METRICS, METRIC } from '../../xhs/metrics.js';
 import { extractMetrics, mergeResults } from '../../xhs/ocr-parse.js';
+import { metricLines, noteExtras } from '../../xhs/ocr-note.js';
+import { noteMetaHtml } from './note-meta.js';
 import { ordered } from '../../xhs/stats.js';
 import { listPosts, normalizePost, savePosts } from '../../xhs/store.js';
 import { xhsPage } from './shell.js';
@@ -114,7 +116,9 @@ export async function renderOcr([postId], { isCurrent }) {
           } else if (/load/.test(m.status)) result.innerHTML = `<p class="card text-[14px]">${esc(t('ocr.loading'))} (${esc(m.status)} ${Math.round((m.progress ?? 0) * 100)}%)</p>`;
         });
         im.text = out.text;
-        im.result = extractMetrics(out.lines);
+        im.lines = out.lines;
+        // Comment screens and a traffic channel's own block are not the note's metrics.
+        im.result = extractMetrics(metricLines(out.lines));
         im.status = 'done';
       } catch (err) {
         console.error(err);
@@ -124,6 +128,16 @@ export async function renderOcr([postId], { isCurrent }) {
       drawThumbs();
     }
     state.merged = mergeResults(state.images.filter((im) => im.status === 'done').map((im) => im.result));
+    // Title, publish time, data cut, peer rank, sources, audience from the same screenshots.
+    state.extras = noteExtras(state.images.filter((im) => im.status === 'done' && im.lines).map((im) => im.lines));
+    if (state.postId === 'new') {
+      const ti = $('#ocr-new-title', root);
+      if (ti && !ti.value.trim() && state.extras.title) ti.value = state.extras.title;
+      if (state.extras.publishedAt) {
+        $('#ocr-new-date', root).value = state.extras.publishedAt.slice(0, 10);
+        $('#ocr-new-time', root).value = state.extras.publishedAt.slice(11, 16);
+      }
+    }
     state.choice = {};
     for (const [key, m] of Object.entries(state.merged)) if (m.status === 'ok') state.choice[key] = m.value;
     drawResult();
@@ -154,6 +168,7 @@ export async function renderOcr([postId], { isCurrent }) {
           <p class="mt-1 text-[12px] text-muted">${esc(t('ocr.legend'))}</p>
           ${errors.length ? `<p class="form-error mt-2">${esc(t('ocr.failed', { n: errors.length, msg: errors[0].error }))}</p>` : ''}
           <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t('crit.metric'))}</th><th>${esc(t('ocr.recognised'))}</th><th>${esc(t('ocr.toSave'))}</th><th class="num">${esc(t('ocr.inApp'))}</th><th>${esc(t('imp.th.status'))}</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
+          ${noteMetaHtml(state.extras, p, state.stage === 'd1' ? 'D+1' : 'D+2')}
           <div class="mt-3 flex flex-wrap gap-2"><button type="button" class="btn btn-primary" id="ocr-save">${esc(t('ocr.save'))}</button><button type="button" class="btn btn-secondary" id="ocr-text">${esc(t('ocr.showText'))}</button></div>
         </section>
         <aside class="card xl:sticky xl:top-4 self-start"><h3 class="text-[14px] font-semibold">${esc(t('ocr.original'))}</h3>
@@ -194,6 +209,9 @@ export async function renderOcr([postId], { isCurrent }) {
     });
     if (!ok) return;
     const updated = { ...target, [state.stage]: { ...target[state.stage], ...values } };
+    if (state.extras) updated[`${state.stage}Meta`] = state.extras;
+    // The publish time read from the screenshots fills a time the post does not have yet.
+    if (!updated.time && state.extras?.publishedAt && state.extras.publishedAt.slice(0, 10) === updated.date) updated.time = state.extras.publishedAt.slice(11, 16);
     if (keep) {
       const records = [];
       for (const im of state.images) {

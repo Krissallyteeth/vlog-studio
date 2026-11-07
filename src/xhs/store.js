@@ -132,10 +132,29 @@ export function normalizePost(raw = {}, now = Date.now()) {
     // Titles this post had in 薯条 screenshots (they can differ from the workbook title).
     adTitles: Array.isArray(raw.adTitles) ? raw.adTitles.filter((x) => typeof x === 'string' && x).slice(-10) : [],
     extra: raw.extra && typeof raw.extra === 'object' ? { ...raw.extra } : {},
+    // What the D+1 / D+2 screenshots showed besides the metrics: when the data was cut, the
+    // platform's peer median and rank, traffic sources, audience.
+    d1Meta: noteMeta(raw.d1Meta),
+    d2Meta: noteMeta(raw.d2Meta),
     source: raw.source ?? null, // { file, sheet, row, importedAt, cells: { col: { v, f, w } } }
     screenshots: Array.isArray(raw.screenshots) ? raw.screenshots.filter((x) => typeof x === 'string') : [],
     createdAt: num(raw.createdAt) ?? now,
     updatedAt: num(raw.updatedAt) ?? now,
+  };
+}
+
+const shares = (o) => Object.fromEntries(Object.entries(o && typeof o === 'object' ? o : {}).filter(([k, v]) => typeof k === 'string' && num(v) != null).map(([k, v]) => [k, num(v)]));
+function noteMeta(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const peer = Object.fromEntries(Object.entries(raw.peer && typeof raw.peer === 'object' ? raw.peer : {}).map(([k, v]) => [k, { value: num(v?.value), median: num(v?.median), beat: num(v?.beat) }]));
+  const aud = raw.audience && typeof raw.audience === 'object' ? raw.audience : {};
+  return {
+    snapshotAt: str(raw.snapshotAt),
+    snapshotDerived: raw.snapshotDerived === true,
+    publishedAt: str(raw.publishedAt),
+    peer,
+    sources: shares(raw.sources),
+    audience: { gender: shares(aud.gender), age: shares(aud.age), city: shares(aud.city), interest: shares(aud.interest) },
   };
 }
 
@@ -156,6 +175,10 @@ export function normalizeIncome(raw = {}, now = Date.now()) {
     // Titles this post had in 薯条 screenshots (they can differ from the workbook title).
     adTitles: Array.isArray(raw.adTitles) ? raw.adTitles.filter((x) => typeof x === 'string' && x).slice(-10) : [],
     extra: raw.extra && typeof raw.extra === 'object' ? { ...raw.extra } : {},
+    // What the D+1 / D+2 screenshots showed besides the metrics: when the data was cut, the
+    // platform's peer median and rank, traffic sources, audience.
+    d1Meta: noteMeta(raw.d1Meta),
+    d2Meta: noteMeta(raw.d2Meta),
     source: raw.source ?? null,
     createdAt: num(raw.createdAt) ?? now,
     updatedAt: num(raw.updatedAt) ?? now,
