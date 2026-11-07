@@ -1491,4 +1491,10 @@ export default {
   "adv.h.against": "비권장인데 진행 {n}건: 팔로워 1명 중앙값 {cost}, 평소보다 쌌던 것 {good}건",
   "adv.h.notRun": "광고하지 않은 글 {n}편",
   "adv.cardNote": "\"평소\"는 그 광고 전까지의 关注 목표 광고 팔로워 단가예요. 권장을 따른 쪽 결과가 더 좋으면 기준을 믿어도 된다는 뜻이에요.",
+
+  "nm.ai": "샤오훙수 AI 분석 (원문)",
+  "nm.ai.traffic": "유입 분석",
+  "nm.ai.audience": "시청자 분석",
+
+  "pf.aiTip": "샤오훙수 AI 제안: {text}",
 };

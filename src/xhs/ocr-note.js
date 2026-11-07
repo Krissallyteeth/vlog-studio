@@ -67,6 +67,7 @@ export function noteExtras(linesPerImage, { year = new Date().getFullYear() } = 
   // metric cards' own cut is often too faint to read; the audience one ("观众画像 … 07:00") is not
   // the metrics' cut.
   let day = '';
+  const titleReads = [];
   for (const lines of linesPerImage) {
     for (const l of lines) {
       const tx = lineText(l);
@@ -85,9 +86,8 @@ export function noteExtras(linesPerImage, { year = new Date().getFullYear() } = 
     let afterTags = false;
     texts.forEach((tx, i) => {
       // Title: the line right below "笔记分析详情" (or the author's post on the comment screen).
-      if (!out.title && /笔记分析详情/.test(texts[i - 1] ?? '') && (tx.match(/[一-鿿]/g) ?? []).length >= 4 && !/笔记状态|数据|概览/.test(tx)) {
-        out.title = tx.replace(/[[\]【】()（）《》@©®]/g, '').replace(/\|+/g, ' | ').replace(/\s+/g, ' ').trim();
-      }
+      if (/笔记分析详情/.test(texts[i - 1] ?? '') && (tx.match(/[一-鿿]/g) ?? []).length >= 4 && !/笔记状态|数据|概览/.test(tx)) titleReads.push(tx);
+      if (comments && /作者/.test(texts[i - 1] ?? '') && (tx.match(/[一-鿿]/g) ?? []).length >= 4) titleReads.push(tx);
       // Publish time: the first time stamp after the hashtags of the author's post.
       if (comments && /^#/.test(tx)) afterTags = true;
       if (comments && afterTags && !out.publishedAt) {
@@ -103,7 +103,9 @@ export function noteExtras(linesPerImage, { year = new Date().getFullYear() } = 
         if (inline) out.peer[LABEL[inline[1]]] ??= { value: num(inline[2]), median: num(inline[3]), beat: p100(inline[4]) };
         else if (diag) {
           const vals = (lines[i + 1]?.words ?? []).map((w) => w.text).join(' ').match(/\d+(?:\.\d+)?\s*(?:%|秒)?/g) ?? [];
-          if (vals.length >= 3) out.peer[diag] ??= { value: num(vals[0]), median: num(vals[1]), beat: num(vals[2]) };
+          // 平均观看时长 is in seconds ("22.5秒" can be read as "22.5%").
+          const sec = (v) => (diag === 'avgWatch' ? Number(String(v).replace(/[^\d.]/g, '')) : num(v));
+          if (vals.length >= 3) out.peer[diag] ??= { value: sec(vals[0]), median: sec(vals[1]), beat: num(vals[2]) };
         }
       }
       // Traffic sources ("首页推荐 65.8%").
@@ -153,6 +155,19 @@ export function noteExtras(linesPerImage, { year = new Date().getFullYear() } = 
   const segs = [...titles.values()].sort((a, b) => a.from.localeCompare(b.from));
   if (segs.length) out.segments = segs.map((x, i) => ({ ...x, loss: segs.length === losses.length ? losses[i] : null }));
   if (lastMark) out.duration = lastMark;
+  // Title: the screens agree on the real characters; what only one reading has (a flag emoji read
+  // as "加", a stray "2") is dropped.
+  const clean = titleReads.map((x) => x.replace(/[[\]【】()（）《》@©®"“”]/g, '').replace(/^[^A-Za-z一-鿿]+/, ''));
+  let title = clean[0] ?? '';
+  for (const c of clean.slice(1)) {
+    const common = lcs(title, c);
+    if (common.length >= Math.min(title.length, c.length) * 0.7) title = common;
+  }
+  if (title) out.title = title.replace(/\s*\|+\s*/g, ' | ').replace(/\s+/g, ' ').trim();
+  // Interests are listed from the largest share down: a share smaller than one listed below it was misread.
+  const ints = Object.entries(out.audience.interest);
+  out.audience.interest = Object.fromEntries(ints.filter(([, v], i) => !ints.slice(i + 1).some(([, w]) => w > v)));
+  out.ai = aiTexts(linesPerImage);
   // The platform cuts D+1 data at midnight after the publish day (shown the next morning at 9).
   if (!out.snapshotAt && out.publishedAt) {
     out.snapshotAt = `${new Date(Date.parse(`${out.publishedAt.slice(0, 10)}T00:00:00Z`) + 86400000).toISOString().slice(0, 10)}T00:00`;
@@ -183,4 +198,96 @@ export function mergeRuns(runs) {
     else if (r.join().includes(out.join())) out = [...r];
   }
   return out;
+}
+
+/** Longest common subsequence of two strings (characters in order). */
+function lcs(a, b) {
+  const m = a.length;
+  const n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = m - 1; i >= 0; i--) for (let j = n - 1; j >= 0; j--) dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  let i = 0;
+  let j = 0;
+  let out = '';
+  while (i < m && j < n) {
+    if (a[i] === b[j]) {
+      out += a[i];
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
+    else j++;
+  }
+  return out;
+}
+
+const AI_END = /该结果于|小时后可重新|评论总结|数据更新至|^@?(首页推荐|视频推荐|搜索|关注页面|其他来源)\d|性别分布/;
+/**
+ * The platform's own written analysis (marked "ai" in the app), kept as read:
+ *  metrics: { ctr: { now, why, tip } … } from the diagnosis popups (现状 · 原因分析 · 建议),
+ *  segments: { '00:00': { analysis, tip } } from 内容分析, traffic / audience: { title, text }.
+ */
+export function aiTexts(linesPerImage) {
+  const ai = { metrics: {}, segments: {} };
+  for (const lines of linesPerImage) {
+    const tx = lines.map(lineText);
+    let metric = '';
+    let seg = '';
+    let part = '';
+    let buf = [];
+    const flush = () => {
+      const text = buf.join('').replace(/ai$/i, '').trim();
+      buf = [];
+      if (!text || !part) return;
+      // The same text can be cut off on one screenshot and whole on the next: keep the longer.
+      const keep = (obj, k) => {
+        if (!obj[k] || text.length > obj[k].length) obj[k] = text;
+      };
+      if (metric && ['now', 'why', 'tip'].includes(part)) keep((ai.metrics[metric] ??= {}), part);
+      else if (seg && ['analysis', 'tip'].includes(part)) keep((ai.segments[seg] ??= {}), part);
+      else if (part === 'traffic' || part === 'audience') {
+        if (!ai[part] || text.length > ai[part].text.length) ai[part] = { title: ai[`_${part}`] ?? '', text };
+      }
+    };
+    tx.forEach((t, i) => {
+      const head = Object.keys(DIAG).find((k) => t.startsWith(k) && t.length <= k.length + 4);
+      if (head) {
+        flush();
+        metric = DIAG[head];
+        part = '';
+      }
+      const sm = /^(\d{2}:\d{2})-\d{2}:\d{2}/.exec(t);
+      if (sm) {
+        flush();
+        seg = sm[1];
+        metric = '';
+        part = '';
+        return;
+      }
+      if (AI_END.test(t)) {
+        flush();
+        part = '';
+        return;
+      }
+      const label = t.replace(/ai$/i, '');
+      if (label === '现状') return void (flush(), (part = 'now'));
+      if (label === '原因分析') return void (flush(), (part = 'why'));
+      if (label === '建议') return void (flush(), (part = 'tip'));
+      if (label === '内容分析' && seg) return void (flush(), (part = 'analysis'));
+      if (label === '优化建议' && seg) return void (flush(), (part = 'tip'));
+      // The traffic / audience summaries: a headline marked "ai" right under the section title.
+      if (/ai$/i.test(t) && (/观看来源/.test(tx[i - 1] ?? '') || /观众画像/.test(tx[i - 1] ?? ''))) {
+        flush();
+        part = /观看来源/.test(tx[i - 1]) ? 'traffic' : 'audience';
+        ai[`_${part}`] = t.replace(/ai$/i, '');
+        metric = '';
+        seg = '';
+        return;
+      }
+      if (part) buf.push(t);
+    });
+    flush();
+  }
+  delete ai._traffic;
+  delete ai._audience;
+  return ai;
 }

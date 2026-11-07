@@ -1491,4 +1491,10 @@ export default {
   "adv.h.against": "Against the advice: {n}, median {cost} per follower, {good} cheaper than usual",
   "adv.h.notRun": "{n} posts without ads",
   "adv.cardNote": "\"Usual\" = the price per follower of 关注 ads before that one. If following the advice turns out better, the rules can be trusted.",
+
+  "nm.ai": "Platform AI analysis (original)",
+  "nm.ai.traffic": "Traffic",
+  "nm.ai.audience": "Audience",
+
+  "pf.aiTip": "Platform AI suggests: {text}",
 };

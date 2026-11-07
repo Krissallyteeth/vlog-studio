@@ -146,6 +146,18 @@ export function normalizePost(raw = {}, now = Date.now()) {
 }
 
 const shares = (o) => Object.fromEntries(Object.entries(o && typeof o === 'object' ? o : {}).filter(([k, v]) => typeof k === 'string' && num(v) != null).map(([k, v]) => [k, num(v)]));
+const txt = (v) => (typeof v === 'string' ? v.slice(0, 600) : '');
+function noteAi(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const parts = (o, keys) => Object.fromEntries(keys.map((k) => [k, txt(o?.[k])]).filter(([, v]) => v));
+  const map = (o, keys) => Object.fromEntries(Object.entries(o && typeof o === 'object' ? o : {}).map(([k, v]) => [k, parts(v, keys)]).filter(([, v]) => Object.keys(v).length));
+  return {
+    metrics: map(raw.metrics, ['now', 'why', 'tip']),
+    segments: map(raw.segments, ['analysis', 'tip']),
+    traffic: raw.traffic ? parts(raw.traffic, ['title', 'text']) : null,
+    audience: raw.audience ? parts(raw.audience, ['title', 'text']) : null,
+  };
+}
 function noteMeta(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const peer = Object.fromEntries(Object.entries(raw.peer && typeof raw.peer === 'object' ? raw.peer : {}).map(([k, v]) => [k, { value: num(v?.value), median: num(v?.median), beat: num(v?.beat) }]));
@@ -160,6 +172,8 @@ function noteMeta(raw) {
     // 内容分析: segments the platform marks with the share of viewers lost in each.
     segments: (Array.isArray(raw.segments) ? raw.segments : []).filter((x) => x && /^\d{2}:\d{2}$/.test(x.from)).slice(0, 12).map((x) => ({ from: str(x.from), to: str(x.to), title: str(x.title), loss: num(x.loss) })),
     duration: num(raw.duration),
+    // The platform's own written analysis, as read (Chinese).
+    ai: noteAi(raw.ai),
   };
 }
 

@@ -160,11 +160,19 @@ export function postFocus(post, posts, baseline) {
     // Cover: the same exposure at my usual click rate would have brought this many more views.
     if (focus.key === 'ctr' && isNum(d.exposure) && isNum(focus.base) && focus.base > d.ctr) vars.gain = Math.round(d.exposure * (focus.base - d.ctr));
     items.push({ key: `focus.${focus.key}`, vars, metric: focus.key });
+    // …with the platform's own suggestion for that step, when its screenshots were read.
+    const aiKey = { ctr: 'ctr', exit2s: 'retain5s', retain5s: 'retain5s', avgWatchRatio: 'avgWatch', completion: 'avgWatch', interactionRate: 'interactionRate' }[focus.key];
+    const tip = post.d1Meta?.ai?.metrics?.[aiKey]?.tip;
+    if (tip) items.push({ key: 'aiTip', tone: 'info', vars: { text: tip } });
   } else if (baseline) items.push({ key: 'focus.none', vars: {} });
 
   // The platform's own segment analysis: most viewers gone in the opening segment.
   const seg0 = (post.d1Meta?.segments ?? [])[0];
-  if (seg0 && seg0.from === '00:00' && isNum(seg0.loss) && seg0.loss >= 0.5) items.push({ key: 'segStart', vars: { p: Math.round(seg0.loss * 100), to: seg0.to, title: seg0.title || '–' } });
+  if (seg0 && seg0.from === '00:00' && isNum(seg0.loss) && seg0.loss >= 0.5) {
+    items.push({ key: 'segStart', vars: { p: Math.round(seg0.loss * 100), to: seg0.to, title: seg0.title || '–' } });
+    const tip = post.d1Meta?.ai?.segments?.['00:00']?.tip;
+    if (tip) items.push({ key: 'aiTip', tone: 'info', vars: { text: tip } });
+  }
 
   // Followers per 1,000 views against my median.
   const per1k = (p) => (isNum(stage(p).newFollowers) && stage(p).views > 0 ? (stage(p).newFollowers / stage(p).views) * 1000 : null);

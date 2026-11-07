@@ -5,6 +5,14 @@ import { flushAll } from './data/autosave.js';
 const routes = [];
 let current = null;
 let token = 0;
+let lastPath = null;
+
+/** Scroll for a freshly drawn view: back where it was when redrawn in place, else `y` (top). */
+export function settleScroll(ctx, y = 0) {
+  const to = ctx?.keepY ?? y;
+  window.scrollTo(0, to);
+  if (to) requestAnimationFrame(() => window.scrollTo(0, to));
+}
 
 export function route(pattern, handler) {
   routes.push({ pattern, handler });
@@ -32,10 +40,13 @@ async function resolve() {
   // Runs before the next view renders (and scrolls), e.g. to remember the list position.
   current?.leave?.();
   const path = currentPath();
+  // The same screen drawn again (after a save, a sync): it keeps its scroll position.
+  const keepY = path === lastPath ? window.scrollY : null;
+  lastPath = path;
   for (const r of routes) {
     const m = path.match(r.pattern);
     if (!m) continue;
-    const ctx = { isCurrent: () => mine === token, previous: current };
+    const ctx = { isCurrent: () => mine === token, previous: current, keepY };
     const view = await r.handler(m.slice(1).map((s) => (s === undefined ? undefined : decodeURIComponent(s))), ctx);
     if (mine !== token) {
       if (view !== current) view?.destroy?.();

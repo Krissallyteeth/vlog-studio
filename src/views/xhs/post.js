@@ -1,6 +1,6 @@
 import { listProjects, getProject } from '../../data/repo.js';
 import { t } from '../../i18n/index.js';
-import { navigate } from '../../router.js';
+import { navigate, settleScroll } from '../../router.js';
 import { $, confirmDialog, esc, openSheet, toast } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { adEffect, analysePost, orderEfficiency } from '../../xhs/analysis.js';
@@ -20,7 +20,11 @@ import { relativeNote, xhsPage } from './shell.js';
 const CF = { good: 'cf-good', mid: 'cf-mid', bad: 'cf-bad' };
 
 // ── 콘텐츠 목록 ───────────────────────────────────────
-export async function renderContents({ isCurrent }) {
+// Where the list was when a post was opened from it: back there on return.
+let contentsY = 0;
+const FROM_LIST = ['xhs-post', 'xhs-ocr'];
+
+export async function renderContents({ isCurrent, previous, keepY }) {
   const [posts, baseline, projects] = await Promise.all([listPosts(), activeBaseline(), listProjects()]);
   if (!isCurrent()) return null;
   const list = ordered(posts).reverse();
@@ -48,12 +52,18 @@ export async function renderContents({ isCurrent }) {
           .join('')}</ul><div class="mt-3">${relativeNote()}</div>`
       : `<div class="empty card"><div class="empty-icon">${icon('list', 'size-6')}</div><p class="font-semibold">${esc(t('dash.empty'))}</p><a href="#/import" class="btn btn-primary mt-4">${esc(t('data.import'))}</a></div>`,
   });
-  window.scrollTo(0, 0);
-  return { kind: 'xhs-contents', root };
+  settleScroll({ keepY }, FROM_LIST.includes(previous?.kind) ? contentsY : 0);
+  return {
+    kind: 'xhs-contents',
+    root,
+    leave() {
+      contentsY = window.scrollY;
+    },
+  };
 }
 
 // ── 게시물 상세: 기획 → 배포 → 통계 → 광고 → 분석 ─────────
-export async function renderPost([id], { isCurrent }) {
+export async function renderPost([id], { isCurrent, keepY }) {
   const [post, posts, baseline, settings, projects] = await Promise.all([getPost(id), listPosts(), activeBaseline(), getSettings(), listProjects()]);
   if (!isCurrent()) return null;
   if (!post) {
@@ -222,7 +232,7 @@ export async function renderPost([id], { isCurrent }) {
     }
   });
   const off = onXhsChange(() => navigate(`/c/${encodeURIComponent(id)}`, { replace: true }));
-  window.scrollTo(0, 0);
+  settleScroll({ keepY });
   return { kind: 'xhs-post', destroy: off };
 }
 

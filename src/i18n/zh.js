@@ -1491,4 +1491,10 @@ export default {
   "adv.h.against": "不建议仍投放{n}单：每粉丝中位数{cost}，{good}单比平时便宜",
   "adv.h.notRun": "未投放笔记{n}篇",
   "adv.cardNote": "“平时”指此前关注目标投放的粉丝单价。按建议的结果更好，说明标准可信。",
+
+  "nm.ai": "小红书AI分析（原文）",
+  "nm.ai.traffic": "流量分析",
+  "nm.ai.audience": "观众分析",
+
+  "pf.aiTip": "小红书AI建议：{text}",
 };

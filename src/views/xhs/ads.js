@@ -67,7 +67,7 @@ export function adAnalysisSection({ posts, income, settings, baseline }, rerende
         <tbody>${list.map((r) => `<tr><td>${esc(name(r))}</td><td class="num">${r.count}</td><td class="num">${esc(yuan(r.spend))}</td><td class="num">${n0(r.reads)}</td><td class="num">${n0(r.likeFav)}</td><td class="num">${n0(r.follows)}</td>${costCells(r)}</tr>`).join('')}</tbody></table></div></section>`
       : '';
 
-  const html = `
+  const top = `
       <div class="kpi-grid">
         <div class="kpi"><p class="kpi-label">${esc(t('ads.spendTotal'))}</p><p class="kpi-value">${esc(yuan(totals.spend) || '0元')}</p><p class="text-[11px] opacity-75">${esc(t('adr.ordersN', { n: totals.count }))}</p></div>
         <div class="kpi"><p class="kpi-label">${esc(t('adr.credit'))}</p><p class="kpi-value">${esc(yuan(totals.credit) || '0元')}</p><p class="text-[11px] opacity-75">${esc(t('adr.creditSub'))}</p></div>
@@ -85,8 +85,8 @@ export function adAnalysisSection({ posts, income, settings, baseline }, rerende
 
       <section class="card mt-3"><h2 class="text-[16px] font-semibold">${esc(t('adr.comments'))}</h2>
         ${shown.length ? `<ul class="mt-2 flex flex-col gap-1.5">${shown.map((c) => `<li class="rounded-[12px] px-3 py-2 text-[14px] leading-relaxed ${toneCls[c.tone]}">${esc(commentText(c))}</li>`).join('')}</ul>` : `<p class="mt-2 text-[14px] text-muted">${esc(t('ads.none'))}</p>`}
-        <p class="mt-2 text-[12px] text-muted">${esc(t('adr.commentsNote'))}</p></section>
-
+        <p class="mt-2 text-[12px] text-muted">${esc(t('adr.commentsNote'))}</p></section>`;
+  const rest = `
       <section class="card mt-3">
         <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="text-[16px] font-semibold">${esc(t('adr.byPeriod'))}</h2>
           <div class="segmented segmented-2 !w-auto"><button type="button" class="seg px-3 ${prefs.unit === 'month' ? 'is-active' : ''}" data-unit="month">${esc(t('adr.month'))}</button><button type="button" class="seg px-3 ${prefs.unit === 'year' ? 'is-active' : ''}" data-unit="year">${esc(t('adr.year'))}</button></div></div>
@@ -107,6 +107,7 @@ export function adAnalysisSection({ posts, income, settings, baseline }, rerende
 
       ${groupTable(t('adr.byStage'), t('ads.stage'), stageRows(orders), (r) => (r.bucket === '?' ? t('adr.stageUnknown') : r.bucket))}
       ${groupTable(t('adr.byGoal'), t('ads.goal'), goalRows(orders), (r) => r.goal || t('adr.goalUnknown'))}`;
+  const html = top + rest;
   const bind = (root) => {
     root.addEventListener('click', (e) => {
       const u = e.target.closest('[data-unit]');
@@ -128,15 +129,15 @@ export function adAnalysisSection({ posts, income, settings, baseline }, rerende
     toast(t('common.saved'));
     });
   };
-  return { html, bind };
+  return { html, top, rest, bind };
 }
 
 /** Order-level ad history for Data → ③ 광고기록: one row per order, multi-note orders folded. */
-export function adRecordsSection({ posts }) {
+export function adRecordsSection({ posts }, { analysisLink = true } = {}) {
   const history = historyEntries(posts);
   const costHead = `<th class="num" data-m="inline">${esc(t('ads.perRead'))}</th><th class="num">${esc(t('ads.perLikeFav'))}</th><th class="num">${esc(t('ads.perFollow'))}</th>`;
   const html = `
-      <div class="mb-3 flex flex-wrap items-center gap-2"><a class="btn btn-primary btn-sm" href="#/ocr-ad">${icon('scan', 'size-4')}${esc(t('oad.fromShots'))}</a><a class="btn btn-secondary btn-sm" href="#/xhs" data-scroll-to="ad-analysis">${icon('chart', 'size-4')}${esc(t('adr.toAnalysis'))}</a></div>
+      <div class="mb-3 flex flex-wrap items-center gap-2"><a class="btn btn-primary btn-sm" href="#/ocr-ad">${icon('scan', 'size-4')}${esc(t('oad.fromShots'))}</a>${analysisLink ? `<a class="btn btn-secondary btn-sm" href="#/xhs" data-scroll-to="ad-analysis">${icon('chart', 'size-4')}${esc(t('adr.toAnalysis'))}</a>` : ''}</div>
       <section class="card">
         <h2 class="text-[16px] font-semibold">${esc(t('ads.history'))}</h2>
         <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th class="col-title">${esc(t('xg.title'))}</th><th>${esc(t('adr.start'))}</th><th data-m="inline">${esc(t('ads.stage'))}</th><th data-m="inline">${esc(t('ads.goal'))}</th><th class="num" data-m="key">${esc(t('ads.spendYuan'))}</th><th class="num">${esc(t('adr.creditCol'))}</th><th class="num">阅读量</th><th class="num">点赞+收藏</th><th class="num">新增关注</th>${costHead}<th>${esc(t('adr.orderNo'))}</th><th data-m="inline"></th></tr></thead>

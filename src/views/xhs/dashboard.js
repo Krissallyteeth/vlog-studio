@@ -1,5 +1,5 @@
 import { t } from '../../i18n/index.js';
-import { navigate } from '../../router.js';
+import { navigate, settleScroll } from '../../router.js';
 import { $, confirmDialog, esc, toast } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { fmt, signedPct, won, yuan } from '../../xhs/format.js';
@@ -25,7 +25,7 @@ const CHARTS = [
 ];
 const CF = { good: 'cf-good', mid: 'cf-mid', bad: 'cf-bad' };
 
-export async function renderDashboard({ isCurrent }) {
+export async function renderDashboard({ isCurrent, keepY }) {
   const [posts, income, baseline, settings] = await Promise.all([listPosts(), listIncome(), activeBaseline(), getSettings()]);
   if (!isCurrent()) return null;
   const list = ordered(posts);
@@ -160,7 +160,7 @@ export async function renderDashboard({ isCurrent }) {
     if (row) navigate(`/data/posts/${encodeURIComponent(row.dataset.goto)}`);
   });
   const off = onXhsChange(() => navigate('/xhs', { replace: true }));
-  window.scrollTo(0, 0);
+  settleScroll({ keepY });
   return { kind: 'xhs-dash', destroy: off };
 }
 

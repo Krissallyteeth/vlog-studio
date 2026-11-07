@@ -1,5 +1,5 @@
 import { getLang, t } from '../../i18n/index.js';
-import { navigate } from '../../router.js';
+import { navigate, settleScroll } from '../../router.js';
 import { $, confirmDialog, esc, openSheet, toast } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { fmt, signedPct, won } from '../../xhs/format.js';
@@ -44,7 +44,7 @@ const savePrefs = (p) => {
   }
 };
 
-export async function renderData([tab = 'posts', focus], { isCurrent }) {
+export async function renderData([tab = 'posts', focus], { isCurrent, keepY }) {
   if (!TABS.includes(tab)) tab = 'posts';
   const [posts, income, baseline, settings, docs, baselines] = await Promise.all([listPosts(), listIncome(), activeBaseline(), getSettings(), getDocs(), getBaselines()]);
   if (!isCurrent()) return null;
@@ -67,11 +67,14 @@ export async function renderData([tab = 'posts', focus], { isCurrent }) {
   if (tab === 'posts') view = renderPosts(body, ctx, focus);
   if (tab === 'criteria') view = renderCriteria(body, ctx);
   if (tab === 'ads') {
-    // ③ 광고기록: one row per 薯条 order (the analysis of them is on the dashboard).
-    const { adRecordsSection } = await import('./ads.js');
-    const sec = adRecordsSection({ posts });
-    body.innerHTML = sec.html;
+    // ③ 광고기록: the ad statistics on top, then one row per 薯条 order, then the breakdowns.
+    const { adRecordsSection, adAnalysisSection } = await import('./ads.js');
+    const sec = adRecordsSection({ posts }, { analysisLink: false });
+    const stats = adAnalysisSection({ posts, income, settings, baseline }, () => navigate('/data/ads', { replace: true }));
+    const split = sec.html.indexOf('<section');
+    body.innerHTML = `${sec.html.slice(0, split)}${stats.top}<div class="mt-3">${sec.html.slice(split)}</div>${stats.rest}`;
     sec.bind(body);
+    stats.bind(body);
   }
   if (tab === 'income') view = renderIncome(body, ctx);
   if (tab === 'rules') view = renderRules(body, ctx);
@@ -85,7 +88,7 @@ export async function renderData([tab = 'posts', focus], { isCurrent }) {
     if (view?.hasPending?.()) return;
     navigate(`/data/${tab}`, { replace: true });
   });
-  window.scrollTo(0, 0);
+  settleScroll({ keepY });
   return { kind: 'xhs-data', destroy: off };
 }
 
