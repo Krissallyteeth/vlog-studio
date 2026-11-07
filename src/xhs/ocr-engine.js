@@ -6,21 +6,46 @@
 
 let workerPromise = null;
 let onProgress = () => {};
+// Loading the engine stops if nothing arrives for this long (a stalled download, e.g. while the
+// site is being redeployed): an error the screen can show, instead of waiting forever.
+const STALL_MS = 60000;
+
+/** Error thrown when the engine itself could not be loaded (not one image failing). */
+export class OcrEngineError extends Error {}
 
 async function getWorker() {
   if (!workerPromise) {
     const { createWorker } = await import('tesseract.js');
     const base = new URL(import.meta.env?.BASE_URL ?? '/', location.href).href;
-    workerPromise = createWorker(['chi_sim', 'eng'], 1, {
+    let timer = null;
+    let fail = () => {};
+    const stalled = new Promise((_, reject) => {
+      fail = (why) => reject(new OcrEngineError(why));
+    });
+    const kick = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fail('stalled'), STALL_MS);
+    };
+    kick();
+    const created = createWorker(['chi_sim', 'eng'], 1, {
       workerPath: `${base}ocr/worker.min.js`,
       corePath: `${base}ocr/`,
       langPath: `${base}ocr/lang`,
       gzip: true,
-      logger: (m) => onProgress(m),
-    }).catch((err) => {
-      workerPromise = null;
-      throw err;
+      logger: (m) => {
+        kick();
+        onProgress(m);
+      },
+      errorHandler: (e) => fail(e?.message ?? String(e)),
     });
+    workerPromise = Promise.race([created, stalled])
+      .finally(() => clearTimeout(timer))
+      .catch((err) => {
+        workerPromise = null;
+        // A worker that loads after all is not left running.
+        created.then((w) => w.terminate()).catch(() => {});
+        throw err instanceof OcrEngineError ? err : new OcrEngineError(err?.message ?? String(err));
+      });
   }
   return workerPromise;
 }

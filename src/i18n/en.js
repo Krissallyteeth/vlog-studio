@@ -1578,4 +1578,5 @@ export default {
   "post.reShotHelp": "Uploading again saves the values you confirm and replaces the other facts read (channels, AI notes, audience).",
 
   "ocr.fixTitle": "Use the title read: now \"{now}\" → \"{read}\"",
+  "ocr.engineFail": "The recognition engine did not load (its download stalled for a minute). Your images are kept. Check the connection; if the app was just updated, reload the page, then press \"Start\" again.",
 };

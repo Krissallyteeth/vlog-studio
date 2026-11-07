@@ -102,7 +102,7 @@ export async function renderOcr([postId, stageParam], { isCurrent }) {
   }
 
   async function run() {
-    const { recognize } = await import('../../xhs/ocr-engine.js');
+    const { recognize, OcrEngineError } = await import('../../xhs/ocr-engine.js');
     result.innerHTML = `<p class="card text-[14px]">${esc(t('ocr.loading'))}</p>`;
     for (const im of state.images) {
       if (im.status === 'done') continue;
@@ -124,6 +124,13 @@ export async function renderOcr([postId, stageParam], { isCurrent }) {
         im.status = 'done';
       } catch (err) {
         console.error(err);
+        if (err instanceof OcrEngineError) {
+          // The engine did not load: nothing is wrong with the images; say what to do and stop.
+          im.status = 'ready';
+          drawThumbs();
+          result.innerHTML = `<p class="card cf-mid text-[14px]">${esc(t('ocr.engineFail'))}</p>`;
+          return;
+        }
         im.status = 'error';
         im.error = err?.message ?? String(err);
       }
