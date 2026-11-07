@@ -175,7 +175,8 @@ export async function renderPost([id], { isCurrent, keepY }) {
         <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t('crit.metric'))}</th><th class="num" data-m="key">D+1</th><th class="num" data-m="inline">${esc(t('crit.fixed'))} V${baseline?.version ?? ''}</th><th class="num" data-m="inline">D+2</th></tr></thead><tbody>${metricRows}</tbody></table></div>
         <div class="mt-2">${relativeNote()}</div>
         ${post.screenshots.length ? `<p class="mt-2 text-[13px]"><a class="link-btn" href="#/ocr/${encodeURIComponent(post.id)}">${esc(t('post.shots', { n: post.screenshots.length }))}</a></p>` : ''}
-        <a class="btn btn-secondary btn-sm mt-3" href="#/ocr/${encodeURIComponent(post.id)}">${icon('scan', 'size-4')}${esc(t('post.fromShot'))}</a>
+        <div class="mt-3 flex flex-wrap gap-2">${['d1', 'd2'].map((w) => `<a class="btn btn-secondary btn-sm" href="#/ocr/${encodeURIComponent(post.id)}/${w}">${icon('scan', 'size-4')}${esc(t(Object.values(post[w] ?? {}).some((v) => v != null) ? 'post.reShot' : 'post.shot', { stage: w === 'd1' ? 'D+1' : 'D+2' }))}</a>`).join('')}</div>
+        <p class="mt-1 text-[12px] text-muted">${esc(t('post.reShotHelp'))}</p>
       </section>
       <section class="card mt-3"><h2 class="section-step">4 · ${esc(t('post.s.ads'))}</h2>${adFlowHtml(adTimeline(post, posts, baseline))}<div class="mt-2" id="p-ads">${adsHtml()}</div></section>
       <section class="card mt-3"><h2 class="section-step">5 · ${esc(t('post.s.analysis'))}</h2>

@@ -1572,4 +1572,10 @@ export default {
 
   "adv.c.dear": "不过建议的那些也比平时贵——最近推广单价本身上涨了。",
   "adv.c.ref": "目前单数少（不足3单），仅供参考。",
+
+  "post.shot": "上传 {stage} 截图",
+  "post.reShot": "重新上传 {stage} 截图",
+  "post.reShotHelp": "重新上传后，数值按确认页所选保存，其他读取信息（渠道、AI意见、观众）会更新为新读取的内容。",
+
+  "ocr.fixTitle": "改用读取的标题：现在「{now}」→「{read}」",
 };

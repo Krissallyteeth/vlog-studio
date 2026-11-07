@@ -1572,4 +1572,10 @@ export default {
 
   "adv.c.dear": "But the advised ones were still dearer than usual — ad prices themselves have risen.",
   "adv.c.ref": "Too few cases yet (under 3) — a reference only.",
+
+  "post.shot": "Upload {stage} screenshots",
+  "post.reShot": "Upload {stage} screenshots again",
+  "post.reShotHelp": "Uploading again saves the values you confirm and replaces the other facts read (channels, AI notes, audience).",
+
+  "ocr.fixTitle": "Use the title read: now \"{now}\" → \"{read}\"",
 };

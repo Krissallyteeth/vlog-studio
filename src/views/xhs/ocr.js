@@ -23,7 +23,7 @@ const KEEP_KEY = 'xhs-ocr-keep';
 const SHOT_MAX_SIDE = 1600; // enough to read the numbers again later
 const SHOT_QUALITY = 0.8;
 
-export async function renderOcr([postId], { isCurrent }) {
+export async function renderOcr([postId, stageParam], { isCurrent }) {
   const [posts, shots] = await Promise.all([listPosts(), getAll('shots')]);
   if (!isCurrent()) return null;
   const list = ordered(posts).reverse();
@@ -42,6 +42,8 @@ export async function renderOcr([postId], { isCurrent }) {
   const post = () => posts.find((p) => p.id === state.postId) ?? null;
   // Default stage: D+2 once D+1 is filled in.
   if (post() && Object.values(post().d1).some((v) => v != null)) state.stage = 'd2';
+  // Asked for a stage (post detail: "upload D+1 again").
+  if (post() && (stageParam === 'd1' || stageParam === 'd2')) state.stage = stageParam;
   const usedBytes = shots.reduce((s, x) => s + (x.blob?.size ?? 0), 0);
 
   const root = xhsPage({
@@ -174,6 +176,7 @@ export async function renderOcr([postId], { isCurrent }) {
           <p class="mt-1 text-[12px] text-muted">${esc(t('ocr.legend'))}</p>
           ${errors.length ? `<p class="form-error mt-2">${esc(t('ocr.failed', { n: errors.length, msg: errors[0].error }))}</p>` : ''}
           <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t('crit.metric'))}</th><th>${esc(t('ocr.recognised'))}</th><th>${esc(t('ocr.toSave'))}</th><th class="num">${esc(t('ocr.inApp'))}</th><th>${esc(t('imp.th.status'))}</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
+          ${p && state.extras?.title && state.extras.title !== p.title ? `<label class="mt-3 flex items-start gap-2 rounded-[10px] bg-surface-2 px-3 py-2 text-[13px]"><input type="checkbox" id="ocr-fix-title" class="mt-1" /><span>${esc(t('ocr.fixTitle', { now: p.title, read: state.extras.title }))}</span></label>` : ''}
           ${noteMetaHtml(state.extras, p, state.stage === 'd1' ? 'D+1' : 'D+2', { posts, edit: true })}
           <div class="mt-3 flex flex-wrap gap-2"><button type="button" class="btn btn-primary" id="ocr-save">${esc(t('ocr.save'))}</button><button type="button" class="btn btn-secondary" id="ocr-text">${esc(t('ocr.showText'))}</button></div>
         </section>
@@ -227,6 +230,7 @@ export async function renderOcr([postId], { isCurrent }) {
     });
     if (!ok) return;
     const updated = { ...target, [state.stage]: { ...target[state.stage], ...values } };
+    if ($('#ocr-fix-title', root)?.checked && state.extras?.title) updated.title = state.extras.title;
     if (state.extras) updated[`${state.stage}Meta`] = state.extras;
     // The publish time read from the screenshots fills a time the post does not have yet.
     if (!updated.time && state.extras?.publishedAt && state.extras.publishedAt.slice(0, 10) === updated.date) updated.time = state.extras.publishedAt.slice(11, 16);

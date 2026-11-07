@@ -28,7 +28,7 @@ route(/^\/c\/([^/]+)$/, async (params, ctx) => (await import('./views/xhs/post.j
 route(/^\/ads$/, async (_, ctx) => (await import('./views/xhs/ads.js')).renderAds(ctx));
 route(/^\/more$/, async (_, ctx) => (await import('./views/xhs/ads.js')).renderMore(ctx));
 route(/^\/ocr-ad(?:\/([^/]+))?$/, async (params, ctx) => (await import('./views/xhs/ocr-ad.js')).renderOcrAd(params, ctx));
-route(/^\/ocr(?:\/([^/]+))?$/, async (params, ctx) => (await import('./views/xhs/ocr.js')).renderOcr(params, ctx));
+route(/^\/ocr(?:\/([^/]+))?(?:\/(d1|d2))?$/, async (params, ctx) => (await import('./views/xhs/ocr.js')).renderOcr(params, ctx));
 route(/^\/p\/([^/]+)\/info$/, ([id], ctx) => renderProjectForm(id, ctx));
 route(/^\/p\/([^/]+)(?:\/([a-z]+))?(?:\/([^/]+))?$/, (params, ctx) => renderDetail(params, ctx));
 
