@@ -10,7 +10,7 @@ import { judge, ordered, stage } from '../../xhs/stats.js';
 import { activeBaseline, deletePost, getPost, getSettings, listPosts, normalizeAd, normalizeStage, onXhsChange, savePosts } from '../../xhs/store.js';
 import { AD_METRICS } from '../../xhs/ocr-ad-parse.js';
 import { memoDuplicateOf } from '../../xhs/ad-orders.js';
-import { postFocus } from '../../xhs/insights.js';
+import { experimentResults, postFocus } from '../../xhs/insights.js';
 import { insightList } from './insight-text.js';
 import { noteMetaHtml } from './note-meta.js';
 import { relativeNote, xhsPage } from './shell.js';
@@ -63,6 +63,22 @@ export async function renderPost([id], { isCurrent }) {
   const report = analysePost(post, posts, baseline);
   // The funnel step to fix first, against my own records; plus what this post's ads showed.
   const focus = postFocus(post, posts, baseline);
+  // This post's experiment choices against the other posts with each option.
+  const expRes = experimentResults(posts, settings.experiments);
+  const expHtml = () => {
+    const mine = settings.experiments.filter((ex) => post.experiments?.[ex.id]);
+    if (!mine.length) return '';
+    const rows = mine.flatMap((ex) =>
+      expRes
+        .filter((r) => r.id === ex.id)
+        .map((r) => {
+          const own = post.experiments[ex.id];
+          const groups = r.groups.map((g) => `${g.opt} ${g.n ? fmt(r.metric, g.med) : '–'} (${t('xp.n', { n: g.n })})`).join(' · ');
+          return `<li class="text-[13px]"><b>${esc(ex.name)}: ${esc(own)}</b> → ${esc(METRIC[r.metric].zh)} ${esc(fmt(r.metric, stage(post)[r.metric]) || '–')} <span class="text-muted">| ${esc(groups)}</span>${r.verdict ? ` <span class="badge ${r.verdict.clear ? 'cf-good' : 'bg-surface-2'}">${esc(t(r.verdict.clear ? 'xp.better' : 'xp.similar', { opt: r.verdict.best }))}</span>${r.verdict.mixed ? ` <span class="badge cf-mid">${esc(t('xp.mixedShort'))}</span>` : ''}` : ` <span class="text-muted">${esc(t('xp.wait'))}</span>`}</li>`;
+        }),
+    );
+    return `<div class="mt-3 rounded-[12px] border border-line p-3"><h3 class="text-[14px] font-semibold">${esc(t('xp.thisPost'))}</h3><ul class="mt-1 flex flex-col gap-1">${rows.join('')}</ul></div>`;
+  };
   const eff = adEffect(post);
   const d1 = stage(post, 'd1');
   const d2 = stage(post, 'd2');
@@ -138,6 +154,9 @@ export async function renderPost([id], { isCurrent }) {
           <div class="field"><span class="field-label">粉丝</span><p class="tabular-nums">${post.followers ?? '–'}</p></div>
           <div class="field"><span class="field-label">推广判断</span><p>${esc([post.adDecisionD1, post.adAux, post.adDecisionD2].filter(Boolean).join(' / ') || '–')}</p></div>
         </div>
+        <div class="mt-3"><p class="field-label">${esc(t('xp.title'))}</p>
+          <div class="mt-1 flex flex-col gap-2">${settings.experiments.map((ex) => `<div class="flex flex-wrap items-center gap-2 text-[13px]"><span class="min-w-[6rem] font-medium">${esc(ex.name)}</span><div class="segmented !w-auto" role="radiogroup">${['', ...ex.options].map((o) => `<button type="button" class="seg px-3 ${(post.experiments?.[ex.id] ?? '') === o ? 'is-active' : ''}" data-exp="${esc(ex.id)}" data-opt="${esc(o)}">${esc(o || '–')}</button>`).join('')}</div></div>`).join('')}</div>
+          <p class="mt-1 text-[12px] text-muted">${esc(t('xp.help'))} <a class="link-btn" href="#/data/rules">${esc(t('xp.manage'))}</a></p></div>
         ${post.memo ? `<p class="mt-2 whitespace-pre-wrap text-[14px]"><span class="text-[12px] text-muted">备注</span><br>${esc(post.memo)}</p>` : ''}
         ${post.source ? `<p class="mt-2 text-[12px] text-muted">${esc(t('post.source', { file: post.source.file, sheet: post.source.sheet, row: post.source.row }))}</p>` : ''}
       </section>
@@ -150,6 +169,7 @@ export async function renderPost([id], { isCurrent }) {
       <section class="card mt-3"><h2 class="section-step">4 · ${esc(t('post.s.ads'))}</h2><div class="mt-2" id="p-ads">${adsHtml()}</div></section>
       <section class="card mt-3"><h2 class="section-step">5 · ${esc(t('post.s.analysis'))}</h2>
         <div class="mt-2 rounded-[12px] border border-line p-3"><h3 class="text-[14px] font-semibold">${esc(t('pf.title'))}</h3>${insightList('pf', focus.items)}</div>
+        ${expHtml()}
         ${noteMetaHtml(post.d1Meta, post, 'D+1')}${noteMetaHtml(post.d2Meta, post, 'D+2')}
         <div class="mt-3">${reportHtml()}</div></section>
       <button type="button" class="btn btn-ghost text-danger mt-4" id="p-delete">${icon('trash', 'size-4')}${esc(t('post.delete'))}</button>`,
@@ -165,6 +185,13 @@ export async function renderPost([id], { isCurrent }) {
     if (e.target.id === 'p-validity') save({ validity: e.target.value });
   });
   root.addEventListener('click', async (e) => {
+    const ex = e.target.closest('[data-exp]');
+    if (ex) {
+      const next = { ...(post.experiments ?? {}) };
+      if (ex.dataset.opt) next[ex.dataset.exp] = ex.dataset.opt;
+      else delete next[ex.dataset.exp];
+      return save({ experiments: next });
+    }
     const drop = e.target.closest('[data-drop-memo]');
     if (drop) {
       const i = Number(drop.dataset.dropMemo);

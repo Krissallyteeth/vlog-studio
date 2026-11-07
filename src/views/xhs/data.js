@@ -26,6 +26,8 @@ import { applyValue, editTextOf, parseCell, postColumns, postValue, renderPostCe
 import { relativeNote, xhsPage } from './shell.js';
 
 const TABS = ['posts', 'criteria', 'ads', 'income', 'rules'];
+// Metrics an experiment item can be meant to move (the viewer's path through a post).
+const EXP_METRICS = ['views', 'ctr', 'exit2s', 'retain5s', 'avgWatchRatio', 'completion', 'interactionRate', 'newFollowers'];
 const PREF_KEY = 'xhs-data-prefs';
 const loadPrefs = () => {
   try {
@@ -506,6 +508,49 @@ function renderRules(body, ctx) {
       <div class="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed">${esc(r.text)}</div></section>`,
       )
       .join('') || `<p class="mt-3 text-[13px] text-muted">${esc(t('rules.none'))}</p>`}`;
+  // Experiment items: name, options, metrics each is meant to move.
+  const exBox = document.createElement('section');
+  exBox.className = 'card mt-3';
+  const drawEx = () => {
+    const list = ctx.settings.experiments;
+    exBox.innerHTML = `<h3 class="text-[15px] font-semibold">${esc(t('xp.manageTitle'))}</h3><p class="mt-1 text-[12px] text-muted">${esc(t('xp.manageHelp'))}</p>
+      <div class="mt-2 flex flex-col gap-3">${list
+        .map((ex, i) => `<div class="rounded-[12px] border border-line p-3" data-ex="${i}"><div class="grid gap-2 sm:grid-cols-[1fr_1.4fr]">
+          <label class="field"><span class="field-label">${esc(t('xp.name'))}</span><input class="input" data-k="name" value="${esc(ex.name)}" /></label>
+          <label class="field"><span class="field-label">${esc(t('xp.options'))}</span><input class="input" data-k="options" value="${esc(ex.options.join(', '))}" /></label></div>
+          <div class="mt-2 flex flex-wrap gap-1.5 text-[12px]">${EXP_METRICS.map((k) => `<label class="chip ${ex.metrics.includes(k) ? 'is-on' : ''}"><input type="checkbox" class="sr-only" data-m="${k}" ${ex.metrics.includes(k) ? 'checked' : ''} />${esc(METRIC[k].zh)}</label>`).join('')}</div>
+          <button type="button" class="link-btn mt-2 text-[12px] text-danger" data-ex-del="${i}">${esc(t('common.delete'))}</button></div>`)
+        .join('')}</div>
+      <div class="mt-3 flex flex-wrap gap-2"><button type="button" class="btn btn-secondary btn-sm" id="ex-add">${esc(t('xp.add'))}</button><button type="button" class="btn btn-primary btn-sm" id="ex-save">${esc(t('common.save'))}</button></div>`;
+  };
+  drawEx();
+  body.append(exBox);
+  const readEx = () =>
+    [...exBox.querySelectorAll('[data-ex]')].map((el, i) => ({
+      ...ctx.settings.experiments[i],
+      name: el.querySelector('[data-k="name"]').value.trim(),
+      options: el.querySelector('[data-k="options"]').value.split(/[,，、/]/).map((x) => x.trim()).filter(Boolean),
+      metrics: [...el.querySelectorAll('[data-m]:checked')].map((x) => x.dataset.m),
+    }));
+  exBox.addEventListener('change', (e) => e.target.closest('label.chip')?.classList.toggle('is-on', e.target.checked));
+  exBox.addEventListener('click', async (e) => {
+    if (e.target.id === 'ex-add') {
+      ctx.settings.experiments = [...readEx(), { id: `ex${Date.now().toString(36)}`, name: '', options: [], metrics: [] }];
+      return drawEx();
+    }
+    const del = e.target.closest('[data-ex-del]');
+    if (del) {
+      ctx.settings.experiments = readEx().filter((_, i) => i !== Number(del.dataset.exDel));
+      return drawEx();
+    }
+    if (e.target.id === 'ex-save') {
+      const list = readEx();
+      if (list.some((x) => !x.name || x.options.length < 2)) return toast(t('xp.needTwo'), { tone: 'error' });
+      ctx.settings.experiments = list;
+      await saveSettings({ ...ctx.settings, experiments: list });
+      toast(t('common.saved'));
+    }
+  });
   $('#rules-save', body).addEventListener('click', async () => {
     await saveSettings({ ...ctx.settings, currentRules: $('#rules-notes', body).value });
     toast(t('common.saved'));

@@ -162,6 +162,10 @@ export function postFocus(post, posts, baseline) {
     items.push({ key: `focus.${focus.key}`, vars, metric: focus.key });
   } else if (baseline) items.push({ key: 'focus.none', vars: {} });
 
+  // The platform's own segment analysis: most viewers gone in the opening segment.
+  const seg0 = (post.d1Meta?.segments ?? [])[0];
+  if (seg0 && seg0.from === '00:00' && isNum(seg0.loss) && seg0.loss >= 0.5) items.push({ key: 'segStart', vars: { p: Math.round(seg0.loss * 100), to: seg0.to, title: seg0.title || '–' } });
+
   // Followers per 1,000 views against my median.
   const per1k = (p) => (isNum(stage(p).newFollowers) && stage(p).views > 0 ? (stage(p).newFollowers / stage(p).views) * 1000 : null);
   const mine = per1k(post);
@@ -196,7 +200,7 @@ const daysBetween = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.pa
  * The dashboard's briefing: what the latest posts say as a whole, what to fix first, how to run
  * ads, where followers come from, posting rhythm and data gaps. Each item: { key, tone, vars }.
  */
-export function opsBrief(posts, baseline, { today = new Date().toISOString().slice(0, 10), window = 5, recent: given = null } = {}) {
+export function opsBrief(posts, baseline, { today = new Date().toISOString().slice(0, 10), window = 5, recent: given = null, experiments = [] } = {}) {
   const out = [];
   const valid = ordered(posts).filter(isValid).filter((p) => isNum(stage(p).views));
   // The same "recent posts" as the dashboard's own figures when given.
@@ -230,6 +234,9 @@ export function opsBrief(posts, baseline, { today = new Date().toISOString().sli
   // 3. Where followers come from.
   const split = ins.find((x) => x.key === 'followerSplit');
   if (split && split.vars.share >= 50) out.push({ key: 'dependOnAds', tone: 'warn', vars: split.vars });
+  // 3b. An experiment that clearly paid off (two options with enough posts, nothing else changed).
+  const exp = experimentResults(posts, experiments).filter((r) => r.verdict?.clear && !r.verdict.mixed).sort((a, b) => b.verdict.rel - a.verdict.rel)[0];
+  if (exp) out.push({ key: 'expWin', tone: 'good', ref: exp.verdict.ref, metric: exp.metric, vars: { name: exp.name, best: exp.verdict.best, worst: exp.verdict.worst, m: METRIC[exp.metric].zh, pct: Math.round(exp.verdict.rel * 100) } });
   // 4. Posting rhythm.
   const dates = ordered(posts).map((p) => p.date).filter(Boolean);
   if (dates.length >= 4) {
@@ -244,4 +251,43 @@ export function opsBrief(posts, baseline, { today = new Date().toISOString().sli
   const noReport = adOrders(posts).filter((o) => !isNum(o.metrics.reads)).length;
   if (noReport) out.push({ key: 'noReport', tone: 'info', vars: { n: noReport } });
   return out.slice(0, 6);
+}
+
+// ── Experiments: what was tried on purpose, compared over posts ─────────────────────────────
+
+/**
+ * For each experiment item and each metric it is meant to move: the median per option over valid
+ * posts with D+1 data. A comparison is made with at least MIN posts on two options; under SOLID it
+ * is a reference. `mixed`: the posts compared also differ in another experiment item, so the
+ * difference cannot be put on this one alone.
+ */
+export function experimentResults(posts, experiments) {
+  const valid = ordered(posts).filter(isValid);
+  const out = [];
+  for (const ex of experiments ?? []) {
+    const tagged = valid.filter((p) => p.experiments?.[ex.id]);
+    const groups = ex.options.map((opt) => ({ opt, posts: tagged.filter((p) => p.experiments[ex.id] === opt) }));
+    for (const k of ex.metrics.filter((m) => METRIC[m])) {
+      const g = groups.map((x) => ({ opt: x.opt, n: x.posts.filter((p) => isNum(stage(p)[k])).length, med: median(x.posts.map((p) => stage(p)[k]).filter(isNum)) }));
+      const ready = g.filter((x) => x.n >= MIN);
+      let verdict = null;
+      if (ready.length >= 2) {
+        ready.sort((a, b) => (b.med - a.med) * METRIC[k].dir);
+        const best = ready[0];
+        const worst = ready.at(-1);
+        const rel = relDiff(best.med, worst.med, METRIC[k].dir);
+        const others = (experiments ?? []).filter((o) => o.id !== ex.id);
+        const of = (opt) => tagged.filter((p) => p.experiments[ex.id] === opt);
+        // Only items recorded on both sides count: not recording an item is not a change.
+        const mixed = others.some((o) => {
+          const a = new Set(of(best.opt).map((p) => p.experiments?.[o.id]).filter(Boolean));
+          const b = new Set(of(worst.opt).map((p) => p.experiments?.[o.id]).filter(Boolean));
+          return a.size > 0 && b.size > 0 && ([...a].some((x) => !b.has(x)) || [...b].some((x) => !a.has(x)));
+        });
+        verdict = { best: best.opt, worst: worst.opt, rel, mixed, ref: Math.min(best.n, worst.n) < SOLID, clear: isNum(rel) && rel >= 0.1 };
+      }
+      out.push({ id: ex.id, name: ex.name, metric: k, groups: g, verdict });
+    }
+  }
+  return out;
 }

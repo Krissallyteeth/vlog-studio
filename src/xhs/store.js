@@ -132,6 +132,8 @@ export function normalizePost(raw = {}, now = Date.now()) {
     // Titles this post had in 薯条 screenshots (they can differ from the workbook title).
     adTitles: Array.isArray(raw.adTitles) ? raw.adTitles.filter((x) => typeof x === 'string' && x).slice(-10) : [],
     extra: raw.extra && typeof raw.extra === 'object' ? { ...raw.extra } : {},
+    // This post's choice for each experiment item: { face: '없음', intro: '없음' }.
+    experiments: Object.fromEntries(Object.entries(raw.experiments && typeof raw.experiments === 'object' ? raw.experiments : {}).filter(([k, v]) => typeof k === 'string' && typeof v === 'string' && v)),
     // What the D+1 / D+2 screenshots showed besides the metrics: when the data was cut, the
     // platform's peer median and rank, traffic sources, audience.
     d1Meta: noteMeta(raw.d1Meta),
@@ -155,6 +157,9 @@ function noteMeta(raw) {
     peer,
     sources: shares(raw.sources),
     audience: { gender: shares(aud.gender), age: shares(aud.age), city: shares(aud.city), interest: shares(aud.interest) },
+    // 内容分析: segments the platform marks with the share of viewers lost in each.
+    segments: (Array.isArray(raw.segments) ? raw.segments : []).filter((x) => x && /^\d{2}:\d{2}$/.test(x.from)).slice(0, 12).map((x) => ({ from: str(x.from), to: str(x.to), title: str(x.title), loss: num(x.loss) })),
+    duration: num(raw.duration),
   };
 }
 
@@ -175,6 +180,8 @@ export function normalizeIncome(raw = {}, now = Date.now()) {
     // Titles this post had in 薯条 screenshots (they can differ from the workbook title).
     adTitles: Array.isArray(raw.adTitles) ? raw.adTitles.filter((x) => typeof x === 'string' && x).slice(-10) : [],
     extra: raw.extra && typeof raw.extra === 'object' ? { ...raw.extra } : {},
+    // This post's choice for each experiment item: { face: '없음', intro: '없음' }.
+    experiments: Object.fromEntries(Object.entries(raw.experiments && typeof raw.experiments === 'object' ? raw.experiments : {}).filter(([k, v]) => typeof k === 'string' && typeof v === 'string' && v)),
     // What the D+1 / D+2 screenshots showed besides the metrics: when the data was cut, the
     // platform's peer median and rank, traffic sources, audience.
     d1Meta: noteMeta(raw.d1Meta),
@@ -201,6 +208,22 @@ export async function getSettings() {
     currentRules: typeof s.currentRules === 'string' ? s.currentRules : '',
     // Won per 1 元, typed by the user (never guessed) — only used to compare ad spend with income.
     cnyKrw: typeof s.cnyKrw === 'number' && s.cnyKrw > 0 ? s.cnyKrw : null,
+    // What is tried on purpose post by post (thumbnail with my face, an intro …), with the metrics
+    // each one is expected to move.
+    experiments: Array.isArray(s.experiments) ? s.experiments.map(normalizeExperiment).filter((x) => x.name && x.options.length >= 2) : DEFAULT_EXPERIMENTS.map((x) => ({ ...x })),
+  };
+}
+
+export const DEFAULT_EXPERIMENTS = [
+  { id: 'face', name: '썸네일 얼굴', options: ['있음', '없음'], metrics: ['ctr'] },
+  { id: 'intro', name: '인트로', options: ['있음', '없음'], metrics: ['exit2s', 'retain5s'] },
+];
+export function normalizeExperiment(raw = {}) {
+  return {
+    id: str(raw.id) || uid(),
+    name: str(raw.name).trim(),
+    options: (Array.isArray(raw.options) ? raw.options : []).map((o) => str(o).trim()).filter(Boolean).slice(0, 6),
+    metrics: (Array.isArray(raw.metrics) ? raw.metrics : []).filter((k) => typeof k === 'string').slice(0, 6),
   };
 }
 export const saveSettings = async (s) => {

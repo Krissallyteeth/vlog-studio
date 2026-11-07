@@ -10,7 +10,7 @@ import { chartLegend, lineChart } from './charts.js';
 import { relativeNote, xhsPage } from './shell.js';
 import { adAnalysisSection } from './ads.js';
 import { insightList } from './insight-text.js';
-import { opsBrief } from '../../xhs/insights.js';
+import { experimentResults, opsBrief } from '../../xhs/insights.js';
 import { postRows } from '../../xhs/ad-report.js';
 
 const CHARTS = [
@@ -40,7 +40,21 @@ export async function renderDashboard({ isCurrent }) {
   const cash = income.reduce((s, x) => s + (x.cashKRW ?? 0), 0);
   const inKind = income.reduce((s, x) => s + (x.inKindKRW ?? 0), 0);
 
-  const brief = opsBrief(posts, baseline, { recent });
+  const brief = opsBrief(posts, baseline, { recent, experiments: settings.experiments });
+  // Experiments: per item, the options compared on the metrics they are meant to move.
+  const expRes = experimentResults(posts, settings.experiments);
+  const expCard = () => {
+    const tagged = posts.filter((p) => Object.keys(p.experiments ?? {}).length).length;
+    const rows = expRes.map((r) => {
+      const g = r.groups.map((x) => `${x.opt} ${x.n ? fmt(r.metric, x.med) : '–'} (${t('xp.n', { n: x.n })})`).join(' · ');
+      const v = r.verdict;
+      const tag = !v ? `<span class="text-muted">${esc(t('xp.wait'))}</span>` : `<span class="badge ${v.clear ? 'cf-good' : 'bg-surface-2'}">${esc(t(v.clear ? 'xp.better' : 'xp.similar', { opt: v.best }))}</span>${v.ref ? ` <span class="badge bg-surface-2">${esc(t('ops.ref'))}</span>` : ''}${v.mixed ? ` <span class="badge cf-mid" title="${esc(t('xp.mixed'))}">${esc(t('xp.mixedShort'))}</span>` : ''}`;
+      return `<li class="text-[13px]"><b>${esc(r.name)}</b> · ${esc(METRIC[r.metric].zh)} <span class="text-muted">${esc(g)}</span> ${tag}</li>`;
+    });
+    return `<section class="card" id="exp-card"><h3 class="text-[15px] font-semibold">${esc(t('xp.results'))}</h3>
+      ${tagged ? `<ul class="mt-2 flex flex-col gap-1.5">${rows.join('')}</ul>` : `<p class="mt-2 text-[13px] text-muted">${esc(t('xp.none'))}</p>`}
+      <p class="mt-2 text-[12px] text-muted">${esc(t('xp.note'))}</p></section>`;
+  };
   const analysis = adAnalysisSection({ posts, income, settings, baseline }, () => navigate('/xhs', { replace: true }));
   // Each post's ads, for the chart tooltips: real money, goals, price of a follower.
   const adByPost = new Map(postRows(posts).map((r) => [r.post.id, r]));
@@ -82,6 +96,7 @@ export async function renderDashboard({ isCurrent }) {
           <section class="card"><h3 class="text-[14px] font-semibold">涨粉丝 <span class="font-normal text-muted">${esc(t('dash.newFans'))}</span></h3><div class="mt-2" data-chart="newFollowers"></div></section>
         </div>
         <aside class="flex min-w-0 flex-col gap-4">
+          ${expCard()}
           <section class="card" id="ops-brief"><h3 class="text-[15px] font-semibold">${esc(t('ops.title'))}</h3>
             ${insightList('ops', brief, { empty: t('ops.none') })}
             <p class="mt-2 text-[12px] text-muted">${esc(t('ops.note'))}</p></section>

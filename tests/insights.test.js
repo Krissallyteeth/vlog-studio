@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalizePost } from '../src/xhs/store.js';
-import { adInsights, opsBrief, postFocus } from '../src/xhs/insights.js';
+import { adInsights, experimentResults, opsBrief, postFocus } from '../src/xhs/insights.js';
 
 // Synthetic posts: D+1 views and an ad (关注 goal) with a report.
 const P = (i, views, ad, extra = {}) =>
@@ -39,5 +39,25 @@ describe('what to fix', () => {
     const b = opsBrief(posts, base, { today: '2026-03-08' });
     expect(b.map((x) => x.key).slice(0, 2)).toEqual(['recentDown', 'weak.ctr']);
     expect(b[1].vars).toMatchObject({ below: 5, n: 5, best: 'T1' });
+  });
+});
+
+describe('experiments', () => {
+  const ex = [{ id: 'face', name: '썸네일 얼굴', options: ['있음', '없음'], metrics: ['ctr'] }, { id: 'intro', name: '인트로', options: ['있음', '없음'], metrics: ['retain5s'] }];
+  const E = (i, ctr, face, intro = '없음') => {
+    const p = P(i, 300);
+    p.d1.ctr = ctr;
+    p.experiments = { face, intro };
+    return p;
+  };
+  it('compares options on the metric they are meant to move, once each has 2 posts', () => {
+    const one = experimentResults([E(1, 0.15, '있음'), E(2, 0.08, '없음')], ex).find((r) => r.id === 'face');
+    expect(one.verdict).toBeNull();
+    const r = experimentResults([E(1, 0.15, '있음'), E(2, 0.16, '있음'), E(3, 0.08, '없음'), E(4, 0.09, '없음')], ex).find((x) => x.id === 'face');
+    expect(r.verdict).toMatchObject({ best: '있음', worst: '없음', clear: true, mixed: false, ref: true });
+  });
+  it('flags a comparison where another item changed too', () => {
+    const r = experimentResults([E(1, 0.15, '있음', '있음'), E(2, 0.16, '있음', '있음'), E(3, 0.08, '없음'), E(4, 0.09, '없음')], ex).find((x) => x.id === 'face');
+    expect(r.verdict.mixed).toBe(true);
   });
 });

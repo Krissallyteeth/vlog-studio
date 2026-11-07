@@ -31,6 +31,8 @@ export function noteMetaHtml(meta, post, stageLabel = 'D+1') {
       .map(([k, v]) => `<tr><td>${esc(METRIC[k].zh)}</td><td class="num">${esc(fmt(k, v.value))}</td><td class="num">${esc(fmt(k, v.median))}</td><td class="num ${v.beat >= 0.6 ? 'cf-good' : v.beat <= 0.4 ? 'cf-mid' : ''}">${v.beat == null ? '–' : esc(t('nm.top', { p: Math.max(1, Math.round((1 - v.beat) * 100)) }))}</td></tr>`)
       .join('')}</tbody></table></div><p class="mt-1 text-[12px] text-muted">${esc(t('nm.peerNote'))}</p>`);
   }
+  const segs = (meta.segments ?? []).filter((x) => x.loss != null);
+  if (segs.length) parts.push(`<p class="mt-2 text-[13px] font-semibold">${esc(t('nm.segments'))}</p><ul class="mt-1 flex flex-col gap-1 text-[13px]">${segs.map((x) => `<li class="flex gap-2 rounded-[8px] px-2 py-1 ${x.loss >= 0.3 ? 'cf-bad' : x.loss >= 0.1 ? 'cf-mid' : 'bg-surface-2'}"><span class="tabular-nums">${esc(x.from)}–${esc(x.to)}</span><b class="tabular-nums">${esc(t('nm.lost', { p: Math.round(x.loss * 100) }))}</b><span class="min-w-0 truncate text-muted">${esc(x.title)}</span></li>`).join('')}</ul>`);
   const src = SRC.filter((k) => meta.sources?.[k] != null);
   if (src.length) parts.push(`<p class="mt-2 text-[13px]"><b>${esc(t('nm.sources'))}</b> ${src.map((k) => `${esc(t(`nm.src.${k}`))} ${pct(meta.sources[k])}`).join(' · ')}</p>`);
   const a = meta.audience ?? {};

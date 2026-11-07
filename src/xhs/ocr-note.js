@@ -132,10 +132,55 @@ export function noteExtras(linesPerImage, { year = new Date().getFullYear() } = 
       }
     });
   }
+  // 内容分析: the segments the platform marks (00:00-00:15 开头节奏慢… · 流失72%) and the video length
+  // (the retention chart's last time mark, 02:24).
+  const titles = new Map();
+  const runs = [];
+  let lastMark = 0;
+  for (const lines of linesPerImage) {
+    const run = [];
+    for (const l of lines) {
+      const tx = lineText(l);
+      const seg = /^(\d{2}:\d{2})-(\d{2}:\d{2})(.*)$/.exec(tx);
+      if (seg) titles.set(seg[1], { from: seg[1], to: seg[2], title: cjkTitle(seg[3]) });
+      for (const m of tx.matchAll(/流失(\d{1,3})%/g)) run.push(Number(m[1]) / 100);
+      const marks = [...tx.matchAll(/(\d{2}):(\d{2})(?!-)/g)].filter((m) => !/\d{2}:\d{2}-/.test(tx)).map((m) => Number(m[1]) * 60 + Number(m[2]));
+      if (marks.length >= 3) lastMark = Math.max(lastMark, ...marks);
+    }
+    if (run.length) runs.push(run);
+  }
+  const losses = mergeRuns(runs);
+  const segs = [...titles.values()].sort((a, b) => a.from.localeCompare(b.from));
+  if (segs.length) out.segments = segs.map((x, i) => ({ ...x, loss: segs.length === losses.length ? losses[i] : null }));
+  if (lastMark) out.duration = lastMark;
   // The platform cuts D+1 data at midnight after the publish day (shown the next morning at 9).
   if (!out.snapshotAt && out.publishedAt) {
     out.snapshotAt = `${new Date(Date.parse(`${out.publishedAt.slice(0, 10)}T00:00:00Z`) + 86400000).toISOString().slice(0, 10)}T00:00`;
     out.snapshotDerived = true;
+  }
+  return out;
+}
+
+/** The platform's segment headline, or '' when it was read as noise (mostly not Chinese). */
+function cjkTitle(s) {
+  const t = String(s).replace(/ai$/i, '').slice(0, 40);
+  const cjk = (t.match(/[\u4e00-\u9fff]/g) ?? []).length;
+  return cjk >= Math.max(4, t.length * 0.7) ? t : '';
+}
+
+/** Loss chips read on several scrolled screenshots ([72,6,5,2] and [5,2,3,3]) joined on their overlap. */
+export function mergeRuns(runs) {
+  let out = [];
+  for (const r of runs) {
+    if (!out.length || r.length > out.length && r.slice(0, out.length).join() === out.join()) {
+      if (r.length >= out.length) out = [...r];
+      continue;
+    }
+    // The longest tail of what we have that is a head of this run.
+    let k = Math.min(out.length, r.length);
+    while (k > 0 && out.slice(-k).join() !== r.slice(0, k).join()) k--;
+    if (k > 0) out = [...out, ...r.slice(k)];
+    else if (r.join().includes(out.join())) out = [...r];
   }
   return out;
 }

@@ -130,6 +130,12 @@ export async function renderOcr([postId], { isCurrent }) {
     state.merged = mergeResults(state.images.filter((im) => im.status === 'done').map((im) => im.result));
     // Title, publish time, data cut, peer rank, sources, audience from the same screenshots.
     state.extras = noteExtras(state.images.filter((im) => im.status === 'done' && im.lines).map((im) => im.lines));
+    // Video length from the retention chart (its time marks split the video in four): the
+    // average watch ratio can then be calculated.
+    if (!state.merged.duration && state.extras.duration) {
+      state.merged.duration = { status: 'ok', value: state.extras.duration, from: [{ value: state.extras.duration, text: `${Math.floor(state.extras.duration / 60)}:${String(state.extras.duration % 60).padStart(2, '0')}`, image: 0, conf: 90 }] };
+      state.choice.duration = state.extras.duration;
+    }
     if (state.postId === 'new') {
       const ti = $('#ocr-new-title', root);
       if (ti && !ti.value.trim() && state.extras.title) ti.value = state.extras.title;
