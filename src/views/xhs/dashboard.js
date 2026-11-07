@@ -11,6 +11,8 @@ import { relativeNote, xhsPage } from './shell.js';
 import { adAnalysisSection } from './ads.js';
 import { insightList } from './insight-text.js';
 import { experimentResults, opsBrief } from '../../xhs/insights.js';
+import { adviceRecord } from '../../xhs/ad-advice.js';
+import { verdictBadge } from './ad-flow.js';
 import { postRows } from '../../xhs/ad-report.js';
 
 const CHARTS = [
@@ -41,6 +43,17 @@ export async function renderDashboard({ isCurrent }) {
   const inKind = income.reduce((s, x) => s + (x.inKindKRW ?? 0), 0);
 
   const brief = opsBrief(posts, baseline, { recent, experiments: settings.experiments });
+  // Ad decisions: posts waiting for one, and how following (or not) the advice turned out.
+  const rec = adviceRecord(posts, baseline);
+  const adviceCard = () => {
+    const pend = rec.pending.slice(-3).reverse();
+    const line = (g, k) => (g.n ? `<li>${esc(t(k, { n: g.n, cost: g.cost == null ? '–' : yuan(g.cost), good: g.good }))}</li>` : '');
+    return `<section class="card" id="advice-card"><h3 class="text-[15px] font-semibold">${esc(t('adv.cardTitle'))}</h3>
+      ${pend.length ? `<ul class="mt-2 flex flex-col gap-1.5 text-[13px]">${pend.map((r) => { const a = r.tl.d2 ?? r.tl.d1; return `<li class="flex flex-wrap items-center gap-2"><a class="link-btn" href="#/c/${encodeURIComponent(r.post.id)}">${esc(r.post.title)}</a>${verdictBadge(a)}<span class="text-[12px] text-muted">${esc(r.tl.d2 ? t('adv.d2') : t('adv.d1'))}${a.expect ? ` · ${esc(t('adv.expectShort', { cost: yuan(a.expect.cost) }))}` : ''}</span></li>`; }).join('')}</ul>` : `<p class="mt-2 text-[13px] text-muted">${esc(t('adv.noPending'))}</p>`}
+      <p class="mt-3 text-[13px] font-semibold">${esc(t('adv.history'))}</p>
+      <ul class="mt-1 flex list-disc flex-col gap-1 pl-5 text-[13px]">${line(rec.followed, 'adv.h.followed')}${line(rec.against, 'adv.h.against')}${rec.notRun ? `<li>${esc(t('adv.h.notRun', { n: rec.notRun }))}</li>` : ''}</ul>
+      <p class="mt-2 text-[12px] text-muted">${esc(t('adv.cardNote'))}</p></section>`;
+  };
   // Experiments: per item, the options compared on the metrics they are meant to move.
   const expRes = experimentResults(posts, settings.experiments);
   const expCard = () => {
@@ -96,6 +109,7 @@ export async function renderDashboard({ isCurrent }) {
           <section class="card"><h3 class="text-[14px] font-semibold">涨粉丝 <span class="font-normal text-muted">${esc(t('dash.newFans'))}</span></h3><div class="mt-2" data-chart="newFollowers"></div></section>
         </div>
         <aside class="flex min-w-0 flex-col gap-4">
+          ${adviceCard()}
           ${expCard()}
           <section class="card" id="ops-brief"><h3 class="text-[15px] font-semibold">${esc(t('ops.title'))}</h3>
             ${insightList('ops', brief, { empty: t('ops.none') })}

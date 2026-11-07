@@ -11,6 +11,8 @@ import { activeBaseline, deletePost, getPost, getSettings, listPosts, normalizeA
 import { AD_METRICS } from '../../xhs/ocr-ad-parse.js';
 import { memoDuplicateOf } from '../../xhs/ad-orders.js';
 import { experimentResults, postFocus } from '../../xhs/insights.js';
+import { adTimeline } from '../../xhs/ad-advice.js';
+import { adFlowHtml } from './ad-flow.js';
 import { insightList } from './insight-text.js';
 import { noteMetaHtml } from './note-meta.js';
 import { relativeNote, xhsPage } from './shell.js';
@@ -109,7 +111,6 @@ export async function renderPost([id], { isCurrent }) {
       <div><h4 class="text-[13px] font-semibold">${esc(t('ana.better'))}</h4><p class="text-[14px]">${esc(report.better.map(line).join(', ') || t('ana.none'))}</p></div>
       <div><h4 class="text-[13px] font-semibold">${esc(t('ana.worse'))}</h4><p class="text-[14px]">${esc(report.worse.map(line).join(', ') || t('ana.none'))}</p></div></div>`);
     parts.push(`<h4 class="mt-3 text-[13px] font-semibold">${esc(t('ana.next'))}</h4><ul class="list-disc pl-5 text-[14px]">${(report.advice.length ? report.advice : ['keep']).map((a) => `<li>${esc(t(`ana.adv.${a}`))}</li>`).join('')}</ul>`);
-    parts.push(`<h4 class="mt-3 text-[13px] font-semibold">${esc(t('ana.adOpinion'))}</h4><p class="text-[14px]">${esc(t(`ana.ad.${report.adOpinion}`))} <span class="text-[12px] text-muted">${esc(t('ana.adNote'))}</span></p>`);
     if (report.caveats.length) parts.push(`<h4 class="mt-3 text-[13px] font-semibold">${esc(t('ana.caveats'))}</h4><ul class="list-disc pl-5 text-[13px] text-muted">${report.caveats.map((c) => `<li>${esc(t(`ana.cav.${c.key}`, c.vars))}</li>`).join('')}</ul>`);
     return parts.join('');
   };
@@ -166,7 +167,7 @@ export async function renderPost([id], { isCurrent }) {
         ${post.screenshots.length ? `<p class="mt-2 text-[13px]"><a class="link-btn" href="#/ocr/${encodeURIComponent(post.id)}">${esc(t('post.shots', { n: post.screenshots.length }))}</a></p>` : ''}
         <a class="btn btn-secondary btn-sm mt-3" href="#/ocr/${encodeURIComponent(post.id)}">${icon('scan', 'size-4')}${esc(t('post.fromShot'))}</a>
       </section>
-      <section class="card mt-3"><h2 class="section-step">4 · ${esc(t('post.s.ads'))}</h2><div class="mt-2" id="p-ads">${adsHtml()}</div></section>
+      <section class="card mt-3"><h2 class="section-step">4 · ${esc(t('post.s.ads'))}</h2>${adFlowHtml(adTimeline(post, posts, baseline))}<div class="mt-2" id="p-ads">${adsHtml()}</div></section>
       <section class="card mt-3"><h2 class="section-step">5 · ${esc(t('post.s.analysis'))}</h2>
         <div class="mt-2 rounded-[12px] border border-line p-3"><h3 class="text-[14px] font-semibold">${esc(t('pf.title'))}</h3>${insightList('pf', focus.items)}</div>
         ${expHtml()}
