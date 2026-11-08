@@ -41,6 +41,27 @@ describe('channel detail OCR', () => {
 const post = (id, date, views, extra = {}) => normalizePost({ id, title: id, date, validity: '유효', d1: { views }, ...extra });
 const meta = (vrWatch, homeWatch, conv, search = 0.05) => ({ sources: { home: 0.6, videoRec: 0.3, search }, channels: { home: { avgWatch: homeWatch, conv }, videoRec: { avgWatch: vrWatch, likes: 0 } } });
 
+describe('channel detail OCR repairs', () => {
+  it('reads "531%" back as 53.1% when that is a listed share', () => {
+    const x = noteExtras([block({ home: 53.1, vr: 40.4, cur: '531' }, { exp: 1912, views: 189, watch: 29.2, likes: 12, comments: 1, conv: 9.9, inter: 9 })], { year: 2026 });
+    expect(x.channels.home).toMatchObject({ shareViews: 0.531, views: 189, avgWatch: 29.2 });
+  });
+  it('fills a missing count from the interaction rate (互动数 = 点赞+评论+收藏)', () => {
+    const [b] = channelBlocks([block({ home: 53.1, vr: 40.4, cur: 53.1 }, { exp: 1912, views: 189, watch: 29.2, likes: 12, comments: 1, conv: 9.9, inter: 9 })]);
+    expect(b).toMatchObject({ favs: 4, derived: ['favs'] });
+  });
+  it('corrects one doubtful count that breaks the sum', () => {
+    const lines = block({ home: 53.1, vr: 40.4, cur: 40.4 }, { exp: 144, views: 144, watch: 7.6, likes: 1, comments: 0, favs: 3, inter: 1.4 });
+    lines.at(-1).words.find((w) => w.text === '3').confidence = 63;
+    const [b] = channelBlocks([lines]);
+    expect(b).toMatchObject({ likes: 1, comments: 0, favs: 1, derived: ['favs'] });
+  });
+  it('does not collect the search channel', () => {
+    const x = noteExtras([block({ home: 53.1, vr: 40.4, cur: 4.2 }, { exp: 100, views: 30, watch: 20, likes: 1, comments: 0, conv: 30, inter: 3 }), [line(120, ['搜索', 190], ['4.2%', 415])]], { year: 2026 });
+    expect(x.channels?.search).toBeUndefined();
+  });
+});
+
 describe('channel findings', () => {
   it('flags an opening that loses 视频推荐 against the same post’s home feed', () => {
     const p = post('a', '2026-11-06', 283, { d1Meta: meta(5.5, 30, 0.1) });

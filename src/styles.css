@@ -1003,8 +1003,19 @@
     transform: none;
     opacity: 1;
   }
+  /* The grip is a drag handle: a taller invisible hit area around the visible bar. */
   .sheet-grip {
-    @apply mx-auto mb-3 h-1 w-10 rounded-full bg-line;
+    @apply relative mx-auto mb-3 h-1 w-10 rounded-full bg-line;
+    touch-action: none;
+    cursor: grab;
+  }
+  .sheet-grip::before {
+    content: '';
+    position: absolute;
+    inset: -14px -60px;
+  }
+  .overlay--sheet .sheet-title {
+    touch-action: none;
   }
   .sheet-title {
     @apply mb-3 px-1 text-[17px] font-semibold;

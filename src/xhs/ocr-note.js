@@ -170,11 +170,26 @@ export function noteExtras(linesPerImage, { year = new Date().getFullYear() } = 
   out.ai = aiTexts(linesPerImage);
   // 此渠道详细数据: which channel a block is for is not readable (the picker is faint), but its
   // "占总观看" equals that channel's share in the source list.
+  // Search is not collected (the user's choice); home and video feed are.
   const channels = {};
-  for (const b of channelBlocks(linesPerImage)) {
-    const key = Object.entries(out.sources).find(([, v]) => isNum(b.shareViews) && Math.abs(v - b.shareViews) < 0.0015)?.[0];
-    if (!key) continue;
-    channels[key] = { ...b, ...channels[key] };
+  const blocks = channelBlocks(linesPerImage);
+  const place = (b, key) => {
+    const { rateRaw, shareRaw, conf, sameCount, ...rest } = b;
+    if (isNum(out.sources[key])) rest.shareViews = out.sources[key];
+    channels[key] = { ...rest, ...channels[key] };
+  };
+  const unplaced = [];
+  for (const b of blocks) {
+    const key = Object.entries(out.sources).find(([k, v]) => k !== 'search' && shareCandidates(b).some((c) => Math.abs(v - c) < 0.0015))?.[0];
+    if (key) place(b, key);
+    else if (!shareCandidates(b).some((c) => Math.abs((out.sources.search ?? -1) - c) < 0.0015)) unplaced.push(b);
+  }
+  // A block whose share could not be read: the video feed has no cover (exposure = views, a note
+  // says so), the home feed has a click rate.
+  for (const b of unplaced) {
+    const vr = b.sameCount || (isNum(b.exposure) && b.exposure === b.views);
+    const key = vr ? 'videoRec' : isNum(b.conv) ? 'home' : null;
+    if (key && !channels[key]) place(b, key);
   }
   if (Object.keys(channels).length) out.channels = channels;
   // The platform cuts D+1 data at midnight after the publish day (shown the next morning at 9).
@@ -210,8 +225,12 @@ export function channelBlocks(linesPerImage) {
         return;
       }
       let m;
+      if (/曝光数和观看数相等/.test(tx)) b.sameCount = true;
       if ((m = /转化率(\d+(?:\.\d+)?)%/.exec(tx))) b.conv ??= p100(m[1]);
-      if ((m = /互动率(\d+(?:\.\d+)?)%/.exec(tx))) b.interactionRate ??= p100(m[1]);
+      if ((m = /互动率(\d+(?:\.\d+)?)%/.exec(tx)) && b.interactionRate == null) {
+        b.interactionRate = p100(m[1]);
+        b.rateRaw = m[1];
+      }
       if ((m = /曝光数(\d+)观看数(\d+)/.exec(tx))) {
         b.exposure ??= Number(m[1]);
         b.views ??= Number(m[2]);
@@ -219,6 +238,7 @@ export function channelBlocks(linesPerImage) {
       if ((m = /占总曝光(\d+(?:\.\d+)?)%占总观看(\d+(?:\.\d+)?)%/.exec(tx))) {
         b.shareExposure ??= p100(m[1]);
         b.shareViews ??= p100(m[2]);
+        b.shareRaw ??= m[2];
       }
       const pair = /平均观看时长.*点赞/.test(tx) ? ['avgWatch', 'likes', '点赞'] : /评论.*收藏/.test(tx) ? ['comments', 'favs', '收藏'] : null;
       if (pair && lines[i + 1]) {
@@ -230,8 +250,10 @@ export function channelBlocks(linesPerImage) {
           const v = /^(\d+(?:\.\d+)?)/.exec(w.text.replace(/[^\d.]/g, ''));
           if (!v) continue;
           // 平均观看时长 is in seconds even when "秒" is read as "%".
-          if (Math.abs(w.bbox.x0 - leftX) < 60) b[pair[0]] ??= Number(v[1]);
-          else if (Math.abs(w.bbox.x0 - rightX) < 60) b[pair[1]] ??= Number(v[1]);
+          const f = Math.abs(w.bbox.x0 - leftX) < 60 ? pair[0] : Math.abs(w.bbox.x0 - rightX) < 60 ? pair[1] : null;
+          if (!f || b[f] != null) continue;
+          b[f] = Number(v[1]);
+          (b.conf ??= {})[f] = w.confidence ?? 100;
         }
       }
     });
@@ -239,7 +261,44 @@ export function channelBlocks(linesPerImage) {
   }
   return blocks
     .map((b) => (isNum(b.exposure) && isNum(b.views) && b.exposure > 0 && b.conv == null && b.views < b.exposure ? { ...b, conv: Number((b.views / b.exposure).toPrecision(4)) } : b))
+    .map(checkReactions)
     .filter((b) => Object.keys(b).length);
+}
+
+/**
+ * 互动数 = 点赞 + 评论 + 收藏 (checked on the screens: 9% of 189 views = 12+1+4). With the rate and
+ * the views, the total is known; one missing count is filled from it, and one doubtful read
+ * (low confidence) that breaks the sum is corrected. Fields filled this way are listed in `derived`.
+ */
+function checkReactions(b) {
+  const F = ['likes', 'comments', 'favs'];
+  if (!isNum(b.interactionRate) || !isNum(b.views) || !b.rateRaw) return b;
+  const decimals = (b.rateRaw.split('.')[1] ?? '').length;
+  const half = 0.5 * 10 ** -decimals;
+  const lo = Math.ceil(((Number(b.rateRaw) - half) * b.views) / 100 - 1e-9);
+  const hi = Math.floor(((Number(b.rateRaw) + half) * b.views) / 100 + 1e-9);
+  if (lo !== hi || lo < 0) return b; // the total is not pinned to one number
+  const total = lo;
+  const missing = F.filter((f) => !isNum(b[f]));
+  const sumOf = (fs) => fs.reduce((s, f) => s + b[f], 0);
+  const valueFor = (f) => total - sumOf(F.filter((x) => x !== f));
+  let fix = null;
+  if (missing.length === 1) fix = missing[0];
+  else if (!missing.length && sumOf(F) !== total) {
+    // The least sure read whose correction gives a possible count (not below 0).
+    fix = F.filter((f) => (b.conf?.[f] ?? 100) < 85 && valueFor(f) >= 0).sort((x, y) => b.conf[x] - b.conf[y])[0] ?? null;
+  }
+  if (!fix) return b;
+  const v = valueFor(fix);
+  return v >= 0 ? { ...b, [fix]: v, derived: [...(b.derived ?? []), fix] } : b;
+}
+
+/** Shares a misread point could stand for ("531%" → 53.1%, 5.31%): the read itself first. */
+function shareCandidates(b) {
+  const out = isNum(b.shareViews) ? [b.shareViews] : [];
+  const d = String(b.shareRaw ?? '').replace(/\D/g, '');
+  if (!b.shareRaw?.includes('.')) for (let i = 1; i < d.length; i++) out.push(p100(`${d.slice(0, i)}.${d.slice(i)}`));
+  return out;
 }
 
 /** The platform's segment headline, or '' when it was read as noise (mostly not Chinese). */

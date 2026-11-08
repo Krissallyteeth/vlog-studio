@@ -81,7 +81,40 @@ export function openSheet({ title = '', body, onMount, variant = 'sheet' }) {
     document.body.append(overlay);
     if (vv) fitViewport();
     requestAnimationFrame(() => overlay.classList.add('is-open'));
-    onMount?.(overlay.querySelector('.sheet'), close);
+    // Drag the grip (or the title) down to close, like a native bottom sheet.
+    const sheet = overlay.querySelector('.sheet');
+    if (variant === 'sheet') {
+      let drag = null;
+      const handles = [...overlay.querySelectorAll('.sheet-grip, .sheet-title')];
+      handles.forEach((h) =>
+        h.addEventListener('pointerdown', (e) => {
+          drag = { y: e.clientY, t: performance.now(), dy: 0, id: e.pointerId };
+          h.setPointerCapture?.(e.pointerId);
+          sheet.style.transition = 'none';
+        }),
+      );
+      const move = (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        drag.dy = Math.max(0, e.clientY - drag.y);
+        sheet.style.transform = `translateY(${drag.dy}px)`;
+      };
+      const end = (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const fast = drag.dy / Math.max(1, performance.now() - drag.t) > 0.6;
+        const far = drag.dy > Math.min(140, sheet.offsetHeight * 0.25);
+        sheet.style.transition = '';
+        drag = null;
+        // Closing slides on from where the finger let go; otherwise it springs back.
+        sheet.style.transform = far || fast ? 'translateY(100%)' : '';
+        if (far || fast) close(null);
+      };
+      handles.forEach((h) => {
+        h.addEventListener('pointermove', move);
+        h.addEventListener('pointerup', end);
+        h.addEventListener('pointercancel', end);
+      });
+    }
+    onMount?.(sheet, close);
     const focusable = overlay.querySelector('[autofocus], button, input, textarea, select');
     focusable?.focus({ preventScroll: true });
   });

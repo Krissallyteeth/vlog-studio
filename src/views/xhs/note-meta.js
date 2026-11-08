@@ -36,11 +36,12 @@ const CH_COLS = [
 /** 此渠道详细数据 per channel; with `edit`, each value is an input (data-ch="home.avgWatch"). */
 function channelTable(meta, edit) {
   const ch = meta.channels ?? {};
-  const keys = SRC.filter((k) => ch[k] || (edit && meta.sources?.[k] != null && ['home', 'videoRec', 'search'].includes(k)));
+  const keys = ['home', 'videoRec'].filter((k) => ch[k] || (edit && meta.sources?.[k] != null));
   if (!keys.length) return '';
   const cell = (k, [f, show, kind]) => {
     const v = ch[k]?.[f];
-    if (edit) return `<td class="num"><input class="input !h-8 !w-16 text-right tabular-nums" inputmode="decimal" data-ch="${k}.${f}" data-kind="${kind}" value="${v == null ? '' : kind === 'pct' ? Math.round(v * 1000) / 10 : v}" /></td>`;
+    const derived = ch[k]?.derived?.includes(f);
+    if (edit) return `<td class="num ${derived ? 'cf-mid' : ''}" ${derived ? `title="${esc(t('nm.ch.derived'))}"` : ''}><input class="input !h-8 !w-16 text-right tabular-nums" inputmode="decimal" data-ch="${k}.${f}" data-kind="${kind}" value="${v == null ? '' : kind === 'pct' ? Math.round(v * 1000) / 10 : v}" /></td>`;
     return `<td class="num">${v == null ? '–' : esc(show(v))}</td>`;
   };
   return `<p class="mt-3 text-[13px] font-semibold">${esc(t('nm.ch.title'))}</p>

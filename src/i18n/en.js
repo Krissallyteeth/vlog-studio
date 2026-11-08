@@ -1568,7 +1568,7 @@ export default {
   "nm.ch.favs": "Saves",
   "nm.ch.sec": "{v} s",
   "nm.ch.note": "Home feed plays only when the cover is tapped (click rate = cover and title); 视频推荐 plays at once (watch time = opening); search comes by words (title and keywords).",
-  "nm.ch.edit": "Read from the \"此渠道详细数据\" screens of each channel. Fix a misread cell before saving (rates as % numbers, watch time in seconds).",
+  "nm.ch.edit": "Read from the \"此渠道详细数据\" screens of 首页推荐 and 视频推荐 (search is not collected). Yellow cells were worked out — check them against the screen; fix any misread cell before saving (rates as % numbers, watch time in seconds).",
 
   "adv.c.dear": "But the advised ones were still dearer than usual — ad prices themselves have risen.",
   "adv.c.ref": "Too few cases yet (under 3) — a reference only.",
@@ -1579,4 +1579,6 @@ export default {
 
   "ocr.fixTitle": "Use the title read: now \"{now}\" → \"{read}\"",
   "ocr.engineFail": "The recognition engine did not load (its download stalled for a minute). Your images are kept. Check the connection; if the app was just updated, reload the page, then press \"Start\" again.",
+
+  "nm.ch.derived": "Read poorly, so worked out from interaction rate × views (= likes + comments + saves). Fix it if it differs from the screen.",
 };
