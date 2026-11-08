@@ -615,6 +615,9 @@
   /* Stacked tables (phones) — see src/ui/stack-tables.js. */
   @media (max-width: 639.98px) {
     .table-scroll:has(> table.stack) { overflow: visible; border: 0; border-radius: 0; }
+    /* A box with a height limit (in a sheet, the import preview) keeps scrolling inside it, so the
+       cards cannot spill over what follows (the save buttons). */
+    .table-scroll[class*='max-h-']:has(> table.stack) { overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
     table.stack, table.stack tbody { display: block; width: 100%; min-width: 0; }
     table.stack thead { display: none; }
     table.stack td { position: static; min-width: 0; max-width: none; border: 0 !important; white-space: normal; text-align: left !important; overflow-wrap: anywhere; }
