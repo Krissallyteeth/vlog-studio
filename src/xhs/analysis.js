@@ -57,7 +57,7 @@ export function analysePost(post, posts, baseline) {
   const worse = usable.filter((r) => r.state === 'worse').sort((a, b) => a.vsBase - b.vsBase);
   const intro = post.experiments?.intro;
   const hook = intro === '있음' ? 'hookIntro' : intro === '없음' ? 'hookNoIntro' : 'hook';
-  const advice = [...new Set(worse.map((r) => ADVICE[r.key]).filter(Boolean).map((key) => key === 'hook' ? hook : key))].slice(0, 2);
+  const advice = [...new Set(worse.slice().sort((a, b) => ['ctr', 'exit2s', 'retain5s', 'avgWatchRatio', 'completion', 'interactionRate', 'totalInteraction'].indexOf(a.key) - ['ctr', 'exit2s', 'retain5s', 'avgWatchRatio', 'completion', 'interactionRate', 'totalInteraction'].indexOf(b.key)).map((r) => ADVICE[r.key]).filter(Boolean).map((key) => key === 'hook' ? hook : key))].slice(0, 2);
 
   const caveats = [];
   if (post.validity === '광고혼입') caveats.push({ key: 'adMixed' });
