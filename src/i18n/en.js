@@ -933,7 +933,7 @@ export default {
   "ana.next": "What to try in the next video",
   "ana.adv.cover": "Cover and title: click-through is low. Try different cover text, opening frame or title keywords and compare.",
   "ana.adv.topic": "Reach: try a different topic, tags or posting time.",
-  "ana.adv.hook": "First 2–5 seconds: show the payoff or key moment first and shorten the intro.",
+  "ana.adv.hook": "Editing check: show one recorded highlight at 0–3 seconds, then one caption explaining the experience at 3–5 seconds. Intro status is unknown; do not assume it needs removal. Compare 5-second retention at the same reporting stage next time.",
   "ana.adv.middle": "Middle: average watch ratio is low. Check pacing and transitions, and try a shorter video.",
   "ana.adv.ending": "Watching to the end: tease a reason to stay (twist, summary, next episode) early on.",
   "ana.adv.cta": "Engagement: add a question or a save prompt at the end or in the caption.",
@@ -1329,7 +1329,7 @@ export default {
 
   "ops.weak.exit2s": "The cause is the 2-second exit rate: {below} of the last {n} posts are below your baseline (median {now}, baseline {base}). Open with the result or strongest shot in the first 2 seconds and cut greetings/intros. See how \"{best}\" ({bestV}) starts.",
 
-  "pf.focus.exit2s": "Fix first: 2-second exit rate {now} — {pct}% below your baseline {base}; your top 3 posts have {top}. Open with the result or strongest shot in the first 2 seconds and cut greetings/intros.",
+  "pf.focus.exit2s": "2-second exit {now}, relatively {pct}% worse than my baseline {base}; top three {top}. Check the first two seconds for blank frames, logo-only screens or setup before footage. The metric does not establish the cause.",
 
   "ops.weak.retain5s": "The cause is the 5-second retention: {below} of the last {n} posts are below your baseline (median {now}, baseline {base}). Promise what viewers get by the end within 3–5 seconds (voice or caption). See \"{best}\" ({bestV}).",
 
@@ -1337,7 +1337,7 @@ export default {
 
   "ops.weak.avgWatchRatio": "The cause is the average watch ratio: {below} of the last {n} posts are below your baseline (median {now}, baseline {base}). The middle drags: shorten cuts, drop repeated shots, make it shorter. See \"{best}\" ({bestV}).",
 
-  "pf.focus.avgWatchRatio": "Fix first: average watch ratio {now} — {pct}% below your baseline {base}; your top 3 posts have {top}. The middle drags: shorten cuts, drop repeated shots, make it shorter.",
+  "pf.focus.avgWatchRatio": "Watch ratio {now}, {pct}% below my baseline {base}; top three {top}. This does not locate a problem in the middle. Check segment losses before recommending cuts.",
 
   "ops.weak.completion": "The cause is the completion rate: {below} of the last {n} posts are below your baseline (median {now}, baseline {base}). Tease a reason to stay to the end (a twist or summary) early and keep the ending short. See \"{best}\" ({bestV}).",
 
@@ -1423,7 +1423,7 @@ export default {
   "nm.segments": "Drop-off by segment (platform analysis)",
   "nm.lost": "lost {p}%",
 
-  "pf.segStart": "{p}% of viewers left in the first segment (0–{to}) — platform: \"{title}\". Move the strongest shot into the first 3 seconds.",
+  "pf.segStart": "Recorded loss {p}% in 0–{to}. Check for travel, greetings or setup before the main experience and try moving recorded core footage earlier. Cause and improvement are not established. Original segment label: {title}",
 
   "xp.title": "Experiments in this post",
   "xp.help": "Mark what you changed on purpose; it is compared with other posts that did the same.",
@@ -1581,4 +1581,6 @@ export default {
   "ocr.engineFail": "The recognition engine did not load (its download stalled for a minute). Your images are kept. Check the connection; if the app was just updated, reload the page, then press \"Start\" again.",
 
   "nm.ch.derived": "Read poorly, so worked out from interaction rate × views (= likes + comments + saves). Fix it if it differs from the screen.",
+  "ana.adv.hookIntro": "Intro present: overlay the logo/title on footage instead of a separate opening screen. Show the main experience at 0–3 seconds, then one explanatory caption at 3–5 seconds. Check 5-second retention at the same reporting stage next time.",
+  "ana.adv.hookNoIntro": "No intro: there is no intro to shorten. Move a recorded highlight to 0–3 seconds and add one explanatory caption at 3–5 seconds. Check 5-second retention at the same reporting stage next time.",
 };

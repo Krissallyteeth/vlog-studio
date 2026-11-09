@@ -12,8 +12,8 @@ export const REPORT_METRICS = ['views', 'exposure', 'ctr', 'exit2s', 'retain5s',
 // What to try next when a metric lags: keyed by metric.
 const ADVICE = {
   ctr: 'cover',
-  exposure: 'topic',
-  views: 'cover',
+  exposure: null,
+  views: null,
   exit2s: 'hook',
   retain5s: 'hook',
   avgWatchRatio: 'middle',
@@ -55,7 +55,9 @@ export function analysePost(post, posts, baseline) {
   const usable = rows.filter((r) => r.state);
   const better = usable.filter((r) => r.state === 'better').sort((a, b) => b.vsBase - a.vsBase);
   const worse = usable.filter((r) => r.state === 'worse').sort((a, b) => a.vsBase - b.vsBase);
-  const advice = [...new Set(worse.map((r) => ADVICE[r.key]))].slice(0, 3);
+  const intro = post.experiments?.intro;
+  const hook = intro === '있음' ? 'hookIntro' : intro === '없음' ? 'hookNoIntro' : 'hook';
+  const advice = [...new Set(worse.map((r) => ADVICE[r.key]).filter(Boolean).map((key) => key === 'hook' ? hook : key))].slice(0, 2);
 
   const caveats = [];
   if (post.validity === '광고혼입') caveats.push({ key: 'adMixed' });
