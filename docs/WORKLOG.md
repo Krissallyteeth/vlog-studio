@@ -12,8 +12,8 @@
 ## 현재 상태 (2026-11-09 기준, [Codex] 갱신)
 
 - 배포: https://krissallyteeth.github.io/vlog-studio/ — `main`에 push하면 GitHub Actions가 테스트·빌드·배포
-- 작업 브랜치: `claude/elegant-hawking-l8c9qv` (Claude 세션용). 배포는 같은 커밋을 `main`에도 push
-- 테스트: `npm test` 166개 통과 (2026-11-08 기준)
+- 작업 기준: `main`. Codex는 별도 로컬 브랜치에서 검증한 뒤 GitHub 연결로 반영.
+- 테스트: 전체 테스트와 빌드·하위 경로 검사 통과 (2026-11-09, 아래 작업 기록 참조)
 - 데이터
   - 기획 데이터: IndexedDB `vlog-studio` + Supabase `projects`, 사진은 Supabase Storage `media` 버킷
   - 小红书 성과 데이터: IndexedDB `vlog-studio-xhs` + Supabase `xhs_records` (kind: post / income / meta)
@@ -21,8 +21,11 @@
   - Supabase 주소·공개용(anon) 키는 `.env.production`에 있음. RLS로 각 사용자는 자기 행만 접근
 - OCR: tesseract.js(chi_sim+eng)를 앱과 함께 `/ocr/`로 배포, 브라우저 안에서만 실행
 - 분석: AI 호출 없이 규칙 기반. 기준값은 사용자 자신의 기록에서 계산
+- 편집 피드백: 확인된 사실 → 조건부 편집 점검 → 다음 통계 확인. 인트로 유무·누락·광고혼입 구분, 최대 두 항목. 실험·광고 비교는 관찰로 표시.
 
 ## 남은 일 · 아이디어 (우선순위 순 아님)
+
+- [ ] 실제 영상을 자동으로 확인하는 기능은 없음. 장면별 조언은 사용자가 실제 영상과 대조할 점검으로 제공.
 
 - [ ] 편집 점검 제안의 효과는 후속 게시물의 같은 통계 시점에서 확인. 인과 효과로 단정하지 않음.
 
@@ -61,6 +64,7 @@
 | 게시물 OCR | `src/xhs/ocr-engine.js`(엔진, 1분 정지 시 오류), `ocr-parse.js`(지표 카드), `ocr-note.js`(제목·발행시각·동류 비교·유입·시청자·내용 구간·AI 의견·채널 상세), 화면 `src/views/xhs/ocr.js` |
 | 광고 OCR | `src/xhs/ocr-ad-parse.js`, `digit-shape.js`, `ad-orders.js`(주문 병합·메모 대체), 화면 `src/views/xhs/ocr-ad.js` |
 | 광고 분석 | `src/xhs/ad-report.js`(주문·게시물별·기간별, `adInWindow`), `ad-advice.js`(D+1/D+2 권장 판단), 화면 `ads.js`, `ad-flow.js` |
+| 편집 피드백 | `src/xhs/feedback.js`(판정·행동), `src/views/xhs/feedback.js`(사실·행동·확인 표시), 대시보드와 동일 행동 공유 |
 | 인사이트 | `src/xhs/insights.js`(광고 인사이트·고칠 것·운영 브리핑·실험), `channels.js`(채널 분석), `conclusions.js`(카드별 결론), 문구 `src/views/xhs/insight-text.js`(강조 `emph`) |
 | 화면 | `src/views/xhs/dashboard.js`, `post.js`(콘텐츠 목록·게시물 상세), `data.js`(데이터 탭 5개), `note-meta.js`, `charts.js` |
 | DB 스키마 | `supabase/schema.sql` |
@@ -152,3 +156,12 @@
 - 인트로 유무에 따라 구체적인 첫 장면 편집 점검을 안내하고 미기록은 구분. 노출·조회만으로 소재 변경을 권하지 않음.
 - 이탈 지표의 원인 단정과 중반 문제 단정을 완화. 주요 파일: analysis.js, insights.js, note-meta.js, 세 언어 번역.
 - 검증: 전체 테스트, 빌드, 하위 경로 검사 실행. 커밋 해시는 이 항목을 포함한 커밋 참조. 실제 계정 데이터는 수정하지 않음.
+
+
+### [Codex] 2026-11-09 — 전체 피드백을 사실·행동·확인 구조로 통일
+- Claude의 기존 운영 브리핑·실험·광고 분석과 Codex의 첫 편집 조언 개선을 이어서 수정.
+- 편집 피드백을 순수 규칙 모듈로 분리하고 게시물 상세와 운영 브리핑에서 같은 행동 안내 사용. 인트로 있음/없음/미기록, 비교자료 없음/일부 누락/차이 작음/광고혼입을 구분.
+- 원인 단정·임의 초수 공식·영상 길이 무조건 축소를 제외. 선택한 행동과 다음 같은 시점 지표를 함께 안내. 플랫폼 원문의 주관적인 구간명도 분석에서 제외.
+- 실험은 관찰 비교로만 표시하고 지표 간 상충을 보존. 광고 점수는 검토 참고로 완화, 0명과 미입력을 분리하고 평가자료 없는 집행을 실패로 세지 않음. CTR·증가율 비교의 자료 개수와 광고혼입도 확인.
+- 검증: 합성 데이터 회귀 테스트, 세 언어 키·자리표시자, 전체 테스트·빌드·하위 경로 검사. 로컬 합성 자료로 PC/390px 화면과 줄바꿈 확인. 실제 계정 데이터 변경 없음.
+- 커밋: 이 항목을 포함한 커밋 참조. 남은 한계: 영상 자체와 인과 효과를 검증하지 않으며, 과거 기록의 사후 수정은 과거 표시에도 반영될 수 있음.

@@ -9,16 +9,18 @@ const MIN = 2;
 export function adConclusion(rec) {
   const out = [];
   const { followed, against } = rec;
-  if (followed.n >= MIN && against.n >= MIN && followed.cost != null && against.cost != null) {
+  const nFollowed = followed.measured ?? followed.n;
+  const nAgainst = against.measured ?? against.n;
+  if (nFollowed >= MIN && nAgainst >= MIN && followed.cost != null && against.cost != null) {
     // Few cases, or both sides dearer than usual (prices rising): said with that caveat.
-    if (followed.cost <= against.cost * 0.9) out.push({ key: 'followWins', vars: { a: followed.cost, b: against.cost }, ref: Math.min(followed.n, against.n) < 3, dear: followed.good < followed.n / 2 });
+    if (followed.cost <= against.cost * 0.9) out.push({ key: 'followWins', vars: { a: followed.cost, b: against.cost }, ref: Math.min(nFollowed, nAgainst) < 3, dear: followed.good < nFollowed / 2 });
     else if (against.cost <= followed.cost * 0.9) out.push({ key: 'ruleWeak', vars: { a: followed.cost, b: against.cost } });
     else out.push({ key: 'noDiff', vars: { a: followed.cost, b: against.cost } });
-  } else if (against.n >= 3 && against.good <= against.n / 3) {
+  } else if (nAgainst >= 3 && against.good <= nAgainst / 3) {
     // Not enough followed advice to compare, but running against it has mostly cost more.
-    out.push({ key: 'againstCostly', vars: { n: against.n, bad: against.n - against.good } });
+    out.push({ key: 'againstCostly', vars: { n: nAgainst, bad: nAgainst - against.good } });
   }
-  if (followed.n < MIN) out.push({ key: 'fewFollowed', vars: { n: followed.n } });
+  if (nFollowed < MIN) out.push({ key: 'fewFollowed', vars: { n: nFollowed } });
   const pend = rec.pending.slice(-3);
   for (const r of pend) {
     const a = r.tl.d2 ?? r.tl.d1;
@@ -46,6 +48,10 @@ export function expConclusion(expRes, experiments = []) {
     else item = { kind: 'same', metric: r.metric, vars: { name: r.name } };
     const cur = byId.get(r.id);
     if (!cur || RANK[item.kind] < RANK[cur.kind]) byId.set(r.id, item);
+  }
+  for (const [id] of byId) {
+    const winners = new Set(expRes.filter((r) => r.id === id && r.verdict?.clear).map((r) => r.verdict.best));
+    if (winners.size > 1) byId.set(id, { kind: 'mixed', vars: { name: expRes.find((r) => r.id === id).name, why: 'conflict' } });
   }
   const order = (experiments ?? []).map((e) => e.id);
   return [...byId.entries()].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0])).map(([, x]) => x);

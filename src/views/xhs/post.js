@@ -15,6 +15,7 @@ import { adTimeline } from '../../xhs/ad-advice.js';
 import { adFlowHtml } from './ad-flow.js';
 import { insightList } from './insight-text.js';
 import { noteMetaHtml } from './note-meta.js';
+import { feedbackHtml } from './feedback.js';
 import { relativeNote, xhsPage } from './shell.js';
 
 const CF = { good: 'cf-good', mid: 'cf-mid', bad: 'cf-bad' };
@@ -112,7 +113,7 @@ export async function renderPost([id], { isCurrent, keepY }) {
     if (report.better.length && report.worse.length) parts.push(`<p class="text-[15px] leading-relaxed">${esc(t('ana.summaryMixed', { good: METRIC[report.better[0].key].zh, goodPct: signedPct(report.better[0].vsBase).replace('+', ''), bad: METRIC[report.worse[0].key].zh, badPct: signedPct(report.worse[0].vsBase).replace('-', '') }))}</p>`);
     else if (report.better.length) parts.push(`<p class="text-[15px] leading-relaxed">${esc(t('ana.summaryGood', { list: report.better.slice(0, 3).map(line).join(', ') }))}</p>`);
     else if (report.worse.length) parts.push(`<p class="text-[15px] leading-relaxed">${esc(t('ana.summaryBad', { list: report.worse.slice(0, 3).map(line).join(', ') }))}</p>`);
-    else parts.push(`<p class="text-[15px] leading-relaxed">${esc(t('ana.summaryFlat'))}</p>`);
+    else parts.push(`<p class="text-[15px] leading-relaxed">${esc(t(report.reserved ? 'ana.reservedWhy' : 'ana.summaryFlat'))}</p>`);
     parts.push(`<div class="table-scroll mt-3"><table class="xtable"><thead><tr><th>${esc(t('crit.metric'))}</th><th class="num" data-m="key">${esc(t('ana.this'))}</th><th class="num" data-m="inline">${esc(t('ana.vsBase'))}</th><th class="num" data-m="inline">${esc(t('ana.vsPrev'))}</th><th class="num">${esc(t('ana.vsRecent'))}</th></tr></thead><tbody>
       ${report.rows.map((r) => `<tr><td>${esc(METRIC[r.key].zh)}</td><td class="num">${esc(fmt(r.key, r.value))}</td><td class="num ${r.state === 'better' ? 'cf-good' : r.state === 'worse' ? 'cf-bad' : r.state ? 'cf-mid' : ''}">${esc(r.baseZero ? t('crit.zeroBase') : signedPct(r.vsBase))}</td><td class="num">${esc(signedPct(r.vsPrev))}</td><td class="num">${esc(report.recentCount >= 5 ? signedPct(r.vsRecent) : t('ana.na'))}</td></tr>`).join('')}
       </tbody></table></div>
@@ -120,7 +121,7 @@ export async function renderPost([id], { isCurrent, keepY }) {
     parts.push(`<div class="mt-3 grid gap-3 md:grid-cols-2">
       <div><h4 class="text-[13px] font-semibold">${esc(t('ana.better'))}</h4><p class="text-[14px]">${esc(report.better.map(line).join(', ') || t('ana.none'))}</p></div>
       <div><h4 class="text-[13px] font-semibold">${esc(t('ana.worse'))}</h4><p class="text-[14px]">${esc(report.worse.map(line).join(', ') || t('ana.none'))}</p></div></div>`);
-    parts.push(`<h4 class="mt-3 text-[13px] font-semibold">${esc(t('ana.next'))}</h4><ul class="list-disc pl-5 text-[14px]">${(report.advice.length ? report.advice : ['keep']).map((a) => `<li>${esc(t(`ana.adv.${a}`))}</li>`).join('')}</ul>`);
+    parts.push(`<p class="mt-3 text-[13px]">${esc(t('fb.location'))}</p>`);
     if (report.caveats.length) parts.push(`<h4 class="mt-3 text-[13px] font-semibold">${esc(t('ana.caveats'))}</h4><ul class="list-disc pl-5 text-[13px] text-muted">${report.caveats.map((c) => `<li>${esc(t(`ana.cav.${c.key}`, c.vars))}</li>`).join('')}</ul>`);
     return parts.join('');
   };
@@ -180,7 +181,8 @@ export async function renderPost([id], { isCurrent, keepY }) {
       </section>
       <section class="card mt-3"><h2 class="section-step">4 · ${esc(t('post.s.ads'))}</h2>${adFlowHtml(adTimeline(post, posts, baseline))}<div class="mt-2" id="p-ads">${adsHtml()}</div></section>
       <section class="card mt-3"><h2 class="section-step">5 · ${esc(t('post.s.analysis'))}</h2>
-        <div class="mt-2 rounded-[12px] border border-line p-3"><h3 class="text-[14px] font-semibold">${esc(t('pf.title'))}</h3>${insightList('pf', focus.items)}</div>
+        ${feedbackHtml(post, baseline)}
+        ${insightList('pf', focus.items.filter((item) => ['followRate', 'profileConv'].includes(item.key)))}
         ${expHtml()}
         ${noteMetaHtml(post.d1Meta, post, 'D+1', { posts })}${noteMetaHtml(post.d2Meta, post, 'D+2', { posts })}
         <div class="mt-3">${reportHtml()}</div></section>

@@ -31,8 +31,9 @@ export function channelFindings(post, posts = [], which = 'd1') {
   };
   // 1. The opening: videoRec plays without a cover, so its watch time is the first seconds' hold.
   if (isNum(vr.avgWatch) && isNum(home.avgWatch) && home.avgWatch > 0) {
-    const reacts = [vr.likes, vr.comments, vr.favs].filter(isNum).reduce((a, b) => a + b, 0);
-    if (vr.avgWatch < home.avgWatch * 0.5) out.push({ key: 'vrShort', tone: 'warn', vars: { vr: r1(vr.avgWatch), home: r1(home.avgWatch), reacts } });
+    const reactions = [vr.likes, vr.comments, vr.favs];
+    const reacts = reactions.every(isNum) ? reactions.reduce((a, b) => a + b, 0) : null;
+    if (vr.avgWatch < home.avgWatch * 0.5) out.push({ key: 'vrShort', tone: 'warn', vars: { vr: r1(vr.avgWatch), home: r1(home.avgWatch), reacts: reacts ?? '–' } });
     else if (vr.avgWatch >= home.avgWatch * 0.8) out.push({ key: 'vrHolds', tone: 'good', vars: { vr: r1(vr.avgWatch), home: r1(home.avgWatch) } });
   }
   const pastVr = mine((p) => chOf(p, which).videoRec?.avgWatch);

@@ -61,16 +61,17 @@ export async function renderDashboard({ isCurrent, keepY }) {
       return t(c.kind === 'mixed' ? `xp.c.mixed.${c.vars.why}` : `xp.c.${c.kind}`, { ...c.vars, m });
     });
   const opsLines = () =>
-    opsConclusion(brief).map((c) => (c.key === 'fix' ? t('ops.c.fix', { m: METRIC[c.metric].zh, act: t(`ops.c.act.${c.metric}`) }) : t(`ops.c.${c.key}`, c.vars ?? {})));
+    opsConclusion(brief).map((c) => (c.key === 'fix' ? t('ops.c.fix', { m: t(`m.${c.metric}`), act: t(`ops.c.act.${c.metric}`) }) : t(`ops.c.${c.key}`, c.vars ?? {})));
   // Ad decisions: posts waiting for one, and how following (or not) the advice turned out.
   const rec = adviceRecord(posts, baseline);
   const adviceCard = () => {
     const pend = rec.pending.slice(-3).reverse();
-    const line = (g, k) => (g.n ? `<li>${esc(t(k, { n: g.n, cost: g.cost == null ? '–' : yuan(g.cost), good: g.good }))}</li>` : '');
+    const line = (g, k) => (g.n ? `<li>${esc(t(k, { n: g.measured ?? g.n, cost: g.cost == null ? '–' : yuan(g.cost), good: g.good }))}</li>` : '');
     return `<section class="card" id="advice-card"><h3 class="text-[15px] font-semibold">${esc(t('adv.cardTitle'))}</h3>
       ${pend.length ? `<ul class="mt-2 flex flex-col gap-1.5 text-[13px]">${pend.map((r) => { const a = r.tl.d2 ?? r.tl.d1; return `<li class="flex flex-wrap items-center gap-2"><a class="link-btn" href="#/c/${encodeURIComponent(r.post.id)}">${esc(r.post.title)}</a>${verdictBadge(a)}<span class="text-[12px] text-muted">${esc(r.tl.d2 ? t('adv.d2') : t('adv.d1'))}${a.expect ? ` · ${esc(t('adv.expectShort', { cost: yuan(a.expect.cost) }))}` : ''}</span></li>`; }).join('')}</ul>` : `<p class="mt-2 text-[13px] text-muted">${esc(t('adv.noPending'))}</p>`}
       <p class="mt-3 text-[13px] font-semibold">${esc(t('adv.history'))}</p>
       <ul class="mt-1 flex list-disc flex-col gap-1 pl-5 text-[13px]">${line(rec.followed, 'adv.h.followed')}${line(rec.against, 'adv.h.against')}${rec.notRun ? `<li>${esc(t('adv.h.notRun', { n: rec.notRun }))}</li>` : ''}</ul>
+      ${rec.unmeasured ? `<p class="mt-1 text-[12px] text-muted">${esc(t('adv.historyMissing', { n: rec.unmeasured }))}</p>` : ''}${rec.zero ? `<p class="mt-1 text-[12px] text-muted">${esc(t('adv.historyZero', { n: rec.zero }))}</p>` : ''}
       ${conclusion(adLines(rec))}
       <details class="mt-2 text-[12px]"><summary class="cursor-pointer font-semibold">${esc(t('adv.basisTitle'))}</summary><ul class="mt-1 flex list-disc flex-col gap-0.5 pl-5 text-muted">${[1, 2, 3, 4, 5, 6].map((i) => `<li>${esc(t(`adv.basis.${i}`))}</li>`).join('')}</ul></details>
       <p class="mt-2 text-[12px] text-muted">${esc(t('adv.cardNote'))}</p></section>`;

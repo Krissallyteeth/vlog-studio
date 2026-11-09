@@ -1,6 +1,6 @@
 import { channelBrief } from './channels.js';
 import { METRIC } from './metrics.js';
-import { adOrders, goalType } from './ad-report.js';
+import { adInWindow, adOrders, goalType } from './ad-report.js';
 import { isValid, median, ordered, relDiff, stage } from './stats.js';
 import { stageDay } from './store.js';
 
@@ -62,7 +62,7 @@ export function adInsights(posts) {
   // 2. Natural D+1 views of the post vs the price of a follower (single-note orders): cut at the
   //    median D+1 views of the user's own valid posts.
   const viewsOf = (o) => (o.links.length === 1 ? stage(o.links[0].post).views : null);
-  const withViews = follow.filter((o) => !o.multi && isNum(viewsOf(o)));
+  const withViews = follow.filter((o) => !o.multi && isValid(o.links[0].post) && !adInWindow(o.links[0].post, 'd1').any && isNum(viewsOf(o)));
   const cut = median(ordered(posts).filter(isValid).map((p) => stage(p).views).filter(isNum));
   if (isNum(cut)) {
     const c = compare('naturalCut', [`D+1 ≥ ${Math.round(cut)}`, withViews.filter((o) => viewsOf(o) >= cut)], [`D+1 < ${Math.round(cut)}`, withViews.filter((o) => viewsOf(o) < cut)], { cut: Math.round(cut) });
@@ -170,18 +170,19 @@ export function postFocus(post, posts, baseline) {
   }
 
   // Followers per 1,000 views against my median.
-  const per1k = (p) => (isNum(stage(p).newFollowers) && stage(p).views > 0 ? (stage(p).newFollowers / stage(p).views) * 1000 : null);
+  const per1k = (p) => (isValid(p) && isNum(stage(p).newFollowers) && stage(p).views > 0 ? (stage(p).newFollowers / stage(p).views) * 1000 : null);
   const mine = per1k(post);
   const med = median(valid.map(per1k).filter(isNum));
-  if (isNum(mine) && isNum(med) && med > 0 && mine < med * 0.6) items.push({ key: 'followRate', vars: { now: Math.round(mine * 10) / 10, med: Math.round(med * 10) / 10 } });
+  if (valid.map(per1k).filter(isNum).length >= SOLID && isNum(mine) && isNum(med) && med > 0 && mine < med * 0.6) items.push({ key: 'followRate', vars: { now: Math.round(mine * 10) / 10, med: Math.round(med * 10) / 10 } });
 
   // Ads on this post: profile visits → follows, against all my orders.
   const allOrders = adOrders(posts).filter((o) => goalType(o.goal) === 'follow' && isNum(o.metrics.follows) && isNum(o.metrics.profileViews) && o.metrics.profileViews > 0);
   const conv = (o) => o.metrics.follows / o.metrics.profileViews;
-  const medConv = median(allOrders.map(conv));
+  const comparisonOrders = allOrders.filter((o) => !o.links.some((l) => l.post.id === post.id));
+  const medConv = median(comparisonOrders.map(conv));
   const mineOrders = allOrders.filter((o) => o.links.some((l) => l.post.id === post.id) && !o.multi);
   for (const o of mineOrders) {
-    if (isNum(medConv) && allOrders.length >= SOLID && conv(o) < medConv * 0.7) items.push({ key: 'profileConv', vars: { now: Math.round(conv(o) * 100), med: Math.round(medConv * 100), pv: o.metrics.profileViews, fo: o.metrics.follows } });
+    if (isNum(medConv) && comparisonOrders.length >= SOLID && conv(o) < medConv * 0.7) items.push({ key: 'profileConv', vars: { now: Math.round(conv(o) * 100), med: Math.round(medConv * 100), pv: o.metrics.profileViews, fo: o.metrics.follows } });
   }
   // Ad audience younger / older than usual (18–23 + under 18).
   const young = (a) => (a && isNum(a['18~23']) ? a['18~23'] + (a['18以下'] ?? 0) : null);
@@ -207,7 +208,7 @@ export function opsBrief(posts, baseline, { today = new Date().toISOString().sli
   const out = [];
   const valid = ordered(posts).filter(isValid).filter((p) => isNum(stage(p).views));
   // The same "recent posts" as the dashboard's own figures when given.
-  const recent = (given ?? valid.slice(-window)).filter((p) => isNum(stage(p).views));
+  const recent = (given ?? valid.slice(-window)).filter((p) => isValid(p) && isNum(stage(p).views));
   if (baseline && recent.length >= 3) {
     // 1. The recent run against the fixed median, and the funnel step behind it.
     const views = median(recent.map((p) => stage(p).views));
@@ -238,7 +239,8 @@ export function opsBrief(posts, baseline, { today = new Date().toISOString().sli
   const split = ins.find((x) => x.key === 'followerSplit');
   if (split && split.vars.share >= 50) out.push({ key: 'dependOnAds', tone: 'warn', vars: split.vars });
   // 3b. An experiment that clearly paid off (two options with enough posts, nothing else changed).
-  const exp = experimentResults(posts, experiments).filter((r) => r.verdict?.clear && !r.verdict.mixed).sort((a, b) => b.verdict.rel - a.verdict.rel)[0];
+  const results = experimentResults(posts, experiments);
+  const exp = results.filter((r) => r.verdict?.clear && !r.verdict.mixed && !results.some((other) => other.id === r.id && other.verdict?.clear && other.verdict.best !== r.verdict.best)).sort((a, b) => b.verdict.rel - a.verdict.rel)[0];
   if (exp) out.push({ key: 'expWin', tone: 'good', ref: exp.verdict.ref, metric: exp.metric, vars: { name: exp.name, best: exp.verdict.best, worst: exp.verdict.worst, m: METRIC[exp.metric].zh, pct: Math.round(exp.verdict.rel * 100) } });
   // 3c. Traffic channels: which feed brings views, what experiments did to the opening's hold.
   for (const x of channelBrief(posts, experiments)) out.push({ ...x, key: `ch.${x.key}` });
@@ -287,9 +289,9 @@ export function experimentResults(posts, experiments) {
         const mixed = others.some((o) => {
           const a = new Set(of(best.opt).map((p) => p.experiments?.[o.id]).filter(Boolean));
           const b = new Set(of(worst.opt).map((p) => p.experiments?.[o.id]).filter(Boolean));
-          return a.size > 0 && b.size > 0 && ([...a].some((x) => !b.has(x)) || [...b].some((x) => !a.has(x)));
+          return of(best.opt).some((p) => !p.experiments?.[o.id]) || of(worst.opt).some((p) => !p.experiments?.[o.id]) || (a.size > 0 && b.size > 0 && ([...a].some((x) => !b.has(x)) || [...b].some((x) => !a.has(x))));
         });
-        verdict = { best: best.opt, worst: worst.opt, rel, mixed, ref: Math.min(best.n, worst.n) < SOLID, clear: isNum(rel) && rel >= 0.1 };
+        verdict = { best: best.opt, worst: worst.opt, rel, mixed, observational: true, ref: Math.min(best.n, worst.n) < SOLID, clear: isNum(rel) && rel >= 0.1 };
       }
       out.push({ id: ex.id, name: ex.name, metric: k, groups: g, verdict });
     }

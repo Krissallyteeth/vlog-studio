@@ -67,7 +67,7 @@ export function noteMetaHtml(meta, post, stageLabel = 'D+1', { posts = [], edit 
   if (segs.length)
     parts.push(`<p class="mt-3 text-[13px] font-semibold">${esc(t('nm.segments'))}</p><ul class="mt-1 flex flex-col gap-1 text-[13px]">${segs
       .map((x) => {
-        const row = `<span class="tabular-nums">${esc(x.from)}–${esc(x.to)}</span><b class="tabular-nums">${esc(t('nm.lost', { p: Math.round(x.loss * 100) }))}</b><span class="min-w-0 truncate">${esc(x.title)}</span>`;
+        const row = `<span class="tabular-nums">${esc(x.from)}–${esc(x.to)}</span><b class="tabular-nums">${esc(t('nm.lost', { p: Math.round(x.loss * 100) }))}</b>`;
         const tone = x.loss >= 0.3 ? 'cf-bad' : x.loss >= 0.1 ? 'cf-mid' : 'bg-surface-2';
         return `<li class="flex gap-2 rounded-[8px] px-2 py-1 ${tone}">${row}</li>`;
       })

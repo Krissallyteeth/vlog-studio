@@ -1,6 +1,8 @@
 import { t } from '../../i18n/index.js';
 import { fmt, yuan } from '../../xhs/format.js';
 import { esc } from '../../ui/dom.js';
+import { editingPlan } from '../../xhs/feedback.js';
+import { editingPlanHtml } from './feedback.js';
 
 /*
  * Wording for the insight items of src/xhs/insights.js: numbers are formatted by what they are
@@ -45,6 +47,6 @@ const TONE = { good: 'cf-good', warn: 'cf-mid', info: 'bg-surface-2' };
 export function insightList(prefix, items, { empty = '' } = {}) {
   if (!items.length) return empty ? `<p class="mt-2 text-[14px] text-muted">${esc(empty)}</p>` : '';
   return `<ul class="mt-2 flex flex-col gap-1.5">${items
-    .map((it) => `<li class="rounded-[12px] px-3 py-2 text-[14px] leading-relaxed ${TONE[it.tone] ?? 'bg-surface-2'}">${emph(insightText(prefix, it))}${it.ref ? ` <span class="badge bg-surface-2">${esc(t('ops.ref'))}</span>` : ''}${it.vars?.bestId && /^weak\./.test(it.key) ? ` <a class="link-btn text-[13px]" href="#/c/${encodeURIComponent(it.vars.bestId)}">${esc(it.vars.best)}</a>` : ''}</li>`)
+    .map((it) => `<li class="rounded-[12px] px-3 py-2 text-[14px] leading-relaxed ${TONE[it.tone] ?? 'bg-surface-2'}">${emph(insightText(prefix, it))}${it.ref ? ` <span class="badge bg-surface-2">${esc(t('ops.ref'))}</span>` : ''}${it.vars?.bestId && /^weak\./.test(it.key) ? ` <a class="link-btn text-[13px]" href="#/c/${encodeURIComponent(it.vars.bestId)}">${esc(it.vars.best)}</a>` : ''}${prefix === 'ops' && /^weak\./.test(it.key) ? editingPlanHtml(editingPlan(it.metric)) : ''}</li>`)
     .join('')}</ul>`;
 }

@@ -16,7 +16,7 @@ describe('ad advice, with only what was known then', () => {
   it('later posts are not used to judge an earlier one', () => {
     expect(adviceAt(posts[1], posts, base, 'd1').verdict).toBe('unknown'); // only one post before it
   });
-  it('run against a skip, and dearer than usual: the advice was right', () => {
+  it('describes higher actual cost without proving that the advice was right', () => {
     const tl = adTimeline(posts[5], posts, base, { today: '2026-04-01' });
     expect(tl.d1.verdict).toBe('skip');
     expect(tl.final).toMatchObject({ key: 'against', outcome: 'bad' });
