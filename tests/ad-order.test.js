@@ -10,6 +10,20 @@ const A = (label, value, conf = 92) => ({ words: [{ text: label, confidence: con
 const L = (text, conf = 92) => ({ words: text.split(' ').map((w, i) => ({ text: w, confidence: conf, bbox: { x0: i * 40, y0: 0, x1: i * 40 + 30, y1: 20 } })) });
 
 describe('薯条 order parsing', () => {
+  it('drops an extra digit in front of the goal result when estimate top + bonus says so ("951" → 51)', () => {
+    const f = parseAdOrder([
+      [L('点 赞 收藏 量 951 效果 极 好 / 预 估 转 化 10 ~ 42', 65), L('超额 获 赠 9', 70), L('曝光 量 阅读 量 点 赞 量 收藏 量'), L('500 60 42 9'), L('推广 目标 点 赞 收藏 量')],
+    ]).fields;
+    expect(f.result).toMatchObject({ status: 'ok', value: 51 });
+    expect(f.bonus).toMatchObject({ status: 'ok', value: 9 });
+  });
+
+  it('leaves a flag emoji read as Latin letters out of the title', () => {
+    const W = (text, x0, conf = 90) => ({ text, confidence: conf, bbox: { x0, y0: 700, x1: x0 + 40, y1: 750 } });
+    const f = parseAdOrder([[L('订单 详情'), { words: [W('测试', 360), W('vlog', 450), W('|', 543), W('tio', 575, 72), W('城市', 637), W('一日游', 780)] }]]).fields;
+    expect(f.title.candidate).toBe('测试vlog | 城市一日游');
+  });
+
   it('splits a slash read as "1"', () => {
     expect(splitSpent('50/80')).toEqual({ spend: 50, budget: 80, sure: true });
     expect(splitSpent('1001100')).toMatchObject({ spend: 100, budget: 100, sure: false });

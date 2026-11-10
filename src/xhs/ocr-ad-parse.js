@@ -118,7 +118,7 @@ export function parseAdOrder(linesPerImage) {
       if ((m = /(?:下单时间|创建时间|投放时间|开始时间|推广时间|订单时间):?(\d{4}-\d{2}-\d{2})(\d{2}:\d{2})/.exec(text))) set('startedAt', judge(`${m[1]}T${m[2]}`, m[0], Math.max(c, 80)));
       // The note title: below the 订单详情 title bar (the status bar "10:38 … 95 |" is not it), with Chinese text.
       if (belowTitle && /vlog|Vlog|VLOG|viog|\|/.test(text) && !/%|关注薯条|小助手|推广技巧|课堂|帮助/.test(text) && (text.match(/[\u4e00-\u9fff]/g) ?? []).length >= 2 && !/作者|发布|互动|订单|消耗|保障/.test(text) && text.length > 6 && !f.title && noteCountSeen() <= 1) {
-        set('title', check(line.words.map((w) => w.text).join('').replace(/^[^A-Za-z一-鿿]+/, '').replace(/^[全:o\s]+/, ''), text, c, 'text'));
+        set('title', check(titleText(line.words), text, c, 'text'));
         titleInNotes = inNotes;
       }
       // Result vs estimate: "点赞收藏量 27 / 预估转化 16 ~ 71", "点赞收藏量 60 效果极好 / 预估转化 11 ~ 53",
@@ -354,11 +354,12 @@ export function parseAdOrder(linesPerImage) {
     confirm('spend', 'costPerResult');
     if (budgetUsedUp && val('budget') === val('spend')) confirm('budget', 'spend'); // "已完成全部预算消耗"
   }
-  // "59 效果极好" read as "598": top of the estimate + bonus = the result, and the reading starts with it.
+  // "59 效果极好" read as "598", "51" as "951": top of the estimate + bonus = the result, and the
+  // reading starts or ends with it (one extra digit from the badge or the icon beside it).
   if (val('bonus') != null && val('result') != null && Array.isArray(val('estimate'))) {
     const expected = val('estimate')[1] + val('bonus');
     const read = String(val('result'));
-    if (read !== String(expected) && read.length > String(expected).length && read.startsWith(String(expected)) && f.result.status !== 'ok') {
+    if (read !== String(expected) && read.length === String(expected).length + 1 && (read.startsWith(String(expected)) || read.endsWith(String(expected))) && f.result.status !== 'ok') {
       f.result = { ...check(expected, f.result.text, f.result.conf, 'format'), at: f.result.at };
     }
   }
@@ -410,6 +411,27 @@ export function parseAdOrder(linesPerImage) {
 const PROVINCES = ['北京', '天津', '上海', '重庆', '河北', '山西', '辽宁', '吉林', '黑龙江', '江苏', '浙江', '安徽', '福建', '江西', '山东', '河南', '湖北', '湖南', '广东', '海南', '四川', '贵州', '云南', '陕西', '甘肃', '青海', '台湾', '内蒙古', '广西', '西藏', '宁夏', '新疆', '香港', '澳门', '其他'];
 const INTERESTS = ['体育运动', '运动健身', '美妆护肤', '时尚穿搭', '母婴育儿', '家居家装', '科技数码', '游戏动漫', '知识教育', '影视综艺', '生活记录', '娱乐', '美食', '情感', '影视', '时尚', '旅游', '宠物', '美妆', '护肤', '穿搭', '运动', '健身', '音乐', '游戏', '科技', '数码', '教育', '学习', '母婴', '家居', '家装', '汽车', '体育', '摄影', '读书', '二次元', '动漫', '搞笑', '职场', '财经', '健康', '婚嫁', '出行', '人文', '艺术', '手工', '绘画', '舞蹈', '明星', '综艺', '潮流', '户外', '露营', '咖啡', '探店', '美甲', '减肥', '亲子', '留学', '校园', '文化', '资讯', '新闻', '萌宠', '家居生活'];
 const WEAK = new Set(['人', '他', '其', '国', '本', '和', '的', '一', '大', '小', '上', '下']);
+
+/**
+ * The note title from its line's words: thumbnail text at the far left is dropped, and so is an emoji
+ * read as a few Latin letters right after "|" ("…vlog | 🇰🇷城市…" read as "…|tio城市…").
+ */
+function titleText(words) {
+  const ws = words.filter((w) => w.text);
+  const out = ws.filter((w, i) => {
+    const prev = ws[i - 1]?.text ?? '';
+    const next = ws[i + 1]?.text ?? '';
+    const emoji = /^[A-Za-z]{1,3}$/.test(w.text) && !/^v?log$/i.test(w.text) && /\|$/.test(prev) && /^[\u4e00-\u9fff]/.test(next) && (w.confidence ?? 100) < 80;
+    return !emoji;
+  });
+  return out
+    .map((w) => w.text)
+    .join('')
+    .replace(/^[^A-Za-z一-鿿]+/, '')
+    .replace(/^[全:o\s]+/, '')
+    .replace(/\s*\|\s*/g, ' | ')
+    .trim();
+}
 
 /**
  * The goal result and the report's own count must agree (关注: result = 新增关注; 点赞收藏:
