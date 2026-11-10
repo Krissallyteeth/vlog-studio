@@ -12,8 +12,9 @@ import { AD_METRICS } from '../../xhs/ocr-ad-parse.js';
 import { memoDuplicateOf } from '../../xhs/ad-orders.js';
 import { experimentResults, postFocus } from '../../xhs/insights.js';
 import { adTimeline } from '../../xhs/ad-advice.js';
+import { adComment } from '../../xhs/ad-comment.js';
 import { adFlowHtml } from './ad-flow.js';
-import { insightList } from './insight-text.js';
+import { emph, insightList } from './insight-text.js';
 import { noteMetaHtml } from './note-meta.js';
 import { feedbackHtml } from './feedback.js';
 import { relativeNote, xhsPage } from './shell.js';
@@ -133,6 +134,19 @@ export async function renderPost([id], { isCurrent, keepY }) {
     return `<div class="mt-2 notice flex flex-wrap items-center gap-2 text-[12px]"><span class="flex-1">${esc(t('ads.dupMemo', { stage: order.stage || '?', start: (order.start || '').replace('T', ' '), spend: a.spend }))}</span><button type="button" class="btn btn-secondary btn-sm" data-drop-memo="${i}">${esc(t('ads.dupDrop'))}</button></div>`;
   };
 
+  // A comment per ad: result vs the platform's estimate, price vs my earlier orders of the same goal.
+  const TONE = { good: 'cf-good', warn: 'cf-mid', info: 'bg-surface' };
+  const adCommentHtml = (a) => {
+    const items = adComment(a, posts);
+    if (!items.length) return '';
+    const text = (x) => {
+      const v = { ...x.vars };
+      for (const k of ['cost', 'usual', 'per', 'followUsual']) if (k in v) v[k] = v[k] == null ? '–' : yuan(v[k]);
+      if (v.what) v.what = t(`adc.what.${v.what}`);
+      return t(`adc.${x.key}`, v);
+    };
+    return `<div class="mt-2"><p class="text-[12px] font-semibold">${esc(t('adc.title'))}</p><ul class="mt-1 flex flex-col gap-1">${items.map((x) => `<li class="rounded-[8px] px-2 py-1 leading-relaxed ${TONE[x.tone]}">${emph(text(x))}${x.ref ? ` <span class="badge bg-surface-2">${esc(t('ops.ref'))}</span>` : ''}</li>`).join('')}</ul><p class="mt-1 text-[11px] text-muted">${esc(t('adc.note'))}</p></div>`;
+  };
   const adsHtml = () => `
     ${post.ads.length ? `<ul class="flex flex-col gap-2">${post.ads.map((a, i) => `<li class="rounded-[12px] bg-surface-2 p-3 text-[13px]">
       <div class="flex items-start justify-between gap-2"><div><b>${esc(a.stage || '–')}</b> · ${esc(a.executed ? t('ads.executed') : t('ads.notExecuted'))} · ${esc(yuan(a.spend) || '–')}${a.credit ? ` + ${esc(t('ads.credit'))} ${esc(yuan(a.credit))}` : ''}${a.needsReview ? ` <span class="badge cf-mid">${esc(t('ads.review'))}</span>` : ''}</div>
@@ -140,7 +154,7 @@ export async function renderPost([id], { isCurrent, keepY }) {
       <p class="mt-1 text-muted">${esc([a.goal, a.hours ? t('ads.hoursN', { n: a.hours }) : '', a.start, a.result, a.memo].filter(Boolean).join(' · '))}</p>
       ${a.sourceText ? `<p class="mt-1 text-[12px] text-muted">${esc(t('ads.from', { text: a.sourceText }))}</p>` : ''}
       ${dupHtml(a, i)}
-      ${orderHtml(a)}</li>`).join('')}</ul>` : `<p class="text-[14px] text-muted">${esc(t('ads.none'))}</p>`}
+      ${orderHtml(a)}${adCommentHtml(a)}</li>`).join('')}</ul>` : `<p class="text-[14px] text-muted">${esc(t('ads.none'))}</p>`}
     <div class="mt-3 flex flex-wrap gap-2"><button type="button" class="btn btn-secondary btn-sm" data-edit-ad="new">${icon('plus', 'size-4')}${esc(t('ads.add'))}</button><a class="btn btn-secondary btn-sm" href="#/ocr-ad/${encodeURIComponent(post.id)}">${icon('scan', 'size-4')}${esc(t('oad.fromShots'))}</a></div>
     ${eff.unknownStage ? `<p class="mt-2 text-[12px] cf-mid rounded-[8px] px-2 py-1">${esc(t('ads.unknownStage', { n: eff.unknownStage }))}</p>` : ''}
     ${eff.spend ? `<div class="mt-3 kpi-grid"><div class="kpi"><p class="kpi-label">${esc(t('ads.spend'))}</p><p class="kpi-value">${esc(yuan(eff.spend))}</p></div><div class="kpi"><p class="kpi-label">${esc(t('ads.betweenSpend'))}</p><p class="kpi-value">${esc(yuan(eff.betweenSpend) || '0元')}</p></div><div class="kpi"><p class="kpi-label">${esc(t('ads.viewsDelta'))}</p><p class="kpi-value">${eff.viewsDelta ?? '–'}</p></div><div class="kpi"><p class="kpi-label">${esc(t('ads.perView'))}</p><p class="kpi-value">${eff.perView == null ? '–' : yuan(eff.perView)}</p></div><div class="kpi"><p class="kpi-label">${esc(t('ads.perFollower'))}</p><p class="kpi-value">${eff.perFollower == null ? '–' : yuan(eff.perFollower)}</p></div></div>
