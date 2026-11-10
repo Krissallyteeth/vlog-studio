@@ -87,9 +87,10 @@ export async function recognize(image, progress = () => {}, { gray = false } = {
 }
 
 /** Reads one line of text (a small, cleaned crop): page segmentation "single line", then back. */
-export async function recognizeLine(image, { digits = false } = {}) {
+export async function recognizeLine(image, { digits = false, chars = '' } = {}) {
   const worker = await getWorker();
-  await worker.setParameters({ tessedit_pageseg_mode: '7', tessedit_char_whitelist: digits ? '0123456789.,%' : '' });
+  // `chars`: only these characters may be read (e.g. the characters of the known names).
+  await worker.setParameters({ tessedit_pageseg_mode: '7', tessedit_char_whitelist: digits ? '0123456789.,%' : chars });
   try {
     const { data } = await worker.recognize(image);
     return { text: String(data.text ?? '').trim(), confidence: data.confidence ?? 0 };

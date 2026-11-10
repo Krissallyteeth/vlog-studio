@@ -455,6 +455,9 @@ export function markMismatch(f) {
 }
 
 /** True when an audience label is one of the known names of its chart. */
+/** Every character the known names of a chart use: a reading limited to them cannot drift to look-alikes. */
+export const nameChars = (section) => [...new Set((section === 'city' ? PROVINCES : section === 'interest' ? INTERESTS : []).join(''))].join('');
+
 export const knownName = (name, section) => (section === 'city' ? PROVINCES : section === 'interest' ? INTERESTS : []).includes(name);
 
 /** Closest known name for a garbled label ("炽乐" → 娱乐, "川" → 四川); '' when nothing fits. */

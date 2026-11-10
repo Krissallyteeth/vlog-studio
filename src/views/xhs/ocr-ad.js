@@ -5,7 +5,7 @@ import { navigate } from '../../router.js';
 import { $, copyText, esc, openSheet, toast } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { putMany } from '../../xhs/db.js';
-import { AD_METRICS, AD_REVIEW_FIELDS, checkOrder, completeBySum, knownName, nameGuess, parseAdOrder } from '../../xhs/ocr-ad-parse.js';
+import { AD_METRICS, AD_REVIEW_FIELDS, checkOrder, completeBySum, knownName, nameChars, nameGuess, parseAdOrder } from '../../xhs/ocr-ad-parse.js';
 import { ordered } from '../../xhs/stats.js';
 import { LATER, memoAds, memoMoney, memoToReplace, mergeOrderGroups, orderAds, placeOrder, rememberTitle, splitMoney } from '../../xhs/ad-orders.js';
 import { listPosts, normalizePost, savePosts, stageFromDates } from '../../xhs/store.js';
@@ -114,8 +114,12 @@ export async function refineAudience(parsed, sources) {
     }
     return bitmaps.get(i);
   };
-  /** Crop → 2× → keep only dark, neutral pixels (text) as black on white. */
-  const clean = (bmp, x0, y0, x1, y1, scale = 2) => {
+  /**
+   * Crop → 2× → keep only dark, neutral pixels (text) as black on white. `ink`: how light a pixel may
+   * be and still count as text (a higher value keeps the soft edges of thin strokes, which some
+   * browsers draw lighter when enlarging).
+   */
+  const clean = (bmp, x0, y0, x1, y1, scale = 2, ink0 = 150) => {
     const w = Math.max(1, Math.round(x1 - x0));
     const h = Math.max(1, Math.round(y1 - y0));
     const c = document.createElement('canvas');
@@ -130,7 +134,7 @@ export async function refineAudience(parsed, sources) {
     for (let i = 0; i < a.length; i += 4) {
       const mx = Math.max(a[i], a[i + 1], a[i + 2]);
       const mn = Math.min(a[i], a[i + 1], a[i + 2]);
-      const ink = mx < 150 && mx - mn < 45; // dark grey/black text; the red bar and grey track are not
+      const ink = mx < ink0 && mx - mn < 45; // dark grey/black text; the red bar and grey track are not
       a[i] = a[i + 1] = a[i + 2] = ink ? 0 : 255;
     }
     g.putImageData(d, 0, 0);
@@ -145,13 +149,25 @@ export async function refineAudience(parsed, sources) {
     const pad = 8;
     const y0 = Math.max(0, r.at.box.y0 - pad);
     const y1 = Math.min(bmp.height, r.at.box.y1 + pad);
-    // A known name read with certainty is kept; a guessed one (a tie, reason "text") is read again.
-    let name = knownName(job.key, sec) && r.reason !== 'text' ? job.key : '';
-    // A few tries at different sizes (small text reads differently at each).
-    for (const scale of [2, 1, 3]) {
+    // Only a confirmed row keeps its name; any other name (a guess from one character, "次" → 二次元)
+    // is read again.
+    let name = knownName(job.key, sec) && r.status === 'ok' ? job.key : '';
+    // A few tries at different sizes (small text reads differently at each, and per browser), then
+    // with softer text edges, then limited to the characters of the known names.
+    const x0 = Math.min(Math.max(0, r.at.box.x0 - pad), W * 0.04);
+    const tries = [
+      [2, 150, ''],
+      [1, 150, ''],
+      [3, 150, ''],
+      [2, 190, ''],
+      [2, 150, nameChars(sec)],
+      [3, 190, nameChars(sec)],
+      [1, 190, nameChars(sec)],
+    ];
+    for (const [scale, ink, chars] of tries) {
       if (name) break;
       // Always from the left edge of the card: the row may have been read without its name.
-      const read = await recognizeLine(clean(bmp, Math.min(Math.max(0, r.at.box.x0 - pad), W * 0.04), y0, W * 0.25, y1, scale)).catch(() => null);
+      const read = await recognizeLine(clean(bmp, x0, y0, W * 0.25, y1, scale, ink), { chars }).catch(() => null);
       const g = read ? nameGuess(read.text, sec) : { name: '' };
       if (g.name && g.sure) name = g.name;
     }
@@ -159,15 +175,17 @@ export async function refineAudience(parsed, sources) {
     // Re-reading did not help: keep the first reading's guess, unconfirmed.
     if (!name) name = knownName(job.key, sec) ? job.key : knownName(r.guessName, sec) ? r.guessName : '';
     let value = r.status === 'ok' ? r.value : null;
-    if (value == null) {
-      const read = await recognizeLine(clean(bmp, W * 0.75, y0, W, y1)).catch(() => null);
+    // The share: a few tries too (sizes, softer edges, digits only).
+    for (const [scale, ink, digits] of [[2, 150, false], [3, 190, true], [1, 150, true], [2, 190, true]]) {
+      if (value != null) break;
+      const read = await recognizeLine(clean(bmp, W * 0.75, y0, W, y1, scale, ink), { digits }).catch(() => null);
       const m = /(\d{1,3}\.\d)\s*%?/.exec(read?.text ?? '');
       // "417%": the dot lost; shares always have one decimal, so three digits are XX.X.
       const m3 = m ? null : /(?:^|\D)(\d{3})\s*%/.exec(read?.text ?? '');
       if (m && Number(m[1]) <= 100) value = Math.round(Number(m[1]) * 10) / 1000;
       else if (m3 && Number(m3[1]) <= 999) value = Number(m3[1]) / 1000;
-      else if (r.candidate != null && nameSure && r.reason === 'text') value = r.candidate; // only the name was unsure
     }
+    if (value == null && r.candidate != null && nameSure && r.reason === 'text') value = r.candidate; // only the name was unsure
     if (!name || value == null) continue;
     value = Math.round(value * 1000) / 1000;
     if (nameSure) fixed++;
