@@ -122,24 +122,43 @@ export async function refineAudience(parsed, sources) {
   const clean = (bmp, x0, y0, x1, y1, scale = 2, ink0 = 150) => {
     const w = Math.max(1, Math.round(x1 - x0));
     const h = Math.max(1, Math.round(y1 - y0));
+    // The crop is copied pixel for pixel (no browser scaling: browsers smooth an enlargement
+    // differently, so the same screenshot read differently on a phone), then judged as text / not
+    // text and enlarged here, the same way in every browser.
+    const src = document.createElement('canvas');
+    src.width = w;
+    src.height = h;
+    const sg = src.getContext('2d', { willReadFrequently: true });
+    sg.fillStyle = '#fff';
+    sg.fillRect(0, 0, w, h);
+    sg.drawImage(bmp, Math.round(x0), Math.round(y0), w, h, 0, 0, w, h);
+    const a = sg.getImageData(0, 0, w, h).data;
+    const inkAt = new Uint8Array(w * h);
+    for (let p = 0, i = 0; p < w * h; p++, i += 4) {
+      const mx = Math.max(a[i], a[i + 1], a[i + 2]);
+      const mn = Math.min(a[i], a[i + 1], a[i + 2]);
+      inkAt[p] = mx < ink0 && mx - mn < 45 ? 1 : 0; // dark grey/black text; the red bar and grey track are not
+    }
     const c = document.createElement('canvas');
     c.width = w * scale;
     c.height = h * scale;
     const g = c.getContext('2d', { willReadFrequently: true });
-    g.fillStyle = '#fff';
-    g.fillRect(0, 0, c.width, c.height);
-    g.drawImage(bmp, x0, y0, w, h, 0, 0, c.width, c.height);
-    const d = g.getImageData(0, 0, c.width, c.height);
-    const a = d.data;
-    for (let i = 0; i < a.length; i += 4) {
-      const mx = Math.max(a[i], a[i + 1], a[i + 2]);
-      const mn = Math.min(a[i], a[i + 1], a[i + 2]);
-      const ink = mx < ink0 && mx - mn < 45; // dark grey/black text; the red bar and grey track are not
-      a[i] = a[i + 1] = a[i + 2] = ink ? 0 : 255;
+    const out = g.createImageData(c.width, c.height);
+    const o = out.data;
+    for (let y = 0; y < c.height; y++) {
+      const row = Math.min(h - 1, Math.floor(y / scale)) * w;
+      for (let x = 0; x < c.width; x++) {
+        const v = inkAt[row + Math.min(w - 1, Math.floor(x / scale))] ? 0 : 255;
+        const k = (y * c.width + x) * 4;
+        o[k] = o[k + 1] = o[k + 2] = v;
+        o[k + 3] = 255;
+      }
     }
-    g.putImageData(d, 0, 0);
+    g.putImageData(out, 0, 0);
     return c;
   };
+  // What each second reading returned (copied with "인식 원문 복사", to diagnose a phone).
+  const log = (parsed.rereadLog ??= []);
   let fixed = 0;
   for (const job of jobs) {
     const { sec, r } = job;
@@ -167,8 +186,9 @@ export async function refineAudience(parsed, sources) {
     for (const [scale, ink, chars] of tries) {
       if (name) break;
       // Always from the left edge of the card: the row may have been read without its name.
-      const read = await recognizeLine(clean(bmp, x0, y0, W * 0.25, y1, scale, ink), { chars }).catch(() => null);
+      const read = await recognizeLine(clean(bmp, x0, y0, W * 0.25, y1, scale, ink), { chars }).catch((err) => ({ text: `!${err?.message ?? err}`, confidence: 0 }));
       const g = read ? nameGuess(read.text, sec) : { name: '' };
+      log.push(`${sec} ${job.key} name x${scale}/${ink}${chars ? '/chars' : ''}: "${read?.text ?? ''}" ${Math.round(read?.confidence ?? 0)} → ${g.name || '-'}${g.sure ? '' : '?'}`);
       if (g.name && g.sure) name = g.name;
     }
     const nameSure = !!name;
@@ -178,7 +198,8 @@ export async function refineAudience(parsed, sources) {
     // The share: a few tries too (sizes, softer edges, digits only).
     for (const [scale, ink, digits] of [[2, 150, false], [3, 190, true], [1, 150, true], [2, 190, true]]) {
       if (value != null) break;
-      const read = await recognizeLine(clean(bmp, W * 0.75, y0, W, y1, scale, ink), { digits }).catch(() => null);
+      const read = await recognizeLine(clean(bmp, W * 0.75, y0, W, y1, scale, ink), { digits }).catch((err) => ({ text: `!${err?.message ?? err}`, confidence: 0 }));
+      log.push(`${sec} ${job.key} share x${scale}/${ink}${digits ? '/digits' : ''}: "${read?.text ?? ''}"`);
       const m = /(\d{1,3}\.\d)\s*%?/.exec(read?.text ?? '');
       // "417%": the dot lost; shares always have one decimal, so three digits are XX.X.
       const m3 = m ? null : /(?:^|\D)(\d{3})\s*%/.exec(read?.text ?? '');
@@ -413,6 +434,7 @@ export async function renderOcrAd([postId], { isCurrent }) {
       await verifyReportNumbers(parsed, imgs.map((im) => im.file)).catch(() => 0);
       parsedGroups.push(parsed);
     }
+    state.rereadLog = parsedGroups.flatMap((p) => p.rereadLog ?? []);
     const bonuses = couponBonuses();
     state.orders = groups.map((imgs, gi) => {
       const parsed = parsedGroups[gi];
@@ -801,7 +823,8 @@ export async function renderOcrAd([postId], { isCurrent }) {
         .filter((im) => im.lines)
         .map((im, i) => `#${i + 1} ${im.w ?? '?'}x${im.h ?? '?'}\n` + im.lines.map((l) => l.words.map((w) => `${w.text}@${Math.round(w.bbox.x0)},${Math.round(w.bbox.y0)},${Math.round(w.bbox.x1)},${Math.round(w.bbox.y1)}:${Math.round(w.confidence)}`).join(' ')).join('\n'))
         .join('\n\n');
-      return copyText(`vlog-studio ocr v${__APP_VERSION__}\n${dump}`).then((ok) => toast(t(ok ? 'oad.dumpDone' : 'menu.copyFailed')));
+      const reread = state.rereadLog?.length ? `\n\n#reread ${navigator.userAgent}\n${state.rereadLog.join('\n')}` : '';
+      return copyText(`vlog-studio ocr v${__APP_VERSION__}\n${dump}${reread}`).then((ok) => toast(t(ok ? 'oad.dumpDone' : 'menu.copyFailed')));
     }
   });
   const drop = $('#oad-drop', root);
