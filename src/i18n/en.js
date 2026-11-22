@@ -1636,4 +1636,5 @@ export default {
   "adc.fewSame": "{cost} per {what}. Only {n} earlier order(s) with this goal (2 needed), so no comparison yet.",
   "adc.followsSide": "It also brought {f} follower(s) ({per} each). My 关注-goal orders usually cost {followUsual} per follower ({n} orders) — for followers, that goal is the yardstick.",
   "adc.followsNone": "No followers came from it. My 关注-goal orders usually cost {followUsual} per follower ({n} orders) — for followers, use that goal.",
+  "post.editTitle": "Edit title",
 };

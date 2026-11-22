@@ -1636,4 +1636,5 @@ export default {
   "adc.fewSame": "{what} {cost}。同目标以往订单只有 {n} 单（需 2 单以上），暂不评价。",
   "adc.followsSide": "另外涨粉 {f} 人（每人 {per}）。关注目标订单通常每粉 {followUsual}（{n} 单）——以涨粉为目的时以关注目标为准。",
   "adc.followsNone": "没有带来涨粉。关注目标订单通常每粉 {followUsual}（{n} 单）——以涨粉为目的时请选关注目标。",
+  "post.editTitle": "修改标题",
 };

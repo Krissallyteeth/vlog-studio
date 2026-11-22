@@ -165,7 +165,7 @@ export async function renderPost([id], { isCurrent, keepY }) {
     back: '#/contents',
     title: post.title || t('xg.untitled'),
     sub: `${post.date} ${post.time} · No.${post.no ?? ''}`,
-    actions: `<a href="#/data/posts/${encodeURIComponent(post.id)}" class="btn btn-secondary btn-sm">${icon('table', 'size-4')}${esc(t('post.inTable'))}</a>`,
+    actions: `<button type="button" class="btn btn-secondary btn-sm" id="p-title">${icon('edit', 'size-4')}${esc(t('post.editTitle'))}</button><a href="#/data/posts/${encodeURIComponent(post.id)}" class="btn btn-secondary btn-sm">${icon('table', 'size-4')}${esc(t('post.inTable'))}</a>`,
     body: `
       <section class="card"><h2 class="section-step">1 · ${esc(t('post.s.plan'))}</h2>
         <label class="field mt-2"><span class="field-label">${esc(t('post.linkProject'))}</span>
@@ -239,6 +239,26 @@ export async function renderPost([id], { isCurrent, keepY }) {
       else if (idx < 0) ads.push(res);
       else ads[idx] = res;
       return save({ ads });
+    }
+    if (e.target.closest('#p-title')) {
+      // Rename the post (e.g. a title misread by OCR), also on phones where the table is awkward.
+      const next = await openSheet({
+        title: t('post.editTitle'),
+        body: `<input class="input w-full" id="p-title-input" value="${esc(post.title)}" autofocus />
+          <div class="mt-4 grid grid-cols-2 gap-2"><button type="button" class="btn btn-secondary" data-v="">${esc(t('common.cancel'))}</button><button type="button" class="btn btn-primary" data-v="1">${esc(t('common.save'))}</button></div>`,
+        onMount(el, close) {
+          const inp = el.querySelector('#p-title-input');
+          el.addEventListener('click', (ev) => {
+            const b = ev.target.closest('[data-v]');
+            if (b) close(b.dataset.v === '1' ? inp.value.trim() : null);
+          });
+          inp.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter' && !ev.isComposing) close(inp.value.trim());
+          });
+        },
+      });
+      if (next && next !== post.title) await save({ title: next }, t('common.saved'));
+      return;
     }
     if (e.target.closest('#p-delete')) {
       const ok = await confirmDialog({ title: t('post.deleteTitle'), message: t('post.deleteBody', { name: post.title }), confirmText: t('common.delete'), danger: true });

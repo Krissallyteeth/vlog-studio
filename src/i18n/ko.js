@@ -1636,4 +1636,5 @@ export default {
   "adc.fewSame": "{what}당 {cost}. 비교할 같은 목표의 이전 주문이 {n}건이라(2건 이상 필요) 아직 평가하지 않아요.",
   "adc.followsSide": "팔로워도 {f}명 늘었어요(1명당 {per}). 关注 목표 주문은 보통 1명당 {followUsual}이었어요({n}건) — 팔로워가 목적이면 关注 목표가 기준이에요.",
   "adc.followsNone": "팔로워는 늘지 않았어요. 关注 목표 주문은 보통 1명당 {followUsual}이었어요({n}건) — 팔로워가 목적이면 关注 목표로 거세요.",
+  "post.editTitle": "제목 수정",
 };
