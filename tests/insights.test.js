@@ -43,6 +43,10 @@ describe('what to fix', () => {
 });
 
 describe('experiments', () => {
+  it('keeps a free-text test note on the post (blank when none)', () => {
+    expect(normalizePost({ experimentNote: '  narration from the intro ' }).experimentNote).toBe('  narration from the intro ');
+    expect(normalizePost({}).experimentNote).toBe('');
+  });
   const ex = [{ id: 'face', name: '썸네일 얼굴', options: ['있음', '없음'], metrics: ['ctr'] }, { id: 'intro', name: '인트로', options: ['있음', '없음'], metrics: ['retain5s'] }];
   const E = (i, ctr, face, intro = '없음') => {
     const p = P(i, 300);

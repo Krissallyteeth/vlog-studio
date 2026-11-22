@@ -1637,4 +1637,7 @@ export default {
   "adc.followsSide": "另外涨粉 {f} 人（每人 {per}）。关注目标订单通常每粉 {followUsual}（{n} 单）——以涨粉为目的时以关注目标为准。",
   "adc.followsNone": "没有带来涨粉。关注目标订单通常每粉 {followUsual}（{n} 单）——以涨粉为目的时请选关注目标。",
   "post.editTitle": "修改标题",
+  "xp.memo": "实验备注",
+  "xp.memoPh": "例：从开头就加了旁白。第一个镜头换成了结果画面。",
+  "xp.memoHelp": "记下上面项目没有的尝试，离开输入框即保存。若要跨笔记比较，请在“管理项目”中把它设为项目（例：旁白 有/无）。",
 };

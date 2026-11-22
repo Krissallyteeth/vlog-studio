@@ -134,6 +134,8 @@ export function normalizePost(raw = {}, now = Date.now()) {
     extra: raw.extra && typeof raw.extra === 'object' ? { ...raw.extra } : {},
     // This post's choice for each experiment item: { face: '없음', intro: '없음' }.
     experiments: Object.fromEntries(Object.entries(raw.experiments && typeof raw.experiments === 'object' ? raw.experiments : {}).filter(([k, v]) => typeof k === 'string' && typeof v === 'string' && v)),
+    // What else was tried on this post, in the user's words ("인트로부터 나레이션").
+    experimentNote: str(raw.experimentNote).slice(0, 1000),
     // What the D+1 / D+2 screenshots showed besides the metrics: when the data was cut, the
     // platform's peer median and rank, traffic sources, audience.
     d1Meta: noteMeta(raw.d1Meta),
@@ -208,6 +210,8 @@ export function normalizeIncome(raw = {}, now = Date.now()) {
     extra: raw.extra && typeof raw.extra === 'object' ? { ...raw.extra } : {},
     // This post's choice for each experiment item: { face: '없음', intro: '없음' }.
     experiments: Object.fromEntries(Object.entries(raw.experiments && typeof raw.experiments === 'object' ? raw.experiments : {}).filter(([k, v]) => typeof k === 'string' && typeof v === 'string' && v)),
+    // What else was tried on this post, in the user's words ("인트로부터 나레이션").
+    experimentNote: str(raw.experimentNote).slice(0, 1000),
     // What the D+1 / D+2 screenshots showed besides the metrics: when the data was cut, the
     // platform's peer median and rank, traffic sources, audience.
     d1Meta: noteMeta(raw.d1Meta),

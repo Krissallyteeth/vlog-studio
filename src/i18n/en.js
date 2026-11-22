@@ -1637,4 +1637,7 @@ export default {
   "adc.followsSide": "It also brought {f} follower(s) ({per} each). My 关注-goal orders usually cost {followUsual} per follower ({n} orders) — for followers, that goal is the yardstick.",
   "adc.followsNone": "No followers came from it. My 关注-goal orders usually cost {followUsual} per follower ({n} orders) — for followers, use that goal.",
   "post.editTitle": "Edit title",
+  "xp.memo": "Test notes",
+  "xp.memoPh": "e.g. Narration from the intro. Opened with the result shot.",
+  "xp.memoHelp": "Write down anything tried that the items above do not cover; it saves when you leave the box. To compare across posts, make it an item (e.g. narration yes/no) under \"manage items\".",
 };

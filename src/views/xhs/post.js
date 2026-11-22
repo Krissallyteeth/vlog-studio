@@ -182,7 +182,9 @@ export async function renderPost([id], { isCurrent, keepY }) {
         </div>
         <div class="mt-3"><p class="field-label">${esc(t('xp.title'))}</p>
           <div class="mt-1 flex flex-col gap-2">${settings.experiments.map((ex) => `<div class="flex flex-wrap items-center gap-2 text-[13px]"><span class="min-w-[6rem] font-medium">${esc(ex.name)}</span><div class="segmented !w-auto" role="radiogroup">${['', ...ex.options].map((o) => `<button type="button" class="seg px-3 ${(post.experiments?.[ex.id] ?? '') === o ? 'is-active' : ''}" data-exp="${esc(ex.id)}" data-opt="${esc(o)}">${esc(o || '–')}</button>`).join('')}</div></div>`).join('')}</div>
-          <p class="mt-1 text-[12px] text-muted">${esc(t('xp.help'))} <a class="link-btn" href="#/data/rules">${esc(t('xp.manage'))}</a></p></div>
+          <p class="mt-1 text-[12px] text-muted">${esc(t('xp.help'))} <a class="link-btn" href="#/data/rules">${esc(t('xp.manage'))}</a></p>
+          <label class="field mt-3"><span class="field-label">${esc(t('xp.memo'))}</span><textarea class="input min-h-[72px]" id="p-xnote" rows="2" placeholder="${esc(t('xp.memoPh'))}">${esc(post.experimentNote ?? '')}</textarea></label>
+          <p class="mt-1 text-[12px] text-muted">${esc(t('xp.memoHelp'))}</p></div>
         ${post.memo ? `<p class="mt-2 whitespace-pre-wrap text-[14px]"><span class="text-[12px] text-muted">备注</span><br>${esc(post.memo)}</p>` : ''}
         ${post.source ? `<p class="mt-2 text-[12px] text-muted">${esc(t('post.source', { file: post.source.file, sheet: post.source.sheet, row: post.source.row }))}</p>` : ''}
       </section>
@@ -211,6 +213,7 @@ export async function renderPost([id], { isCurrent, keepY }) {
     if (e.target.id === 'p-project') save({ projectId: e.target.value });
     if (e.target.id === 'p-type') save({ contentType: e.target.value });
     if (e.target.id === 'p-validity') save({ validity: e.target.value });
+    if (e.target.id === 'p-xnote') save({ experimentNote: e.target.value.trim() });
   });
   root.addEventListener('click', async (e) => {
     const ex = e.target.closest('[data-exp]');
