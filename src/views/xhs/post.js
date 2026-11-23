@@ -149,7 +149,7 @@ export async function renderPost([id], { isCurrent, keepY }) {
   };
   const adsHtml = () => `
     ${post.ads.length ? `<ul class="flex flex-col gap-2">${post.ads.map((a, i) => `<li class="rounded-[12px] bg-surface-2 p-3 text-[13px]">
-      <div class="flex items-start justify-between gap-2"><div><b>${esc(a.stage || '–')}</b> · ${esc(a.executed ? t('ads.executed') : t('ads.notExecuted'))} · ${esc(yuan(a.spend) || '–')}${a.credit ? ` + ${esc(t('ads.credit'))} ${esc(yuan(a.credit))}` : ''}${a.needsReview ? ` <span class="badge cf-mid">${esc(t('ads.review'))}</span>` : ''}</div>
+      <div class="flex items-start justify-between gap-2"><div><b>${esc(a.stage || '–')}</b>${a.pending ? ` <span class="badge cf-mid" title="${esc(t('ads.pendingHelp'))}">${esc(t('ads.pending'))}</span>` : ''} · ${esc(a.executed ? t('ads.executed') : t('ads.notExecuted'))} · ${esc(yuan(a.spend) || '–')}${a.credit ? ` + ${esc(t('ads.credit'))} ${esc(yuan(a.credit))}` : ''}${a.needsReview ? ` <span class="badge cf-mid">${esc(t('ads.review'))}</span>` : ''}</div>
       <button type="button" class="link-btn" data-edit-ad="${i}">${esc(t('ads.edit'))}</button></div>
       <p class="mt-1 text-muted">${esc([a.goal, a.hours ? t('ads.hoursN', { n: a.hours }) : '', a.start, a.result, a.memo].filter(Boolean).join(' · '))}</p>
       ${a.sourceText ? `<p class="mt-1 text-[12px] text-muted">${esc(t('ads.from', { text: a.sourceText }))}</p>` : ''}

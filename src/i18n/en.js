@@ -1644,4 +1644,12 @@ export default {
   "ocr.followersHelp": "Add a screenshot of your profile or the creator center to read the total followers, or type it. Left blank, the saved value stays.",
   "ocr.followersRead": "Followers read from the screenshot: {n}. Fix it if different (a next-morning screenshot may include followers gained after publishing).",
   "post.followersHint": "at publishing",
+  "ocr.adAsk": "Did an ad run before the D+2 cut (midnight after the day after publishing)?",
+  "ocr.adNone": "No",
+  "ocr.adD": "D (publishing day)",
+  "ocr.adD1": "D+1",
+  "ocr.adAskHelp": "If so, a \"results pending\" ad record is added so D+2 counts as \"with ads\" right away; the order screenshot later replaces it (spend is never counted twice). Leave it unchosen to save as before.",
+  "ocr.adKnown": "An ad before the D+2 cut is already recorded ({list}); D+2 counts as \"with ads\".",
+  "ads.pending": "Results pending",
+  "ads.pendingHelp": "Marked as \"ad ran\" with the D+2 screenshots; uploading the order screenshot replaces it.",
 };

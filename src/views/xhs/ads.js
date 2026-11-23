@@ -150,7 +150,7 @@ export function adRecordsSection({ posts }, { analysisLink = true } = {}) {
             if (!h.multi) {
               const { p, i } = h.items[0];
               return `<tr class="${a.needsReview ? 'cf-mid' : ''}"><td class="col-title"><a class="link-btn" href="#/c/${encodeURIComponent(p.id)}">${esc(p.title)}</a><span class="block text-[11px] text-muted">${esc(p.date)}${a.sourceText ? ` · ${esc(t('ads.from', { text: a.sourceText }))}` : ''}</span></td>
-            ${startCell}<td>${esc(a.stage)}${a.executed ? '' : ` (${esc(t('ads.notExecuted'))})`}</td><td>${esc(a.goal)}</td><td class="num">${esc(yuan(a.spend))}</td><td class="num">${esc(a.credit ? yuan(a.credit) : '')}</td>
+            ${startCell}<td>${esc(a.stage)}${a.executed ? '' : ` (${esc(t('ads.notExecuted'))})`}${a.pending ? ` <span class="badge cf-mid" title="${esc(t('ads.pendingHelp'))}">${esc(t('ads.pending'))}</span>` : ''}</td><td>${esc(a.goal)}</td><td class="num">${esc(yuan(a.spend))}</td><td class="num">${esc(a.credit ? yuan(a.credit) : '')}</td>
             ${metrics}<td><button type="button" class="link-btn" data-ad="${esc(p.id)}" data-i="${i}">${esc(t('ads.edit'))}</button></td></tr>`;
             }
             // A multi-note order: one row with the order's numbers, its notes folded below.

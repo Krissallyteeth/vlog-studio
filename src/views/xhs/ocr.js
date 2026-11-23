@@ -11,7 +11,8 @@ import { extractMetrics, mergeResults } from '../../xhs/ocr-parse.js';
 import { metricLines, noteExtras } from '../../xhs/ocr-note.js';
 import { noteMetaHtml } from './note-meta.js';
 import { ordered } from '../../xhs/stats.js';
-import { listPosts, normalizePost, savePosts } from '../../xhs/store.js';
+import { listPosts, normalizeAd, normalizePost, savePosts } from '../../xhs/store.js';
+import { adInWindow } from '../../xhs/ad-report.js';
 import { xhsPage } from './shell.js';
 
 /*
@@ -184,6 +185,7 @@ export async function renderOcr([postId, stageParam], { isCurrent }) {
           ${errors.length ? `<p class="form-error mt-2">${esc(t('ocr.failed', { n: errors.length, msg: errors[0].error }))}</p>` : ''}
           <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t('crit.metric'))}</th><th>${esc(t('ocr.recognised'))}</th><th>${esc(t('ocr.toSave'))}</th><th class="num">${esc(t('ocr.inApp'))}</th><th>${esc(t('imp.th.status'))}</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
           ${p && state.extras?.title && state.extras.title !== p.title ? `<label class="mt-3 flex items-start gap-2 rounded-[10px] bg-surface-2 px-3 py-2 text-[13px]"><input type="checkbox" id="ocr-fix-title" class="mt-1" /><span>${esc(t('ocr.fixTitle', { now: p.title, read: state.extras.title }))}</span></label>` : ''}
+          ${state.stage === 'd2' && p ? adAskHtml(p) : ''}
           <label class="field mt-3"><span class="field-label">${esc(t('ocr.followers'))}</span>
             <input class="input !w-40 tabular-nums" inputmode="numeric" id="ocr-followers" value="${p?.followers ?? state.extras?.followers ?? ''}" placeholder="–" /></label>
           <p class="mt-1 text-[12px] text-muted">${esc(state.extras?.followers != null ? t('ocr.followersRead', { n: state.extras.followers }) : t('ocr.followersHelp'))}</p>
@@ -193,6 +195,22 @@ export async function renderOcr([postId, stageParam], { isCurrent }) {
         <aside class="card xl:sticky xl:top-4 self-start"><h3 class="text-[14px] font-semibold">${esc(t('ocr.original'))}</h3>
           <div class="mt-2 flex max-h-[75vh] flex-col gap-2 overflow-y-auto">${state.images.map((im, i) => `<figure><img src="${im.url}" alt="" class="w-full rounded-[10px] border border-line" /><figcaption class="text-[11px] text-muted">#${i + 1} ${esc(im.file.name)}</figcaption></figure>`).join('')}</div></aside>
       </div>`;
+  }
+
+  /**
+   * D+2: did an ad run before its data was cut? An ad already recorded says so; otherwise the user
+   * is asked (the order results usually come days later).
+   */
+  function adAskHtml(p) {
+    const win = adInWindow(p, 'd2');
+    if (win.any) {
+      const cut = Date.parse(`${p.date}T00:00:00Z`) + 2 * 86400000;
+      const ads = (p.ads ?? []).filter((a) => a.executed !== false && (a.start ? Date.parse(`${a.start.slice(0, 10)}T00:00:00Z`) < cut : ['D', 'D+1'].includes(a.stage)));
+      return `<p class="notice mt-3 text-[13px]">${esc(t('ocr.adKnown', { list: ads.map((a) => a.stage || '?').join(', ') || 'D+1' }))}</p>`;
+    }
+    return `<div class="mt-3 rounded-[12px] border border-line p-3"><p class="text-[14px] font-semibold">${esc(t('ocr.adAsk'))}</p>
+      <div class="mt-2 inline-flex flex-wrap gap-1 rounded-[14px] bg-surface-2 p-1" role="radiogroup">${['none', 'D', 'D+1'].map((v) => `<button type="button" class="seg px-3 ${state.adAsk === v ? 'is-active' : ''}" data-adask="${v}" aria-checked="${state.adAsk === v}">${esc(v === 'none' ? t('ocr.adNone') : v === 'D' ? t('ocr.adD') : t('ocr.adD1'))}</button>`).join('')}</div>
+      <p class="mt-1 text-[12px] text-muted">${esc(t('ocr.adAskHelp'))}</p></div>`;
   }
 
   async function save() {
@@ -241,6 +259,10 @@ export async function renderOcr([postId, stageParam], { isCurrent }) {
     if (!ok) return;
     const updated = { ...target, [state.stage]: { ...target[state.stage], ...values } };
     if ($('#ocr-fix-title', root)?.checked && state.extras?.title) updated.title = state.extras.title;
+    // An ad before the D+2 cut, results to come: a placeholder the order screenshot replaces later.
+    if (state.stage === 'd2' && (state.adAsk === 'D' || state.adAsk === 'D+1') && !adInWindow(updated, 'd2').any) {
+      updated.ads = [...(updated.ads ?? []), normalizeAd({ stage: state.adAsk, executed: true, pending: true })];
+    }
     // Followers: what the box says (blank leaves the post's value as it was).
     const fansRaw = ($('#ocr-followers', root)?.value ?? '').replace(/[,\s]/g, '');
     if (/^\d+$/.test(fansRaw)) updated.followers = Number(fansRaw);
@@ -290,6 +312,15 @@ export async function renderOcr([postId, stageParam], { isCurrent }) {
     else state.choice[k] = v;
   });
   root.addEventListener('click', async (e) => {
+    const ask = e.target.closest('[data-adask]');
+    if (ask) {
+      state.adAsk = ask.dataset.adask;
+      root.querySelectorAll('[data-adask]').forEach((b) => {
+        b.classList.toggle('is-active', b === ask);
+        b.setAttribute('aria-checked', String(b === ask));
+      });
+      return;
+    }
     const st = e.target.closest('[data-stage]');
     if (st) {
       state.stage = st.dataset.stage;

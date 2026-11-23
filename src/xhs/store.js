@@ -100,6 +100,9 @@ export function normalizeAd(raw = {}) {
     screenshots: Array.isArray(raw.screenshots) ? raw.screenshots.filter((x) => typeof x === 'string') : [],
     sourceText: str(raw.sourceText), // original Excel note it was read from
     needsReview: raw.needsReview === true,
+    // Told on the D+2 screenshots that an ad ran, results to come: marks the post's D+2 as "with ads"
+    // until the order screenshot replaces this record (it is a memo record: no order number, no report).
+    pending: raw.pending === true,
   };
 }
 
