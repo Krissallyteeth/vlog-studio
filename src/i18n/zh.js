@@ -1652,4 +1652,5 @@ export default {
   "ocr.adKnown": "D+2 截止前已有推广记录（{list}），D+2 按“含推广”计算。",
   "ads.pending": "待结果",
   "ads.pendingHelp": "上传 D+2 截图时标记为“已投放”的记录；上传推广截图后会替换为订单结果。",
+  "ads.addPending": "添加待结果推广",
 };

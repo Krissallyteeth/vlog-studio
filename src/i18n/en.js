@@ -1652,4 +1652,5 @@ export default {
   "ocr.adKnown": "An ad before the D+2 cut is already recorded ({list}); D+2 counts as \"with ads\".",
   "ads.pending": "Results pending",
   "ads.pendingHelp": "Marked as \"ad ran\" with the D+2 screenshots; uploading the order screenshot replaces it.",
+  "ads.addPending": "Add ad (results pending)",
 };

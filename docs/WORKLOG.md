@@ -243,3 +243,8 @@
 - 주요 파일: `src/views/xhs/ocr.js`, `src/xhs/store.js`(`pending`), `src/views/xhs/post.js`, `src/views/xhs/ads.js`, `src/i18n/{ko,en,zh}.js`(CRLF 유지),
   `tests/ad-pending.test.js`(2개).
 - 검증: 테스트 201개, 폰 폭에서 질문→저장→배지→재업로드 시 안내까지 확인.
+
+### [Claude] 2026-11-23 — D+2 광고 질문을 업로드 화면으로, 게시물에 "결과 대기 광고 추가"
+- 사용자 지적: PC에서 질문이 안 보임 → 인식 후 확인 화면에만 있었음. 이제 D+2를 고르면 업로드 화면(캡처 고르기 전)에 바로 표시.
+- D+2를 이미 올린 게시물용: 게시물 상세 4 · 광고에 "결과 대기 광고 추가"(D / D+1 선택, D+2 마감 전 광고 기록이 있으면 숨김).
+- 주요 파일: `src/views/xhs/ocr.js`, `src/views/xhs/post.js`, `src/i18n/{ko,en,zh}.js`(`ads.addPending`). 검증: 테스트 201개, PC 폭에서 확인.

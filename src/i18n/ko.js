@@ -1652,4 +1652,5 @@ export default {
   "ocr.adKnown": "D+2 마감 전 광고 기록이 이미 있어요({list}). D+2는 \"광고 포함\"으로 계산돼요.",
   "ads.pending": "결과 대기",
   "ads.pendingHelp": "D+2 캡처 때 \"광고 함\"으로 표시한 기록이에요. 광고 캡처를 올리면 주문 결과로 바뀌어요.",
+  "ads.addPending": "결과 대기 광고 추가",
 };

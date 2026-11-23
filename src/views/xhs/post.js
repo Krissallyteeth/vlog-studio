@@ -1,7 +1,7 @@
 import { listProjects, getProject } from '../../data/repo.js';
 import { t } from '../../i18n/index.js';
 import { navigate, settleScroll } from '../../router.js';
-import { $, confirmDialog, esc, openSheet, toast } from '../../ui/dom.js';
+import { $, actionSheet, confirmDialog, esc, openSheet, toast } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { adEffect, analysePost, orderEfficiency } from '../../xhs/analysis.js';
 import { fmt, signedPct, yuan } from '../../xhs/format.js';
@@ -13,6 +13,7 @@ import { memoDuplicateOf } from '../../xhs/ad-orders.js';
 import { experimentResults, postFocus } from '../../xhs/insights.js';
 import { adTimeline } from '../../xhs/ad-advice.js';
 import { adComment } from '../../xhs/ad-comment.js';
+import { adInWindow } from '../../xhs/ad-report.js';
 import { adFlowHtml } from './ad-flow.js';
 import { emph, insightList } from './insight-text.js';
 import { noteMetaHtml } from './note-meta.js';
@@ -155,7 +156,7 @@ export async function renderPost([id], { isCurrent, keepY }) {
       ${a.sourceText ? `<p class="mt-1 text-[12px] text-muted">${esc(t('ads.from', { text: a.sourceText }))}</p>` : ''}
       ${dupHtml(a, i)}
       ${orderHtml(a)}${adCommentHtml(a)}</li>`).join('')}</ul>` : `<p class="text-[14px] text-muted">${esc(t('ads.none'))}</p>`}
-    <div class="mt-3 flex flex-wrap gap-2"><button type="button" class="btn btn-secondary btn-sm" data-edit-ad="new">${icon('plus', 'size-4')}${esc(t('ads.add'))}</button><a class="btn btn-secondary btn-sm" href="#/ocr-ad/${encodeURIComponent(post.id)}">${icon('scan', 'size-4')}${esc(t('oad.fromShots'))}</a></div>
+    <div class="mt-3 flex flex-wrap gap-2"><button type="button" class="btn btn-secondary btn-sm" data-edit-ad="new">${icon('plus', 'size-4')}${esc(t('ads.add'))}</button>${adInWindow(post, 'd2').any ? '' : `<button type="button" class="btn btn-secondary btn-sm" id="p-ad-pending" title="${esc(t('ads.pendingHelp'))}">${icon('plus', 'size-4')}${esc(t('ads.addPending'))}</button>`}<a class="btn btn-secondary btn-sm" href="#/ocr-ad/${encodeURIComponent(post.id)}">${icon('scan', 'size-4')}${esc(t('oad.fromShots'))}</a></div>
     ${eff.unknownStage ? `<p class="mt-2 text-[12px] cf-mid rounded-[8px] px-2 py-1">${esc(t('ads.unknownStage', { n: eff.unknownStage }))}</p>` : ''}
     ${eff.spend ? `<div class="mt-3 kpi-grid"><div class="kpi"><p class="kpi-label">${esc(t('ads.spend'))}</p><p class="kpi-value">${esc(yuan(eff.spend))}</p></div><div class="kpi"><p class="kpi-label">${esc(t('ads.betweenSpend'))}</p><p class="kpi-value">${esc(yuan(eff.betweenSpend) || '0元')}</p></div><div class="kpi"><p class="kpi-label">${esc(t('ads.viewsDelta'))}</p><p class="kpi-value">${eff.viewsDelta ?? '–'}</p></div><div class="kpi"><p class="kpi-label">${esc(t('ads.perView'))}</p><p class="kpi-value">${eff.perView == null ? '–' : yuan(eff.perView)}</p></div><div class="kpi"><p class="kpi-label">${esc(t('ads.perFollower'))}</p><p class="kpi-value">${eff.perFollower == null ? '–' : yuan(eff.perFollower)}</p></div></div>
       <p class="mt-2 text-[12px] text-muted">${esc(t('ads.effectNote'))}</p>` : ''}`;
@@ -248,6 +249,12 @@ export async function renderPost([id], { isCurrent, keepY }) {
       else if (idx < 0) ads.push(res);
       else ads[idx] = res;
       return save({ ads });
+    }
+    if (e.target.closest('#p-ad-pending')) {
+      // An ad ran before the D+2 cut, results to come (e.g. D+2 already uploaded before asking).
+      const stage = await actionSheet({ title: t('ocr.adAsk'), actions: [{ id: 'D', label: t('ocr.adD') }, { id: 'D+1', label: t('ocr.adD1') }] });
+      if (!stage) return;
+      return save({ ads: [...post.ads, normalizeAd({ stage, executed: true, pending: true })] });
     }
     if (e.target.closest('#p-title')) {
       // Rename the post (e.g. a title misread by OCR), also on phones where the table is awkward.

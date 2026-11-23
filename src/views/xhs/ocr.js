@@ -62,6 +62,7 @@ export async function renderOcr([postId, stageParam], { isCurrent }) {
           <div class="field"><span class="field-label">${esc(t('ocr.stage'))}</span>
             <div class="segmented segmented-2" role="radiogroup"><button type="button" class="seg" data-stage="d1">D+1</button><button type="button" class="seg" data-stage="d2">D+2</button></div></div>
         </div>
+        <div id="ocr-adask"></div>
         <div id="ocr-new" class="mt-3 hidden grid gap-3 sm:grid-cols-3">
           <label class="field"><span class="field-label">배포내용</span><input class="input" id="ocr-new-title" /></label>
           <label class="field"><span class="field-label">배포일자</span><input class="input" type="date" id="ocr-new-date" value="${yesterday}" /></label>
@@ -83,7 +84,15 @@ export async function renderOcr([postId, stageParam], { isCurrent }) {
 
   const thumbs = $('#ocr-thumbs', root);
   const result = $('#ocr-result', root);
-  const drawStage = () => root.querySelectorAll('[data-stage]').forEach((b) => b.classList.toggle('is-active', b.dataset.stage === state.stage));
+  // D+2 of an existing post: the "ad before the D+2 cut?" question, right on the upload screen.
+  const drawAdAsk = () => {
+    const p = post();
+    $('#ocr-adask', root).innerHTML = state.stage === 'd2' && p ? adAskHtml(p) : '';
+  };
+  const drawStage = () => {
+    root.querySelectorAll('[data-stage]').forEach((b) => b.classList.toggle('is-active', b.dataset.stage === state.stage));
+    drawAdAsk();
+  };
   const drawNew = () => $('#ocr-new', root).classList.toggle('hidden', state.postId !== 'new');
   drawStage();
   drawNew();
@@ -185,7 +194,6 @@ export async function renderOcr([postId, stageParam], { isCurrent }) {
           ${errors.length ? `<p class="form-error mt-2">${esc(t('ocr.failed', { n: errors.length, msg: errors[0].error }))}</p>` : ''}
           <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t('crit.metric'))}</th><th>${esc(t('ocr.recognised'))}</th><th>${esc(t('ocr.toSave'))}</th><th class="num">${esc(t('ocr.inApp'))}</th><th>${esc(t('imp.th.status'))}</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
           ${p && state.extras?.title && state.extras.title !== p.title ? `<label class="mt-3 flex items-start gap-2 rounded-[10px] bg-surface-2 px-3 py-2 text-[13px]"><input type="checkbox" id="ocr-fix-title" class="mt-1" /><span>${esc(t('ocr.fixTitle', { now: p.title, read: state.extras.title }))}</span></label>` : ''}
-          ${state.stage === 'd2' && p ? adAskHtml(p) : ''}
           <label class="field mt-3"><span class="field-label">${esc(t('ocr.followers'))}</span>
             <input class="input !w-40 tabular-nums" inputmode="numeric" id="ocr-followers" value="${p?.followers ?? state.extras?.followers ?? ''}" placeholder="–" /></label>
           <p class="mt-1 text-[12px] text-muted">${esc(state.extras?.followers != null ? t('ocr.followersRead', { n: state.extras.followers }) : t('ocr.followersHelp'))}</p>
@@ -291,7 +299,9 @@ export async function renderOcr([postId, stageParam], { isCurrent }) {
     }
     if (e.target.id === 'ocr-post') {
       state.postId = e.target.value;
+      state.adAsk = undefined;
       drawNew();
+      drawAdAsk();
       if (state.merged) drawResult();
     }
     if (e.target.id === 'ocr-keep') {
