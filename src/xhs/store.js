@@ -115,6 +115,7 @@ export function normalizePost(raw = {}, now = Date.now()) {
     date: DATE_RE.test(raw.date) ? raw.date : '',
     time: TIME_RE.test(raw.time) ? raw.time.slice(0, 5) : '',
     contentType: str(raw.contentType),
+    shootRegion: ['cn', 'kr', 'other'].includes(raw.shootRegion) ? raw.shootRegion : '',
     projectId: str(raw.projectId),
     validity: VALIDITY.includes(raw.validity) ? raw.validity : '미확인',
     d1: normStage(raw.d1),

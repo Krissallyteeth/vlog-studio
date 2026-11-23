@@ -16,6 +16,7 @@ import { adConclusion, expConclusion, opsConclusion } from '../../xhs/conclusion
 import { emph } from './insight-text.js';
 import { verdictBadge } from './ad-flow.js';
 import { adInWindow, postRows } from '../../xhs/ad-report.js';
+import { operatingInsightsHtml } from './operating-insights.js';
 
 const CHARTS = [
   { key: 'views' },
@@ -137,6 +138,7 @@ export async function renderDashboard({ isCurrent, keepY }) {
           <section class="card" id="ops-brief"><h3 class="text-[15px] font-semibold">${esc(t('ops.title'))}</h3>
             ${conclusion(opsLines())}
             ${insightList('ops', brief, { empty: t('ops.none') })}
+            ${operatingInsightsHtml(posts, baseline)}
             <p class="mt-2 text-[12px] text-muted">${esc(t('ops.note'))}</p></section>
           <section class="card">
             <div class="flex items-center justify-between"><h3 class="text-[15px] font-semibold">${esc(t('dash.recent5'))}</h3><a class="link-btn text-[13px]" href="#/data/posts">${esc(t('dash.all'))}</a></div>

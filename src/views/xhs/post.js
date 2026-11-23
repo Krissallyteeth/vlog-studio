@@ -18,6 +18,7 @@ import { adFlowHtml } from './ad-flow.js';
 import { emph, insightList } from './insight-text.js';
 import { noteMetaHtml } from './note-meta.js';
 import { feedbackHtml } from './feedback.js';
+import { postReachHtml, regionOptions } from './operating-insights.js';
 import { relativeNote, xhsPage } from './shell.js';
 
 const CF = { good: 'cf-good', mid: 'cf-mid', bad: 'cf-bad' };
@@ -179,6 +180,7 @@ export async function renderPost([id], { isCurrent, keepY }) {
           <label class="field"><span class="field-label">${esc(t('xg.type'))}</span><select class="input" id="p-type"><option value="">${esc(t('data.noType'))}</option>${types.map((x) => `<option ${x === post.contentType ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
           <label class="field"><span class="field-label">D+1 유효성</span><select class="input" id="p-validity">${VALIDITY.map((v) => `<option ${v === post.validity ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
           <label class="field"><span class="field-label">粉丝 <span class="font-normal text-muted">${esc(t('post.followersHint'))}</span></span><input class="input tabular-nums" inputmode="numeric" id="p-followers" value="${post.followers ?? ''}" placeholder="–" /></label>
+          <label class="field"><span class="field-label">${esc(t('oi.regionField'))}</span><select class="input" id="p-region">${regionOptions(post.shootRegion)}</select></label>
           <div class="field"><span class="field-label">推广判断</span><p>${esc([post.adDecisionD1, post.adAux, post.adDecisionD2].filter(Boolean).join(' / ') || '–')}</p></div>
         </div>
         <div class="mt-3"><p class="field-label">${esc(t('xp.title'))}</p>
@@ -199,6 +201,7 @@ export async function renderPost([id], { isCurrent, keepY }) {
       <section class="card mt-3"><h2 class="section-step">4 · ${esc(t('post.s.ads'))}</h2>${adFlowHtml(adTimeline(post, posts, baseline))}<div class="mt-2" id="p-ads">${adsHtml()}</div></section>
       <section class="card mt-3"><h2 class="section-step">5 · ${esc(t('post.s.analysis'))}</h2>
         ${feedbackHtml(post, baseline)}
+        ${postReachHtml(post, baseline)}
         ${insightList('pf', focus.items.filter((item) => ['followRate', 'profileConv'].includes(item.key)))}
         ${expHtml()}
         ${noteMetaHtml(post.d1Meta, post, 'D+1', { posts })}${noteMetaHtml(post.d2Meta, post, 'D+2', { posts })}
@@ -213,6 +216,7 @@ export async function renderPost([id], { isCurrent, keepY }) {
   root.addEventListener('change', (e) => {
     if (e.target.id === 'p-project') save({ projectId: e.target.value });
     if (e.target.id === 'p-type') save({ contentType: e.target.value });
+    if (e.target.id === 'p-region') save({ shootRegion: e.target.value });
     if (e.target.id === 'p-validity') save({ validity: e.target.value });
     if (e.target.id === 'p-xnote') save({ experimentNote: e.target.value.trim() });
     if (e.target.id === 'p-followers') {
