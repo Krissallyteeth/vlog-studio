@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { metricLines, noteExtras } from '../src/xhs/ocr-note.js';
+import { followerCount, metricLines, noteExtras } from '../src/xhs/ocr-note.js';
 import { extractMetrics } from '../src/xhs/ocr-parse.js';
 
 // A line of words laid out left to right at height y.
@@ -24,5 +24,19 @@ describe('note analysis screens', () => {
     expect(x.sources).toMatchObject({ home: 0.658, search: 0.026 });
     expect(x.audience.gender).toEqual({ male: 0.16, female: 0.84 });
     expect(x.audience.age['25-34']).toBe(0.43);
+  });
+});
+
+describe('total followers', () => {
+  it('reads the profile row and the creator center, never a share or a gain', () => {
+    const profile = [L(400, ['12', 80, 110], ['关注', 120, 180], ['2025', 230, 300], ['粉丝', 310, 370], ['3456', 420, 500], ['获赞与收藏', 510, 690])];
+    expect(followerCount([profile])).toBe(2025);
+    expect(noteExtras([profile], { year: 2026 }).followers).toBe(2025);
+    // Its numbers are not the note's metrics (获赞与收藏 is not 收藏).
+    expect(Object.keys(extractMetrics(metricLines(profile)).values)).toEqual([]);
+    const center = [L(300, ['创作中心', 100, 300]), L(500, ['粉丝数', 100, 220], ['获赞', 500, 600]), L(560, ['2.1万', 100, 200], ['8000', 500, 600])];
+    expect(followerCount([center])).toBe(21000);
+    const analysis = [L(300, ['数据概览', 60, 250]), L(600, ['曝光数', 230, 340]), L(650, ['2428', 230, 340]), L(700, ['粉丝占6.5%', 230, 400]), L(900, ['涨粉', 230, 300], ['3', 400, 420])];
+    expect(followerCount([analysis])).toBe(null);
   });
 });

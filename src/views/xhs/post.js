@@ -177,7 +177,7 @@ export async function renderPost([id], { isCurrent, keepY }) {
         <div class="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <label class="field"><span class="field-label">${esc(t('xg.type'))}</span><select class="input" id="p-type"><option value="">${esc(t('data.noType'))}</option>${types.map((x) => `<option ${x === post.contentType ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
           <label class="field"><span class="field-label">D+1 유효성</span><select class="input" id="p-validity">${VALIDITY.map((v) => `<option ${v === post.validity ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-          <div class="field"><span class="field-label">粉丝</span><p class="tabular-nums">${post.followers ?? '–'}</p></div>
+          <label class="field"><span class="field-label">粉丝 <span class="font-normal text-muted">${esc(t('post.followersHint'))}</span></span><input class="input tabular-nums" inputmode="numeric" id="p-followers" value="${post.followers ?? ''}" placeholder="–" /></label>
           <div class="field"><span class="field-label">推广判断</span><p>${esc([post.adDecisionD1, post.adAux, post.adDecisionD2].filter(Boolean).join(' / ') || '–')}</p></div>
         </div>
         <div class="mt-3"><p class="field-label">${esc(t('xp.title'))}</p>
@@ -214,6 +214,12 @@ export async function renderPost([id], { isCurrent, keepY }) {
     if (e.target.id === 'p-type') save({ contentType: e.target.value });
     if (e.target.id === 'p-validity') save({ validity: e.target.value });
     if (e.target.id === 'p-xnote') save({ experimentNote: e.target.value.trim() });
+    if (e.target.id === 'p-followers') {
+      const raw = e.target.value.replace(/[,\s]/g, '');
+      if (raw === '') return save({ followers: null });
+      if (!/^\d+$/.test(raw)) return toast(t('ocr.badInput', { n: 1 }), { tone: 'error' });
+      save({ followers: Number(raw) });
+    }
   });
   root.addEventListener('click', async (e) => {
     const ex = e.target.closest('[data-exp]');

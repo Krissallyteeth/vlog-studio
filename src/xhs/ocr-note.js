@@ -21,12 +21,63 @@ export const isCommentScreen = (lines) => {
   return /留下你的想法|赞和收藏\d/.test(all) || (/作者/.test(all) && /回复/.test(all) && /评论\d/.test(all));
 };
 
+/** The profile / creator-center screen ("12关注 2025粉丝 3456获赞与收藏"): only its follower count is used. */
+export const isProfileScreen = (lines) => {
+  const all = lines.map(lineText).join('');
+  return /获赞与收藏|获赞和收藏/.test(all) || (/粉丝数|总粉丝/.test(all) && !/笔记分析|数据概览/.test(all));
+};
+
+/**
+ * Total followers on a profile or creator-center screenshot: "2025粉丝" (number before the label,
+ * as on the profile), "粉丝数 2025" / "总粉丝 2.1万" (label then number, or the number on the next
+ * line under the label). Shares ("粉丝占6.5%") and gains (涨粉, 新增) are not it. null when not read.
+ */
+export function followerCount(linesPerImage) {
+  const toNum = (s, wan) => {
+    const v = Number(String(s).replace(/,/g, ''));
+    return Number.isFinite(v) ? Math.round(wan ? v * 10000 : v) : null;
+  };
+  const ok = (v) => (v != null && v >= 0 && v < 1e7 ? v : null);
+  for (const lines of linesPerImage) {
+    if (!isProfileScreen(lines)) continue;
+    for (let i = 0; i < lines.length; i++) {
+      const tx = lineText(lines[i]);
+      if (/%|涨粉|新增|占/.test(tx)) continue;
+      let m = /(\d[\d,]*(?:\.\d+)?)(万|w)?粉丝(?!数据)/.exec(tx);
+      if (m && !/粉丝数|总粉丝/.test(tx)) {
+        const v = ok(toNum(m[1], m[2]));
+        if (v != null) return v;
+      }
+      m = /(?:粉丝数|总粉丝数?)(\d[\d,]*(?:\.\d+)?)(万|w)?/.exec(tx);
+      if (m) {
+        const v = ok(toNum(m[1], m[2]));
+        if (v != null) return v;
+      }
+      // Label alone: the number right below it, in the same column.
+      if (/^(粉丝数|总粉丝数?|粉丝)$/.test(tx) || /粉丝数|总粉丝/.test(tx)) {
+        const label = lines[i].words.find((w) => /粉丝/.test(w.text));
+        const next = lines[i + 1]?.words ?? [];
+        const x = label?.bbox?.x0 ?? 0;
+        const cand = next
+          .map((w) => ({ w, m: /^(\d[\d,]*(?:\.\d+)?)(万|w)?$/.exec(w.text) }))
+          .filter((c) => c.m && c.w.bbox)
+          .sort((a, b) => Math.abs(a.w.bbox.x0 - x) - Math.abs(b.w.bbox.x0 - x))[0];
+        if (cand) {
+          const v = ok(toNum(cand.m[1], cand.m[2]));
+          if (v != null) return v;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 /**
  * Lines that may be read as the post's own metrics: none from a comment screen, and nothing from
  * a traffic channel's detail block ("此渠道详细数据": 首页推荐 only — 127 views, not 283).
  */
 export function metricLines(lines) {
-  if (isCommentScreen(lines)) return [];
+  if (isCommentScreen(lines) || isProfileScreen(lines)) return [];
   const cut = lines.find((l) => /此渠道详细数据|渠道详细/.test(lineText(l)));
   const cutY = cut ? midY(cut) - 5 : Infinity;
   return lines.filter((l) => midY(l) < cutY);
@@ -168,6 +219,9 @@ export function noteExtras(linesPerImage, { year = new Date().getFullYear() } = 
   const ints = Object.entries(out.audience.interest);
   out.audience.interest = Object.fromEntries(ints.filter(([, v], i) => !ints.slice(i + 1).some(([, w]) => w > v)));
   out.ai = aiTexts(linesPerImage);
+  // Total followers, when a profile / creator-center screenshot is among them.
+  const fans = followerCount(linesPerImage);
+  if (fans != null) out.followers = fans;
   // 此渠道详细数据: which channel a block is for is not readable (the picker is faint), but its
   // "占总观看" equals that channel's share in the source list.
   // Search is not collected (the user's choice); home and video feed are.

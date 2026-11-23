@@ -1640,4 +1640,8 @@ export default {
   "xp.memo": "Test notes",
   "xp.memoPh": "e.g. Narration from the intro. Opened with the result shot.",
   "xp.memoHelp": "Write down anything tried that the items above do not cover; it saves when you leave the box. To compare across posts, make it an item (e.g. narration yes/no) under \"manage items\".",
+  "ocr.followers": "Followers (粉丝)",
+  "ocr.followersHelp": "Add a screenshot of your profile or the creator center to read the total followers, or type it. Left blank, the saved value stays.",
+  "ocr.followersRead": "Followers read from the screenshot: {n}. Fix it if different (a next-morning screenshot may include followers gained after publishing).",
+  "post.followersHint": "at publishing",
 };

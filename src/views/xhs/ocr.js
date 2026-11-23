@@ -184,6 +184,9 @@ export async function renderOcr([postId, stageParam], { isCurrent }) {
           ${errors.length ? `<p class="form-error mt-2">${esc(t('ocr.failed', { n: errors.length, msg: errors[0].error }))}</p>` : ''}
           <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t('crit.metric'))}</th><th>${esc(t('ocr.recognised'))}</th><th>${esc(t('ocr.toSave'))}</th><th class="num">${esc(t('ocr.inApp'))}</th><th>${esc(t('imp.th.status'))}</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
           ${p && state.extras?.title && state.extras.title !== p.title ? `<label class="mt-3 flex items-start gap-2 rounded-[10px] bg-surface-2 px-3 py-2 text-[13px]"><input type="checkbox" id="ocr-fix-title" class="mt-1" /><span>${esc(t('ocr.fixTitle', { now: p.title, read: state.extras.title }))}</span></label>` : ''}
+          <label class="field mt-3"><span class="field-label">${esc(t('ocr.followers'))}</span>
+            <input class="input !w-40 tabular-nums" inputmode="numeric" id="ocr-followers" value="${p?.followers ?? state.extras?.followers ?? ''}" placeholder="–" /></label>
+          <p class="mt-1 text-[12px] text-muted">${esc(state.extras?.followers != null ? t('ocr.followersRead', { n: state.extras.followers }) : t('ocr.followersHelp'))}</p>
           ${noteMetaHtml(state.extras, p, state.stage === 'd1' ? 'D+1' : 'D+2', { posts, edit: true })}
           <div class="mt-3 flex flex-wrap gap-2"><button type="button" class="btn btn-primary" id="ocr-save">${esc(t('ocr.save'))}</button><button type="button" class="btn btn-secondary" id="ocr-text">${esc(t('ocr.showText'))}</button></div>
         </section>
@@ -238,6 +241,9 @@ export async function renderOcr([postId, stageParam], { isCurrent }) {
     if (!ok) return;
     const updated = { ...target, [state.stage]: { ...target[state.stage], ...values } };
     if ($('#ocr-fix-title', root)?.checked && state.extras?.title) updated.title = state.extras.title;
+    // Followers: what the box says (blank leaves the post's value as it was).
+    const fansRaw = ($('#ocr-followers', root)?.value ?? '').replace(/[,\s]/g, '');
+    if (/^\d+$/.test(fansRaw)) updated.followers = Number(fansRaw);
     if (state.extras) updated[`${state.stage}Meta`] = state.extras;
     // The publish time read from the screenshots fills a time the post does not have yet.
     if (!updated.time && state.extras?.publishedAt && state.extras.publishedAt.slice(0, 10) === updated.date) updated.time = state.extras.publishedAt.slice(11, 16);
