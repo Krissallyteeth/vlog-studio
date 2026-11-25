@@ -7,3 +7,8 @@ dev-dist
 
 # Personal data (original Excel, screenshots, exports). Never commit or deploy.
 private-data/
+
+# Python caches (tools/collector)
+__pycache__/
+*.pyc
+.venv/

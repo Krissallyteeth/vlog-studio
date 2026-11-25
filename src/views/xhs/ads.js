@@ -230,6 +230,7 @@ export async function renderMore({ isCurrent }) {
     nav: 'more',
     title: t('nav.more'),
     body: `<div class="flex flex-col gap-2.5">
+      ${item('#/search', 'sparkle', t('se.title'), t('more.search'))}
       ${item('#/ocr', 'scan', t('nav.ocr'), t('more.ocr'))}
       ${item('#/import', 'upload', t('data.import'), t('more.import'))}
       ${item('#/xhs/backup', 'archive', t('more.xhsBackup'), t('more.xhsBackupHint'))}

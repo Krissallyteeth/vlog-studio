@@ -1,0 +1,55 @@
+# 小红书 검색 수집기 (읽기 전용)
+
+VLOG Studio의 **검색 근거 추천** 화면에 넣을 자료를 모으는 PC용 작은 프로그램입니다.
+
+- 하는 일: 검색어마다 小红书 검색 결과 상위 노트를 열어 제목, 본문 일부, 해시태그, 좋아요·수집·댓글·공유 수,
+  발행 시각(중국 표준시)을 읽고 JSON 파일 하나로 저장합니다.
+- 하지 않는 일: 게시, 댓글, 좋아요, 팔로우, 표지 이미지 저장, 자동화 숨기기. 다른 서버로 아무것도 보내지 않습니다.
+- 로그인 정보: 이 프로그램 전용 Chrome 프로필(`~/.vlog-studio-collector/chrome-profile`)에만 남습니다.
+  저장소·앱·Supabase로 가지 않습니다. 지우려면 `logout`.
+- 결과 파일: 기본 `private-data/xhs-search/` (git에 올라가지 않는 폴더).
+- 페이지에 없는 값은 `null`(미수집)로 저장합니다. 0으로 채우지 않습니다. "1.2万"처럼 줄여 쓴 값은 `approx`에 표시합니다.
+
+## 준비 (처음 한 번)
+
+Python 3.10 이상과 Google Chrome이 필요합니다. 저장소 폴더에서:
+
+```bash
+python -m venv .venv
+```
+
+Windows: `.venv\Scripts\activate` · macOS/Linux: `source .venv/bin/activate`
+
+```bash
+pip install -r tools/collector/requirements.txt
+```
+
+Google Chrome이 없으면 추가로 `python -m playwright install chromium`.
+
+## 사용
+
+1. 로그인 (한 번만, 창이 열리면 小红书 앱으로 QR 스캔):
+
+```bash
+python tools/collector/xhs_search.py login
+```
+
+2. 검색 (검색어 최대 5개, 검색어마다 상세는 기본 8개·최대 10개):
+
+```bash
+python tools/collector/xhs_search.py search "海南 新家" "小户型 收纳" --details 8
+```
+
+3. VLOG Studio → 더보기 → **검색 근거 추천** → "수집 파일 가져오기"에서 만들어진 JSON 파일을 고릅니다.
+
+## 계정 보호
+
+- 페이지 사이에 몇 초씩 쉬고, 한 번에 검색어 5개·상세 50개를 넘지 않게 막아 두었습니다.
+- 小红书가 로그인이나 보안 확인을 요청하면 바로 멈추고 그때까지 읽은 것만 저장합니다. 이 경우 시간을 두고 다시 하세요.
+- 자주, 많이 돌리지 마세요. 내부 화면 구조가 바뀌면 일부 값이 `null`로 나올 수 있습니다.
+
+## 테스트 (가상 데이터)
+
+```bash
+python -m unittest discover -s tools/collector
+```

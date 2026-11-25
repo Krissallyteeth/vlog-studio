@@ -2,6 +2,7 @@ import { uid } from '../lib/ids.js';
 import { DEFAULT_CONTENT_TYPES, INPUT_METRICS, VALIDITY } from './metrics.js';
 import { buildBaseline } from './stats.js';
 import { deleteOne, getAll, getMetaValue, getOne, putMany, replaceStores, setMetaValue } from './db.js';
+import { normalizeSearchPick } from './search-evidence.js';
 
 /*
  * Repository for 小红书 records. Device-only: nothing here is uploaded or synced.
@@ -140,6 +141,8 @@ export function normalizePost(raw = {}, now = Date.now()) {
     experiments: Object.fromEntries(Object.entries(raw.experiments && typeof raw.experiments === 'object' ? raw.experiments : {}).filter(([k, v]) => typeof k === 'string' && typeof v === 'string' && v)),
     // What else was tried on this post, in the user's words ("인트로부터 나레이션").
     experimentNote: str(raw.experimentNote).slice(0, 1000),
+    // Title and hashtags chosen on the search-evidence screen (and the search they came from).
+    searchPick: normalizeSearchPick(raw.searchPick),
     // What the D+1 / D+2 screenshots showed besides the metrics: when the data was cut, the
     // platform's peer median and rank, traffic sources, audience.
     d1Meta: noteMeta(raw.d1Meta),

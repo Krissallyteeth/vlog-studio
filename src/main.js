@@ -25,6 +25,7 @@ route(/^\/xhs\/baseline$/, async (_, ctx) => (await import('./views/xhs/dashboar
 route(/^\/xhs\/backup$/, async (_, ctx) => (await import('./views/xhs/export.js')).renderBackup(ctx));
 route(/^\/contents$/, async (_, ctx) => (await import('./views/xhs/post.js')).renderContents(ctx));
 route(/^\/c\/([^/]+)$/, async (params, ctx) => (await import('./views/xhs/post.js')).renderPost(params, ctx));
+route(/^\/search$/, async (_, ctx) => (await import('./views/xhs/search.js')).renderSearch(ctx));
 route(/^\/ads$/, async (_, ctx) => (await import('./views/xhs/ads.js')).renderAds(ctx));
 route(/^\/more$/, async (_, ctx) => (await import('./views/xhs/ads.js')).renderMore(ctx));
 route(/^\/ocr-ad(?:\/([^/]+))?$/, async (params, ctx) => (await import('./views/xhs/ocr-ad.js')).renderOcrAd(params, ctx));

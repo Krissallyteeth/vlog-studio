@@ -1,0 +1,278 @@
+/*
+ * 小红书 search evidence: the JSON file from tools/collector/xhs_search.py, read and summarised
+ * by rules only (no AI). The summary and a copy-ready brief go to the user's own Claude chat;
+ * the answer pasted back is checked against the evidence (unknown hashtags, copied sentences).
+ *
+ * A value the page did not show stays null ("not collected"), never 0. Scores use 点赞 (likes),
+ * the one count every search card has; 收藏/评论 are shown when the note page was read.
+ */
+
+export const SEARCH_SCHEMA = 'vlog-studio.xhs-search/1';
+export const HOT_RATIO = 3; // a note with ≥3× the keyword's median likes is a 爆款 candidate
+export const MIN_NOTES = 5; // fewer notes than this: no median, no candidates
+const MIN_SIDE = 2; // pattern comparison only with ≥2 notes on each side
+
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
+const str = (v, n = 600) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
+const ID_RE = /^[0-9a-zA-Z]{8,40}$/;
+
+export function median(list) {
+  const v = list.filter((x) => num(x) != null).sort((a, b) => a - b);
+  if (!v.length) return null;
+  const m = Math.floor(v.length / 2);
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+}
+
+/** Hashtag key used to compare spellings: no '#', no spaces, lower case. */
+export const tagKey = (s) => String(s ?? '').replace(/^#+|#+$/g, '').replace(/\[[^\]]*\]$/, '').replace(/\s+/g, '').toLowerCase();
+
+function normNote(raw) {
+  if (!raw || typeof raw !== 'object' || !ID_RE.test(raw.id ?? '')) return null;
+  const approx = Array.isArray(raw.approx) ? raw.approx.filter((x) => ['likes', 'collects', 'comments', 'shares'].includes(x)) : [];
+  return {
+    id: raw.id,
+    keyword: str(raw.keyword, 60),
+    rank: num(raw.rank),
+    type: raw.type === 'video' || raw.type === 'normal' ? raw.type : '',
+    title: str(raw.title, 200),
+    desc: typeof raw.desc === 'string' ? str(raw.desc) : null,
+    tags: Array.isArray(raw.tags) ? [...new Set(raw.tags.map((x) => str(x, 30)).filter(Boolean))].slice(0, 30) : null,
+    likes: num(raw.likes),
+    collects: num(raw.collects),
+    comments: num(raw.comments),
+    shares: num(raw.shares),
+    approx,
+    publishedAt: str(raw.publishedAt, 40),
+    duration: num(raw.duration),
+    author: str(raw.author?.nickname, 60),
+    followers: num(raw.author?.followers),
+    detail: raw.detail === true,
+  };
+}
+
+/** Reads and validates an evidence file. Throws Error('schema') for anything else. */
+export function parseEvidence(data) {
+  if (!data || typeof data !== 'object' || data.schema !== SEARCH_SCHEMA || !Array.isArray(data.notes)) throw new Error('schema');
+  const keywords = (Array.isArray(data.keywords) ? data.keywords : [])
+    .map((k) => ({
+      keyword: str(k?.keyword, 60),
+      status: ['ok', 'empty', 'blocked', 'error'].includes(k?.status) ? k.status : 'error',
+      related: Array.isArray(k?.related) ? [...new Set(k.related.map((x) => str(x, 30)).filter(Boolean))].slice(0, 30) : null,
+      searchedAt: str(k?.searchedAt, 40),
+    }))
+    .filter((k) => k.keyword)
+    .slice(0, 10);
+  const seen = new Set();
+  const notes = [];
+  for (const raw of data.notes.slice(0, 500)) {
+    const n = normNote(raw);
+    if (!n || seen.has(`${n.keyword}|${n.id}`)) continue;
+    seen.add(`${n.keyword}|${n.id}`);
+    notes.push(n);
+  }
+  const collectedAt = str(data.collectedAt, 40);
+  return { id: `${collectedAt}|${keywords.map((k) => k.keyword).join(',')}`, collectedAt, keywords, notes };
+}
+
+const EMOJI_RE = /\p{Extended_Pictographic}/u;
+export function titleTraits(title) {
+  const t = String(title ?? '');
+  return {
+    length: [...t].length,
+    digits: /\d/.test(t),
+    emoji: EMOJI_RE.test(t),
+    question: /[?？吗呢]/.test(t),
+    exclaim: /[!！]/.test(t),
+  };
+}
+
+const share = (list, key) => (list.length ? list.filter((x) => x[key]).length / list.length : null);
+function traitsSummary(notes) {
+  const tr = notes.map((n) => titleTraits(n.title));
+  return { n: notes.length, length: median(tr.map((x) => x.length)), digits: share(tr, 'digits'), emoji: share(tr, 'emoji'), question: share(tr, 'question'), exclaim: share(tr, 'exclaim') };
+}
+
+/** Chinese phrases (2–8 characters, longest form kept) that appear in at least two of the given titles. */
+export function frequentTerms(titles, exclude = [], limit = 10) {
+  const skip = exclude.map((x) => String(x).replace(/\s+/g, ''));
+  const counts = new Map();
+  for (const title of titles) {
+    const runs = String(title ?? '').match(/[一-鿿]+/g) ?? [];
+    const grams = new Set();
+    for (const r of runs) for (let n = 2; n <= 8; n++) for (let i = 0; i + n <= r.length; i++) grams.add(r.slice(i, i + n));
+    for (const g of grams) counts.set(g, (counts.get(g) ?? 0) + 1);
+  }
+  let list = [...counts].filter(([g, c]) => c >= 2 && !skip.some((k) => k.includes(g)));
+  // Keep "收纳技巧" and drop "收纳"/"技巧" when they never appear on their own more often.
+  list = list.filter(([g, c]) => !list.some(([h, d]) => h !== g && h.includes(g) && d >= c));
+  return list.sort((a, b) => b[1] - a[1] || b[0].length - a[0].length).slice(0, limit).map(([term, count]) => ({ term, count }));
+}
+
+/** Per keyword: median likes, 爆款 candidates, title patterns; across keywords: hashtags, related searches. */
+export function analyzeEvidence(ev) {
+  const keywords = ev.keywords.map((k) => {
+    const notes = ev.notes.filter((n) => n.keyword === k.keyword);
+    const scored = notes.filter((n) => n.likes != null);
+    const med = scored.length >= MIN_NOTES ? median(scored.map((n) => n.likes)) : null;
+    const hot = med ? scored.filter((n) => n.likes >= HOT_RATIO * Math.max(med, 1)).sort((a, b) => b.likes - a.likes).map((n) => ({ ...n, ratio: n.likes / Math.max(med, 1) })) : [];
+    const hotIds = new Set(hot.map((n) => n.id));
+    const rest = scored.filter((n) => !hotIds.has(n.id));
+    return {
+      keyword: k.keyword,
+      status: k.status,
+      related: k.related,
+      count: notes.length,
+      scored: scored.length,
+      unscored: notes.length - scored.length,
+      median: med,
+      hot,
+      patterns: hot.length >= MIN_SIDE && rest.length >= MIN_SIDE ? { hot: traitsSummary(hot), rest: traitsSummary(rest) } : null,
+      terms: frequentTerms(hot.map((n) => n.title), [k.keyword]),
+    };
+  });
+  const withTags = ev.notes.filter((n) => Array.isArray(n.tags));
+  const tagMap = new Map();
+  for (const n of withTags) {
+    for (const tag of n.tags) {
+      const key = tagKey(tag);
+      if (!key) continue;
+      const e = tagMap.get(key) ?? { tag, notes: [], keywords: new Set() };
+      e.notes.push(n);
+      e.keywords.add(n.keyword);
+      tagMap.set(key, e);
+    }
+  }
+  const tags = [...tagMap.values()]
+    .map((e) => ({ tag: e.tag, count: e.notes.length, medianLikes: median(e.notes.map((n) => n.likes)), keywords: [...e.keywords] }))
+    .sort((a, b) => b.count - a.count || (b.medianLikes ?? -1) - (a.medianLikes ?? -1))
+    .slice(0, 25);
+  const related = [...new Set(ev.keywords.flatMap((k) => k.related ?? []))].slice(0, 30);
+  return { keywords, tags, tagNotes: withTags.length, related, relatedCollected: ev.keywords.some((k) => k.related != null) };
+}
+
+const fmt = (v) => (v == null ? '미수집' : String(v));
+const pct = (v) => (v == null ? '미수집' : `${Math.round(v * 100)}%`);
+
+/**
+ * The brief for the user's Claude chat. Every note gets a reference (N1, N2 …) so each suggestion
+ * can name its evidence. Instructions are in Korean; the content asked for is Chinese.
+ */
+export function buildBrief(ev, an, { topic = '', hook = '', maxNotes = 30 } = {}) {
+  const hotIds = new Set(an.keywords.flatMap((k) => k.hot.map((n) => n.id)));
+  const ordered = [...ev.notes].sort((a, b) => Number(hotIds.has(b.id)) - Number(hotIds.has(a.id)) || (b.likes ?? -1) - (a.likes ?? -1)).slice(0, maxNotes);
+  const ref = new Map(ordered.map((n, i) => [n.id, `N${i + 1}`]));
+  const lines = [];
+  lines.push('너는 小红书 콘텐츠 기획 도우미야. 아래 [근거 자료]는 小红书 검색 결과를 실제로 수집한 것이야.');
+  lines.push('규칙:');
+  lines.push('1. 근거 자료 밖의 소문·일반론으로 추측하지 말고, 자료에서 보이는 패턴만 근거로 써.');
+  lines.push('2. 해시태그는 [자주 쓰인 해시태그] 목록에 있는 것만 써. 목록에 없는 태그가 꼭 필요하면 "(자료에 없음)"이라고 따로 표시해.');
+  lines.push('3. 제목마다 참고한 노트 번호(N1 등)와 이유를 한 줄로 적어.');
+  lines.push('4. 다른 노트의 문장을 그대로 베끼지 마. 내 주제와 경험에 맞게 새로 써.');
+  lines.push('5. 결과물(제목·본문·해시태그)은 중국어 간체로, 설명은 한국어로 써.');
+  lines.push('');
+  lines.push('요청: 제목 후보 10개(각 20자 안팎), 본문 1개(300~500자, 첫 줄에 Hook), 해시태그 8~10개, 표지 문구 후보 3개.');
+  lines.push('');
+  lines.push(`[내 주제] ${topic.trim() || '(입력 안 함)'}`);
+  if (hook.trim()) lines.push(`[내 Hook·핵심 장면] ${hook.trim()}`);
+  lines.push('');
+  lines.push(`[근거 자료] 수집 ${ev.collectedAt || '시각 미상'} (중국 표준시), 검색어 ${ev.keywords.map((k) => k.keyword).join(', ')}`);
+  for (const k of an.keywords) {
+    lines.push(`- 검색어 "${k.keyword}": 노트 ${k.count}개, 좋아요 중앙값 ${fmt(k.median)}, 爆款 후보(중앙값 ${HOT_RATIO}배 이상) ${k.hot.map((n) => ref.get(n.id)).filter(Boolean).join(', ') || '없음'}`);
+    if (k.patterns) lines.push(`  제목 패턴 爆款 vs 나머지: 길이 ${fmt(k.patterns.hot.length)} vs ${fmt(k.patterns.rest.length)}자, 숫자 ${pct(k.patterns.hot.digits)} vs ${pct(k.patterns.rest.digits)}, 이모지 ${pct(k.patterns.hot.emoji)} vs ${pct(k.patterns.rest.emoji)}, 질문형 ${pct(k.patterns.hot.question)} vs ${pct(k.patterns.rest.question)}`);
+    if (k.terms.length) lines.push(`  爆款 제목에 반복된 단어: ${k.terms.map((x) => `${x.term}(${x.count})`).join(', ')}`);
+  }
+  lines.push('');
+  lines.push(`[자주 쓰인 해시태그] (태그를 읽은 노트 ${an.tagNotes}개 기준, 괄호는 사용 노트 수 / 그 노트들의 좋아요 중앙값)`);
+  lines.push(an.tags.length ? an.tags.map((x) => `#${x.tag} (${x.count} / ${fmt(x.medianLikes)})`).join(', ') : '(태그 미수집)');
+  lines.push('');
+  lines.push(`[연관 검색어] ${an.related.length ? an.related.join(', ') : an.relatedCollected ? '(없음)' : '(미수집)'}`);
+  lines.push('');
+  lines.push('[노트]');
+  for (const n of ordered) {
+    const counts = `좋아요 ${fmt(n.likes)}${n.approx.includes('likes') ? '(약)' : ''} · 수집 ${fmt(n.collects)} · 댓글 ${fmt(n.comments)}`;
+    lines.push(`${ref.get(n.id)}${hotIds.has(n.id) ? ' [爆款 후보]' : ''} "${n.title || '(제목 없음)'}" — ${counts}${n.type === 'video' ? ' · 영상' : n.type ? ' · 이미지' : ''}`);
+    if (n.tags?.length) lines.push(`   태그: ${n.tags.map((x) => `#${x}`).join(' ')}`);
+    if (n.desc) lines.push(`   본문 앞부분: ${n.desc.replace(/\s+/g, ' ').slice(0, 120)}`);
+  }
+  return lines.join('\n');
+}
+
+const HASH_RE = /#([^\s#[\]，,。、；;：:！!？?()（）"'「」]{1,30})(?:\[[^\]]*\])?#?/g;
+/** Hashtags written in a text (#收纳 / #收纳[话题]#). */
+export const hashtagsIn = (text) => [...new Set([...String(text ?? '').matchAll(HASH_RE)].map((m) => m[1]))];
+
+function bigrams(s) {
+  const t = String(s ?? '').replace(/\s+/g, '');
+  const out = new Set();
+  for (let i = 0; i + 2 <= t.length; i++) out.add(t.slice(i, i + 2));
+  return out;
+}
+function dice(a, b) {
+  if (!a.size || !b.size) return 0;
+  let both = 0;
+  for (const x of a) if (b.has(x)) both++;
+  return (2 * both) / (a.size + b.size);
+}
+/** Length of the longest piece of text two strings share (spaces ignored). */
+export function longestShared(a, b) {
+  const x = String(a ?? '').replace(/\s+/g, '');
+  const y = String(b ?? '').replace(/\s+/g, '');
+  let best = 0;
+  let prev = new Array(y.length + 1).fill(0);
+  for (let i = 1; i <= x.length; i++) {
+    const cur = new Array(y.length + 1).fill(0);
+    for (let j = 1; j <= y.length; j++) {
+      if (x[i - 1] === y[j - 1]) {
+        cur[j] = prev[j - 1] + 1;
+        if (cur[j] > best) best = cur[j];
+      }
+    }
+    prev = cur;
+  }
+  return best;
+}
+
+export const SIMILAR_DICE = 0.6;
+export const SIMILAR_RUN = 12;
+
+/** Checks a pasted answer: hashtags not in the evidence, lines too close to a collected note. */
+export function checkAnswer(text, ev) {
+  const known = new Set(ev.notes.flatMap((n) => n.tags ?? []).map(tagKey));
+  const tagsCollected = ev.notes.some((n) => Array.isArray(n.tags));
+  const tags = hashtagsIn(text).map((tag) => ({ tag, known: tagsCollected ? known.has(tagKey(tag)) : null }));
+  const sources = ev.notes.flatMap((n) => [
+    { id: n.id, title: n.title, part: 'title', text: n.title },
+    ...(n.desc ? n.desc.split(/[\n。！？!?]+/).filter((s) => s.trim().length >= 8).map((s) => ({ id: n.id, title: n.title, part: 'desc', text: s.trim() })) : []),
+  ]).filter((s) => s.text);
+  const sourceGrams = sources.map((s) => bigrams(s.text));
+  const similar = [];
+  for (const raw of String(text ?? '').split(/\n+/)) {
+    const line = raw.replace(HASH_RE, '').trim();
+    if ([...line.replace(/\s+/g, '')].length < 8) continue;
+    const g = bigrams(line);
+    let hit = null;
+    sources.forEach((s, i) => {
+      const d = dice(g, sourceGrams[i]);
+      const run = d >= 0.3 || line.length >= SIMILAR_RUN ? longestShared(line, s.text) : 0;
+      if ((d >= SIMILAR_DICE || run >= SIMILAR_RUN) && (!hit || d > hit.score)) hit = { line, id: s.id, title: s.title, part: s.part, score: d, run };
+    });
+    if (hit) similar.push(hit);
+  }
+  return { tags, tagsCollected, unknownTags: tags.filter((x) => x.known === false).map((x) => x.tag), similar };
+}
+
+/** What a post keeps from this screen: the chosen title and tags, and which search they came from. */
+export function normalizeSearchPick(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const title = str(raw.title, 200);
+  const tags = Array.isArray(raw.tags) ? [...new Set(raw.tags.map((x) => tagKey(x)).filter(Boolean))].slice(0, 20) : [];
+  if (!title && !tags.length) return null;
+  return {
+    title,
+    tags,
+    keywords: Array.isArray(raw.keywords) ? raw.keywords.map((x) => str(x, 60)).filter(Boolean).slice(0, 10) : [],
+    evidenceAt: str(raw.evidenceAt, 40),
+    unknownTags: Array.isArray(raw.unknownTags) ? raw.unknownTags.map((x) => tagKey(x)).filter(Boolean).slice(0, 20) : [],
+    savedAt: num(raw.savedAt),
+  };
+}

@@ -72,6 +72,7 @@
 | 광고 분석 | `src/xhs/ad-report.js`(주문·게시물별·기간별, `adInWindow`), `ad-advice.js`(D+1/D+2 권장 판단), 화면 `ads.js`, `ad-flow.js` |
 | 편집 피드백 | `src/xhs/feedback.js`(판정·행동), `src/views/xhs/feedback.js`(사실·행동·확인 표시), 대시보드와 동일 행동 공유 |
 | 인사이트 | `src/xhs/insights.js`(광고 인사이트·고칠 것·운영 브리핑·실험), `channels.js`(채널 분석), `conclusions.js`(카드별 결론), 문구 `src/views/xhs/insight-text.js`(강조 `emph`) |
+| 검색 근거 추천 | `tools/collector/`(PC 수집기, Python, 읽기 전용), `src/xhs/search-evidence.js`(爆款 후보·제목 패턴·태그·Claude 자료·답 검사), 화면 `src/views/xhs/search.js`(`#/search`) |
 | 화면 | `src/views/xhs/dashboard.js`, `post.js`(콘텐츠 목록·게시물 상세), `data.js`(데이터 탭 5개), `note-meta.js`, `charts.js` |
 | DB 스키마 | `supabase/schema.sql` |
 
@@ -274,3 +275,15 @@
 - 사용자 질문: 한 편에 여러 유형이 섞이면? → 주 유형 1개(기존 `contentType`) + 보조 태그(`subTypes`) + 협찬 체크(`sponsored`)로 결정.
   유형별 표는 주 유형 기준(중복 집계 없음), 보조 태그는 "포함 vs 미포함" 참고 비교만. "협찬 콘텐츠" 유형 글은 사용자 승인 후 옮김.
 - 주요 파일: `docs/PLAN-funnel.md`.
+
+### [Claude] 2026-11-25 — 1단계: 小红书 검색 근거 제목·해시태그 추천
+- 사용자 요청: 검색 데이터를 근거로 제목·본문·해시태그를 만들어 爆款을 노리기(기획안 1단계). AGENTS.md에 "콘텐츠 작성 추천만 AI(복사·붙여넣기)" 예외와 수집기 읽기 전용 규칙 추가.
+- PC 수집기 `tools/collector/`(Python+Playwright): 직접 QR 로그인, 검색어 ≤5개, 검색어마다 상세 ≤10개, 페이지가 이미 받은 `__INITIAL_STATE__`만 읽음,
+  보안 확인·로그인 요청 시 멈추고 읽은 것까지 저장, 열람용 토큰은 파일에 안 씀, 없는 값 null, 시간 +08:00. 오픈소스 코드는 복사하지 않고 구조만 참고(xpzouying·xhs-analytics).
+- 앱 `#/search`(더보기 → 검색 근거 추천): 파일 가져오기(이 기기에만 5개, 동기화 안 함) → 검색어별 좋아요 중앙값·爆款 후보(3배 이상, 5개 미만이면 계산 안 함)·제목 패턴·반복된 말,
+  자주 쓰인 해시태그, 연관 검색어 → Claude용 자료 복사(근거 번호 N1…, 자료 안 태그만, 베끼지 않기) → 답 검사(자료에 없는 태그, 너무 비슷한 문장) → 게시물 `searchPick`에 제목·태그 저장.
+- 주요 파일: `tools/collector/{xhs_search.py,xhs_parse.py,test_xhs_parse.py,README.md}`, `src/xhs/search-evidence.js`, `src/views/xhs/search.js`, `src/xhs/store.js`(`searchPick`),
+  `src/main.js`, `src/views/xhs/ads.js`(더보기 항목), `src/i18n/{ko,en,zh}.js`(CRLF 유지), `tests/search-evidence.test.js`, `.gitignore`(Python 캐시).
+- 검증: Vitest 223개, Python 단위 테스트 9개, 빌드·하위 경로 검사, 가상 검색 파일로 PC·390px 화면(콘솔 오류·가로 넘침 없음),
+  가짜 페이지로 수집기 전체 흐름(로그인 확인→검색→상세→보안 확인 시 중단·부분 저장, 토큰 미기록). 이 과정에서 상세 1개 오류에 검색어 전체를 잃던 문제를 고침.
+- 남은 일: **실제 小红书로는 확인 못 함** → 사용자 PC에서 `login`·`search` 1회 실행해 필드가 맞는지 확인. 기존 코드에서 발견: `normalizeIncome`에 게시물 전용 칸이 섞여 있음(동작 영향 작음, 미수정).
