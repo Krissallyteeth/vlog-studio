@@ -83,7 +83,8 @@ class Collector:
                 raise Busy()
             self.seq += 1
             self.job = {"id": self.seq, "state": "running", "phase": "starting", "keywords": keywords, "keyword": None,
-                        "index": None, "total": len(keywords), "reason": None, "log": [], "file": None, "result": None}
+                        "index": None, "total": len(keywords), "reason": None, "log": [], "file": None, "result": None,
+                        "covers": None}
             job = self.job
         threading.Thread(target=self._run, args=(job, details), daemon=True).start()
         return job
@@ -96,8 +97,9 @@ class Collector:
         def progress(phase, **info):
             job.update(phase=phase, **{k: v for k, v in info.items() if k in ("keyword", "index", "total")})
 
+        covers = {}  # shown once by the app, never written to disk
         try:
-            code, path = self.collect_fn(job["keywords"], details, self.out_dir, log=log, progress=progress)
+            code, path = self.collect_fn(job["keywords"], details, self.out_dir, log=log, progress=progress, covers=covers)
             if path:
                 job["result"] = json.loads(Path(path).read_text(encoding="utf-8"))
                 job["file"] = Path(path).name
@@ -107,6 +109,7 @@ class Collector:
             job["reason"] = "error"
         finally:
             self.last_seen = time.time()
+            job["covers"] = covers  # sent only once the job has ended
             job["state"] = "done" if job["reason"] is None else "failed"
             job["phase"] = job["state"]
 
@@ -165,7 +168,12 @@ class Handler(BaseHTTPRequestHandler):
                                     "maxKeywords": xs.MAX_KEYWORDS, "maxDetails": xs.MAX_DETAILS})
         if self.path == "/job":
             job = self.app.job
-            return self._send(200, dict(job) if job else {"state": "none"})
+            if not job:
+                return self._send(200, {"state": "none"})
+            view = dict(job)
+            if view["state"] == "running":
+                view["covers"] = None
+            return self._send(200, view)
         self._send(404, {"error": "not found"})
 
     def do_POST(self):

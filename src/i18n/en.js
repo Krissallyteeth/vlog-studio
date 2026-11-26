@@ -1803,6 +1803,8 @@ export default {
   "se.run.fail.nothing": "No notes were read. Try again later.",
   "se.run.fail.error": "Something went wrong while collecting. Check the collector window.",
   "se.run.log": "Collector log",
+  "se.topCovers": "Covers of the most-liked notes",
+  "se.coverNote": "Covers are shown small for the results just collected only. They are not saved, so they disappear after a reload or when you pick other data.",
   "se.status.ok": "",
   "se.status.empty": "小红书 answered with no results for this keyword. Try another keyword.",
   "se.status.blocked": "小红书 asked for a login or security check, so collecting stopped here. Try again later.",

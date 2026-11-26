@@ -13,6 +13,19 @@ export const DETAILS = 8;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const COVER_RE = /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/]+={0,2}$/;
+const COVER_MAX = 200_000;
+
+/** The collector's covers ({note id: small image data URL}), keeping only well-formed pictures. */
+export function cleanCovers(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const [id, url] of Object.entries(raw).slice(0, 600)) {
+    if (/^[0-9a-zA-Z]{8,40}$/.test(id) && typeof url === 'string' && url.length <= COVER_MAX && COVER_RE.test(url)) out[id] = url;
+  }
+  return out;
+}
+
 /** One keyword per line (commas also split). Spaces inside a keyword are kept: "海南 新家" is one search. */
 export function parseKeywords(text) {
   const keywords = [

@@ -45,9 +45,10 @@ class Live(unittest.TestCase):
         self.gate = threading.Event()
         self.result_code = 0
 
-        def fake_collect(keywords, details, out_dir, log, progress):
+        def fake_collect(keywords, details, out_dir, log, progress, covers):
             progress("keyword", index=0, keyword=keywords[0], total=len(keywords))
             log("[검색] fake")
+            covers["64a1b2c3d4e5f6a7b8c9d0e1"] = "data:image/webp;base64,AAAA"
             self.gate.wait(5)
             data = xp.evidence_file([{"keyword": k, "status": "ok"} for k in keywords], [], collected_at="2026-01-01T10:00:00+08:00")
             path = Path(out_dir) / "r.json"
@@ -106,12 +107,17 @@ class Live(unittest.TestCase):
         self.assertEqual(code, 202)
         job = self.wait_job("running")
         self.assertEqual((job["phase"], job["keyword"], job["total"]), ("keyword", "收纳", 2))
+        self.assertIsNone(job["covers"])  # not resent on every poll while running
         self.assertEqual(self.req("/search", "POST", {"keywords": ["x"]})[0], 409)
         self.gate.set()
         job = self.wait_job("done")
         self.assertEqual((job["reason"], job["file"]), (None, "r.json"))
         self.assertEqual([k["keyword"] for k in job["result"]["keywords"]], ["收纳", "海南"])
         self.assertIn("[검색] fake", job["log"])
+        self.assertEqual(job["covers"], {"64a1b2c3d4e5f6a7b8c9d0e1": "data:image/webp;base64,AAAA"})
+        # Covers go to the app only: the saved file has none
+        saved = (Path(self.tmp.name) / "r.json").read_text(encoding="utf-8")
+        self.assertNotIn("base64", saved)
         self.assertEqual(self.req("/search", "POST", {"keywords": ["x"]})[0], 202)
 
     def test_failed_run_reports_reason(self):

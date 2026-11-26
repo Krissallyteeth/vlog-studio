@@ -1,5 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { COLLECTOR_URL, collectorStatus, followJob, parseKeywords, startCollect } from '../src/xhs/collector-client.js';
+import { COLLECTOR_URL, cleanCovers, collectorStatus, followJob, parseKeywords, startCollect } from '../src/xhs/collector-client.js';
+
+describe('cleanCovers', () => {
+  it('keeps small image data URLs only', () => {
+    const ok = 'data:image/webp;base64,UklGRg==';
+    expect(cleanCovers({ '64a1b2c3d4e5f6a7': ok })).toEqual({ '64a1b2c3d4e5f6a7': ok });
+    expect(
+      cleanCovers({
+        bad: ok, // id too short
+        '64a1b2c3d4e5f6a8': 'https://evil.example/x.png',
+        '64a1b2c3d4e5f6a9': 'data:image/svg+xml;base64,PHN2Zz4=',
+        '64a1b2c3d4e5f6b0': 'data:image/webp;base64,"onerror="x',
+        '64a1b2c3d4e5f6b1': `data:image/webp;base64,${'A'.repeat(200_001)}`,
+      }),
+    ).toEqual({});
+    expect(cleanCovers(null)).toEqual({});
+    expect(cleanCovers([ok])).toEqual({});
+  });
+});
 
 describe('parseKeywords', () => {
   it('one per line, spaces inside a keyword kept', () => {

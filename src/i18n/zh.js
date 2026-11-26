@@ -1803,6 +1803,8 @@ export default {
   "se.run.fail.nothing": "没有读到笔记，请稍后再试。",
   "se.run.fail.error": "采集时出错，请查看采集器窗口的信息。",
   "se.run.log": "查看采集器记录",
+  "se.topCovers": "点赞最多的笔记封面",
+  "se.coverNote": "封面只在刚采集的结果里小图显示，不会保存，刷新或选择其他资料后就会消失。",
   "se.status.ok": "",
   "se.status.empty": "小红书显示这个关键词没有搜索结果，请换个关键词。",
   "se.status.blocked": "小红书要求登录或安全验证，采集在此停止，请稍后再试。",

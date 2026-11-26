@@ -60,6 +60,22 @@ class Cards(unittest.TestCase):
         n = xp.note_from_card(item, "k", 2)
         self.assertEqual((n["likes"], n["type"], n["title"]), (7, "normal", "t"))
 
+    def test_cover_url(self):
+        pre = "https://sns-webpic-qc.xhscdn.com/pre/abc"
+        dft = "https://sns-webpic-qc.xhscdn.com/dft/abc"
+        self.assertEqual(xp.cover_url({"cover": {"urlPre": pre, "urlDefault": dft}}), pre)
+        self.assertEqual(xp.cover_url({"cover": {"infoList": [{"imageScene": "WB_DFT", "url": dft}]}}), dft)
+        self.assertEqual(xp.cover_url({"cover": {"url_default": dft}}), dft)
+        self.assertIsNone(xp.cover_url({"cover": {"urlPre": "https://evil.example/x.jpg"}}))
+        self.assertIsNone(xp.cover_url({"cover": {"urlPre": "http://sns-webpic-qc.xhscdn.com/x"}}))
+        self.assertIsNone(xp.cover_url({}))
+        self.assertFalse(xp.is_image_url("https://xhscdn.com.evil.example/x"))
+
+    def test_cover_never_written(self):
+        n = xp.note_from_card(card(noteCard={**card()["noteCard"], "cover": {"urlPre": "https://sns-webpic-qc.xhscdn.com/pre/abc"}}), "k", 1)
+        self.assertEqual(n["_cover_url"], "https://sns-webpic-qc.xhscdn.com/pre/abc")
+        self.assertNotIn("xhscdn", str(xp.evidence_file([], [n])))
+
     def test_non_notes_skipped(self):
         self.assertIsNone(xp.note_from_card({"id": "abc", "modelType": "hot_query"}, "k", 1))
         self.assertIsNone(xp.note_from_card(card(id="bad id!"), "k", 1))

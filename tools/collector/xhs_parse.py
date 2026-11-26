@@ -117,7 +117,33 @@ def note_from_card(item, keyword, rank):
     note.update(_counts(_pick(card, "interactInfo", "interact_info")))
     # The token opens the note page in this session only; it is never written to the file.
     note["_token"] = _pick(item, "xsecToken", "xsec_token")
+    # The cover is shown once in the app right after collecting; it is never written to the file either.
+    note["_cover_url"] = cover_url(card)
     return note
+
+
+def cover_url(card):
+    """Address of the card's cover picture (the small preview first). None if there is none."""
+    cover = card.get("cover") if isinstance(card, dict) else None
+    if not isinstance(cover, dict):
+        return None
+    candidates = [cover.get(k) for k in ("urlPre", "url_pre")]
+    for info in cover.get("infoList") or cover.get("info_list") or []:
+        if isinstance(info, dict) and info.get("imageScene", info.get("image_scene")) in ("WB_PRV", "WB_DFT"):
+            candidates.append(info.get("url"))
+    candidates += [cover.get(k) for k in ("urlDefault", "url_default", "url")]
+    for url in candidates:
+        if is_image_url(url):
+            return url
+    return None
+
+
+def is_image_url(url):
+    """Only 小红书's own picture servers over https."""
+    if not isinstance(url, str) or len(url) > 2000:
+        return False
+    m = re.match(r"https://([a-z0-9.-]+)/", url)
+    return bool(m) and (m.group(1).endswith(".xhscdn.com") or m.group(1).endswith(".xiaohongshu.com"))
 
 
 def tags_from_desc(desc):

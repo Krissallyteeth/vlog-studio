@@ -31,6 +31,20 @@ DEFAULT_OUT = REPO_ROOT / "private-data" / "xhs-search"
 MAX_KEYWORDS = 5
 MAX_DETAILS = 10
 MAX_KEYWORD_LEN = 40
+COVER_WIDTH = 240  # px; the app shows covers small
+COVER_QUALITY = 0.6  # WebP quality, about 5-15 KB per cover
+COVER_MAX_BYTES = 5_000_000
+COMPRESS_JS = """async ([b64, type, maxW, q]) => {
+  const blob = await (await fetch(`data:${type};base64,${b64}`)).blob();
+  const bmp = await createImageBitmap(blob);
+  const s = Math.min(1, maxW / bmp.width);
+  const c = new OffscreenCanvas(Math.max(1, Math.round(bmp.width * s)), Math.max(1, Math.round(bmp.height * s)));
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  const buf = new Uint8Array(await (await c.convertToBlob({ type: 'image/webp', quality: q })).arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  return 'data:image/webp;base64,' + btoa(bin);
+}"""
 RESULT_WAIT_S = 30
 
 STATE_FEEDS_JS = """() => {
@@ -201,6 +215,29 @@ def search_keyword(page, keyword, details):
         page.remove_listener("response", on_response)
 
 
+def fetch_covers(ctx, notes, covers):
+    """Downloads each note's cover, shrinks it in a blank tab, keeps it in `covers` (memory only)."""
+    import base64
+
+    todo = [n for n in notes if n.get("_cover_url") and n["id"] not in covers]
+    if not todo:
+        return
+    tab = ctx.new_page()
+    try:
+        for n in todo:
+            try:
+                resp = ctx.request.get(n["_cover_url"], headers={"Referer": "https://www.xiaohongshu.com/"}, timeout=15000)
+                body = resp.body() if resp.ok else b""
+                kind = (resp.headers.get("content-type") or "").split(";")[0].strip()
+                if not body or len(body) > COVER_MAX_BYTES or not kind.startswith("image/"):
+                    continue
+                covers[n["id"]] = tab.evaluate(COMPRESS_JS, [base64.b64encode(body).decode(), kind, COVER_WIDTH, COVER_QUALITY])
+            except Exception:
+                continue  # no cover for this note
+    finally:
+        tab.close()
+
+
 def write_file(out_dir, keywords, notes):
     out_dir.mkdir(parents=True, exist_ok=True)
     data = xp.evidence_file(keywords, notes, tool_version=VERSION)
@@ -247,8 +284,9 @@ def clean_keywords(keywords):
     return out[:MAX_KEYWORDS]
 
 
-def collect(keywords, details, out_dir, log=print, progress=lambda *a, **k: None):
-    """One collection run. Returns (exit_code, saved_path or None)."""
+def collect(keywords, details, out_dir, log=print, progress=lambda *a, **k: None, covers=None):
+    """One collection run. Returns (exit_code, saved_path or None).
+    With a dict as `covers`, also fills it with {note id: small WebP data URL}; covers never go into the file."""
     from playwright.sync_api import sync_playwright
 
     keywords = clean_keywords(keywords)
@@ -281,6 +319,8 @@ def collect(keywords, details, out_dir, log=print, progress=lambda *a, **k: None
                     entry, notes = {"keyword": kw, "searchedAt": xp.now_cst(), "status": "error", "error": str(e)[:200], "related": None, "noteIds": []}, []
                 entries.append(entry)
                 all_notes.extend(notes)
+                if covers is not None and notes:
+                    fetch_covers(ctx, notes, covers)
                 log(f"        노트 {len(notes)}개 (상세 {sum(1 for n in notes if n['detail'])}개)")
                 if entry["status"] == "empty":
                     log("        小红书가 결과 0개라고 답했어요.")
