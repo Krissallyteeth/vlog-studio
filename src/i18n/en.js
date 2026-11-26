@@ -1866,4 +1866,7 @@ export default {
   "tt.sponsored": "Sponsored",
   "tt.sponsoredHelp": "Brand collaboration or gifted product, kept apart from the type.",
   "tt.incomeHint": "An income (sponsorship) record is linked to this post. Tick above if it was sponsored.",
+  "tt.modeNone": "No valid post is marked sponsored, so both views are the same. Mark posts with 'Sponsored' on the post detail (ad-mixed or unconfirmed posts are never in this table).",
+  "tt.modeIncluded": "{s} sponsored posts are included. Values are medians, so removing a few may not change them: compare the post counts.",
+  "tt.modeExcluded": "{s} sponsored posts are left out. Values are medians and may stay the same: compare the post counts.",
 };

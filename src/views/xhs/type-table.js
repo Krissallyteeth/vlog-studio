@@ -44,6 +44,7 @@ function inner(posts) {
   const move = toMove.length ? `<div class="notice mt-3 flex flex-col items-start gap-2 text-[13px] sm:flex-row sm:items-center"><span class="flex-1">${esc(t('tt.moveHint', { n: toMove.length }))}</span><button type="button" class="btn btn-secondary btn-sm" data-tt-move>${esc(t('tt.moveBtn'))}</button></div>` : '';
   return `<div class="flex flex-wrap items-center justify-between gap-2"><h3 class="text-[15px] font-semibold">${esc(t('tt.title'))}</h3>${toggle}</div>
     <p class="mt-1 text-[12px] text-muted">${esc(t('tt.sub', { n: table.total, s: table.sponsoredTotal }))}</p>
+    <p class="mt-1 text-[12px] ${table.sponsoredTotal ? 'text-muted' : 'cf-mid rounded-[8px] px-2 py-1'}">${esc(t(!table.sponsoredTotal ? 'tt.modeNone' : mode === 'exclude' ? 'tt.modeExcluded' : 'tt.modeIncluded', { s: table.sponsoredTotal }))}</p>
     ${table.rows.length ? `<div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t('tt.type'))}</th><th class="num" data-m="inline">${esc(t('tt.n'))}</th><th class="num">${esc(t('tt.views'))}</th><th class="num">${esc(t('tt.ctr'))}</th><th class="num" data-m="key">${esc(t('tt.followRate'))}</th><th class="num">${esc(t('tt.newFollowers'))}</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="mt-2 text-[13px] text-muted">${esc(t('tt.empty'))}</p>`}
     <p class="mt-1 text-[12px] text-muted">${esc(t('tt.note', { n: REF_UNDER }))}</p>
     ${tagHtml}${move}`;

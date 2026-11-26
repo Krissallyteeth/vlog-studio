@@ -79,3 +79,11 @@ describe('card text', () => {
     expect(html).toContain('data-tt-move');
   });
 });
+
+describe('sponsored switch message', () => {
+  it('says when there is nothing to leave out', () => {
+    applyLang('ko');
+    expect(typeTableHtml([mk('여행', 100, 1)])).toContain('협찬으로 체크된 유효 글이 없어서');
+    expect(typeTableHtml([mk('여행', 100, 1, { sponsored: true })])).toContain('협찬 글 1편이 들어가 있어요');
+  });
+});
