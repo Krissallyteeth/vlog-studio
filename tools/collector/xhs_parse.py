@@ -42,9 +42,9 @@ def parse_count(value):
     s = value.strip().replace(",", "")
     if re.fullmatch(r"\d+", s):
         return int(s), False
-    m = re.fullmatch(r"(\d+(?:\.\d+)?)\s*([万wW千kK])\+?", s)
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)\s*([亿万wW千kK])\+?", s)
     if m:
-        unit = 10000 if m.group(2) in "万wW" else 1000
+        unit = 100_000_000 if m.group(2) == "亿" else 10000 if m.group(2) in "万wW" else 1000
         return int(round(float(m.group(1)) * unit)), True
     m = re.fullmatch(r"(\d+)\+", s)
     if m:
@@ -162,11 +162,15 @@ def merge_detail(note, detail):
     if not isinstance(detail, dict):
         return note
     desc = _text(detail.get("desc"))
-    tags = []
+    tags, topics = [], []
     for t in detail.get("tagList") or detail.get("tag_list") or []:
         name = t.get("name") if isinstance(t, dict) else None
         if isinstance(name, str) and name.strip():
             tags.append(name.strip()[:30])
+            tid = t.get("id")
+            if isinstance(tid, str) and re.fullmatch(r"[0-9a-zA-Z]{8,40}", tid):
+                topics.append({"id": tid, "name": name.strip()[:30]})
+    note["_topics"] = topics  # topic page ids, used during this run only
     for t in tags_from_desc(detail.get("desc")):
         if t not in tags:
             tags.append(t)
@@ -256,12 +260,66 @@ def related_words(obj, keyword, limit=30):
     return found[:limit]
 
 
+def full_keyword_suggestions(batches, keyword):
+    """The search box answers after every keystroke. Keep the answer for the whole keyword
+    (its request names the keyword); if none names it, the last answer."""
+    if not batches:
+        return []
+    full = [words for query, words in batches if f"={keyword}" in query or query.endswith(keyword)]
+    return list(dict.fromkeys(full[-1] if full else batches[-1][1]))
+
+
+def pick_topics(notes, limit):
+    """Topics to look up: those on the most notes first (only ones whose page id is known)."""
+    seen = {}
+    for n in notes:
+        for t in n.get("_topics") or []:
+            e = seen.setdefault(t["name"], {"id": t["id"], "name": t["name"], "count": 0})
+            e["count"] += 1
+    return sorted(seen.values(), key=lambda e: -e["count"])[:limit]
+
+
+VIEW_KEYS = ("view_num", "viewNum", "view_count", "viewCount", "browse_num", "browseNum", "page_view", "pageView", "views")
+VIEW_TEXT_RE = re.compile(r"(\d+(?:\.\d+)?\s*[亿万wW千kK]?\+?)\s*次?\s*浏览")
+
+
+def topic_views(payloads, text):
+    """A topic page's view count from its data (known field names) or its visible text ("1.2亿浏览").
+    Returns (views, approx) or (None, False) when the page did not show one."""
+    found = []
+
+    def walk(x, depth=0):
+        if depth > 8 or found:
+            return
+        if isinstance(x, dict):
+            for k in VIEW_KEYS:
+                if k in x:
+                    v, approx = parse_count(x[k])
+                    if v is not None:
+                        found.append((v, approx))
+                        return
+            for v in x.values():
+                walk(v, depth + 1)
+        elif isinstance(x, list):
+            for v in x:
+                walk(v, depth + 1)
+
+    for p in payloads:
+        walk(p)
+        if found:
+            return found[0]
+    m = VIEW_TEXT_RE.search(text or "")
+    if m:
+        return parse_count(m.group(1).replace(" ", ""))
+    return None, False
+
+
 def public_note(note):
     return {k: v for k, v in note.items() if not k.startswith("_")}
 
 
-def evidence_file(keywords, notes, collected_at=None, tool_version="1"):
-    return {
+def evidence_file(keywords, notes, collected_at=None, tool_version="1", topics=None):
+    data = {
         "schema": SCHEMA,
         "collectedAt": collected_at or now_cst(),
         "timezone": "Asia/Shanghai",
@@ -269,3 +327,6 @@ def evidence_file(keywords, notes, collected_at=None, tool_version="1"):
         "keywords": keywords,
         "notes": [public_note(n) for n in notes],
     }
+    if topics is not None:
+        data["topics"] = topics  # [{"name", "views", "approx"}]; views None = page did not show it
+    return data

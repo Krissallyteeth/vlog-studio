@@ -151,19 +151,36 @@ function keywordCard(k, ev, covers) {
   </section>`;
 }
 
+function tagTable(list, showViews) {
+  return `<div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t('se.tag'))}</th><th class="num">${esc(t('se.tagNotes'))}</th><th class="num">${esc(t('se.medianLikes'))}</th>${showViews ? `<th class="num">${esc(t('se.tagViews'))}</th>` : ''}</tr></thead><tbody>${list
+    .map((x) => `<tr><td>#${esc(x.tag)}</td><td class="num">${x.count}</td><td class="num">${n0(x.medianLikes)}</td>${showViews ? `<td class="num">${n0(x.views)}${x.viewsApprox ? esc(t('se.approx')) : ''}</td>` : ''}</tr>`)
+    .join('')}</tbody></table></div>`;
+}
+
+const pills = (list) => list.map((x) => `<span class="pill pill-muted">${esc(x)}</span>`).join(' ');
+
 function evidenceView(ev, an, covers) {
   const tags = an.tags.length
-    ? `<div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t('se.tag'))}</th><th class="num">${esc(t('se.tagNotes'))}</th><th class="num">${esc(t('se.medianLikes'))}</th></tr></thead><tbody>${an.tags
-        .map((x) => `<tr><td>#${esc(x.tag)}</td><td class="num">${x.count}</td><td class="num">${n0(x.medianLikes)}</td></tr>`)
-        .join('')}</tbody></table></div>`
-    : `<p class="mt-2 text-[13px] text-muted">${esc(t('se.noTags'))}</p>`;
-  const related = an.related.length ? an.related.map((x) => `<span class="pill pill-muted">${esc(x)}</span>`).join(' ') : `<span class="text-muted">${esc(t(an.relatedCollected ? 'se.none' : 'se.notCollected'))}</span>`;
+    ? tagTable(an.tags, an.topicsCollected)
+    : `<p class="mt-2 text-[13px] text-muted">${esc(t(an.tagNotes ? 'se.noMultiTags' : 'se.noTags'))}</p>`;
+  const singles = an.singleTags.length
+    ? `<details class="mt-3"><summary class="cursor-pointer text-[13px] text-muted">${esc(t('se.singleTags', { n: an.singleTags.length }))}</summary>${tagTable(an.singleTags, an.topicsCollected)}</details>`
+    : '';
+  const suggest = an.keywords
+    .map(
+      (k) => `<h4 class="mt-3 text-[14px] font-semibold">${esc(t('se.suggestFor', { kw: k.keyword }))}</h4>
+      <p class="mt-1.5 flex flex-wrap gap-1.5 text-[13px]">${k.suggest == null ? `<span class="text-muted">${esc(t('se.notCollected'))}</span>` : k.suggest.length ? k.suggest.map((x, i) => `<span class="pill pill-muted">${i + 1}. ${esc(x)}</span>`).join(' ') : `<span class="text-muted">${esc(t('se.none'))}</span>`}</p>`,
+    )
+    .join('');
+  const related = an.related.length ? pills(an.related) : `<span class="text-muted">${esc(t(an.relatedCollected ? 'se.none' : 'se.notCollected'))}</span>`;
   return `
     ${covers ? `<p class="mt-3 text-[12px] text-muted">${esc(t('se.coverNote'))}</p>` : ''}
     ${an.keywords.map((k) => keywordCard(k, ev, covers)).join('')}
+    <section class="card mt-3"><h3 class="text-[16px] font-semibold">${esc(t('se.demandTitle'))}</h3>
+      <p class="mt-1 text-[13px] text-muted">${esc(t('se.demandSub'))}</p>${suggest}
+      <h4 class="mt-3 text-[14px] font-semibold">${esc(t('se.related'))}</h4><p class="mt-1.5 flex flex-wrap gap-1.5 text-[13px]">${related}</p></section>
     <section class="card mt-3"><h3 class="text-[16px] font-semibold">${esc(t('se.tagsTitle'))}</h3>
-      <p class="mt-1 text-[13px] text-muted">${esc(t('se.tagsSub', { n: an.tagNotes }))}</p>${tags}</section>
-    <section class="card mt-3"><h3 class="text-[16px] font-semibold">${esc(t('se.related'))}</h3><p class="mt-2 flex flex-wrap gap-1.5 text-[13px]">${related}</p></section>`;
+      <p class="mt-1 text-[13px] text-muted">${esc(t('se.tagsSub', { n: an.tagNotes }))}</p>${tags}${singles}</section>`;
 }
 
 export async function renderSearch({ isCurrent }) {

@@ -18,7 +18,7 @@ import random
 import sys
 import time
 from pathlib import Path
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, unquote_plus, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import xhs_parse as xp  # noqa: E402
@@ -46,6 +46,19 @@ COMPRESS_JS = """async ([b64, type, maxW, q]) => {
   return 'data:image/webp;base64,' + btoa(bin);
 }"""
 RESULT_WAIT_S = 30
+SCROLL_ROUNDS = 2  # scroll the results this many times to see more notes and "大家都在搜" cards
+TOPIC_MAX = 8  # topic pages opened per run for view counts
+SEARCH_BOX = "input#search-input, input.search-input, header input[type='text'], input[placeholder*='搜索']"
+SUGGEST_DOM_JS = """() => {
+  const out = [];
+  for (const el of document.querySelectorAll('[class*="sug"] *, [class*="Sug"] *')) {
+    if (el.children.length) continue;
+    const s = (el.innerText || '').trim();
+    if (s.length >= 2 && s.length <= 30 && !out.includes(s)) out.push(s);
+  }
+  return JSON.stringify(out.slice(0, 20));
+}"""
+PAGE_TEXT_JS = "() => (document.body && document.body.innerText || '').slice(0, 5000)"
 
 STATE_FEEDS_JS = """() => {
   const f = window.__INITIAL_STATE__?.search?.feeds;
@@ -147,8 +160,8 @@ def wait_results(page, captured):
 
 
 def search_keyword(page, keyword, details):
-    entry = {"keyword": keyword, "searchedAt": xp.now_cst(), "status": "ok", "error": None, "related": None, "noteIds": []}
-    captured = {"api": [], "related": [], "answered": False, "problems": []}
+    entry = {"keyword": keyword, "searchedAt": xp.now_cst(), "status": "ok", "error": None, "related": None, "suggest": None, "noteIds": []}
+    captured = {"api": [], "related": [], "suggest": [], "typing": False, "answered": False, "problems": []}
 
     def on_response(resp):
         try:
@@ -169,12 +182,19 @@ def search_keyword(page, keyword, details):
                     captured["answered"] = True
                     captured["api"].extend(found)
             elif not xp.is_filter_path(path):
-                captured["related"].extend(xp.related_words(resp.json(), keyword))
+                # While the keyword is being typed, the answers are the search box's suggestions.
+                words = xp.related_words(resp.json(), keyword)
+                if captured["typing"]:
+                    # One answer per keystroke: remember which text each answer was for.
+                    captured["suggest"].append((unquote_plus(urlparse(resp.url).query), words))
+                else:
+                    captured["related"].extend(words)
         except Exception:
             pass
 
     page.on("response", on_response)
     try:
+        entry["suggest"] = read_suggestions(page, keyword, captured)
         page.goto(f"https://www.xiaohongshu.com/search_result?keyword={quote(keyword)}&source=web_search_result_notes", wait_until="domcontentloaded", timeout=60000)
         check_blocked(page)
         items = wait_results(page, captured)
@@ -184,6 +204,8 @@ def search_keyword(page, keyword, details):
             page.reload(wait_until="domcontentloaded", timeout=60000)
             check_blocked(page)
             items = wait_results(page, captured)
+        if items:
+            items = scroll_results(page, captured, items)
         # Hot-query cards inside the results are real search phrases too.
         related = list(dict.fromkeys(captured["related"] + xp.related_words([i for i in items if isinstance(i, dict) and i.get("modelType") not in (None, "note")], keyword)))
         entry["related"] = related or None
@@ -215,6 +237,76 @@ def search_keyword(page, keyword, details):
         page.remove_listener("response", on_response)
 
 
+def read_suggestions(page, keyword, captured):
+    """Types the keyword into the page's search box (without searching) and reads what 小红书 suggests.
+    The suggestions are the words people search most, in 小红书's own order. None if not readable."""
+    try:
+        box = page.locator(SEARCH_BOX).first
+        box.click(timeout=5000)
+        box.fill("")
+        captured["typing"] = True
+        box.type(keyword, delay=150)
+        page.wait_for_timeout(2500)
+        words = xp.full_keyword_suggestions(captured["suggest"], keyword)
+        if not words:
+            words = [w for w in (eval_json(page, SUGGEST_DOM_JS) or []) if w != keyword]
+        page.keyboard.press("Escape")
+        return words[:20] or None
+    except Exception:
+        return None
+    finally:
+        captured["typing"] = False
+
+
+def scroll_results(page, captured, items):
+    """Scrolls the result list a little to load the next part (more notes, more 大家都在搜 cards)."""
+    try:
+        for _ in range(SCROLL_ROUNDS):
+            page.mouse.wheel(0, 2500)
+            page.wait_for_timeout(int(random.uniform(1500, 2500)))
+            check_blocked(page)
+    except Blocked:
+        raise
+    except Exception:
+        return items  # keep what the first screen had
+    more = xp.feed_items(eval_json(page, STATE_FEEDS_JS)) or captured["api"]
+    return more if len(more) > len(items) else items
+
+
+def read_topic_views(page, notes, log):
+    """Opens the pages of the most used topics and reads their view counts. Best effort: None when not shown."""
+    picked = xp.pick_topics(notes, TOPIC_MAX)
+    out = []
+    for t in picked:
+        payloads = []
+
+        def on_response(resp):
+            try:
+                if "json" in (resp.headers.get("content-type") or ""):
+                    payloads.append(resp.json())
+            except Exception:
+                pass
+
+        page.on("response", on_response)
+        try:
+            pause()
+            page.goto(f"https://www.xiaohongshu.com/page/topics/{t['id']}", wait_until="domcontentloaded", timeout=60000)
+            page.wait_for_timeout(3000)
+            check_blocked(page)
+            state = eval_json(page, "() => { try { return JSON.stringify(window.__INITIAL_STATE__ || null); } catch (e) { return ''; } }")
+            views, approx = xp.topic_views(([state] if state else []) + payloads, page.evaluate(PAGE_TEXT_JS))
+        except Blocked:
+            raise
+        except Exception:
+            views, approx = None, False
+        finally:
+            page.remove_listener("response", on_response)
+        out.append({"name": t["name"], "notes": t["count"], "views": views, "approx": approx})
+    if picked:
+        log(f"[话题] 조회수 {sum(1 for t in out if t['views'] is not None)}개 / 태그 {len(picked)}개")
+    return out
+
+
 def fetch_covers(ctx, notes, covers):
     """Downloads each note's cover, shrinks it in a blank tab, keeps it in `covers` (memory only)."""
     import base64
@@ -238,9 +330,9 @@ def fetch_covers(ctx, notes, covers):
         tab.close()
 
 
-def write_file(out_dir, keywords, notes):
+def write_file(out_dir, keywords, notes, topics=None):
     out_dir.mkdir(parents=True, exist_ok=True)
-    data = xp.evidence_file(keywords, notes, tool_version=VERSION)
+    data = xp.evidence_file(keywords, notes, tool_version=VERSION, topics=topics)
     text = json.dumps(data, ensure_ascii=False, indent=2)
     stem = "xhs-search_" + data["collectedAt"][:19].replace(":", "").replace("T", "_")
     n = 1
@@ -294,7 +386,7 @@ def collect(keywords, details, out_dir, log=print, progress=lambda *a, **k: None
         log("검색어를 1개 이상 넣어 주세요.")
         return 2, None
     details = max(0, min(details, MAX_DETAILS))
-    entries, all_notes = [], []
+    entries, all_notes, topics = [], [], None
     progress("starting", total=len(keywords))
     with sync_playwright() as p:
         ctx = open_browser(p)
@@ -311,27 +403,33 @@ def collect(keywords, details, out_dir, log=print, progress=lambda *a, **k: None
                 try:
                     entry, notes = search_keyword(page, kw, details)
                 except Blocked as b:
-                    entries.append({"keyword": kw, "searchedAt": xp.now_cst(), "status": "blocked", "error": str(b), "related": None, "noteIds": [n["id"] for n in b.notes]})
+                    entries.append({"keyword": kw, "searchedAt": xp.now_cst(), "status": "blocked", "error": str(b), "related": None, "suggest": None, "noteIds": [n["id"] for n in b.notes]})
                     all_notes.extend(b.notes)
                     log("[중단] 小红书가 로그인 또는 보안 확인을 요청했어요. 지금까지 읽은 것만 저장합니다. 잠시 뒤 다시 시도하세요.")
                     break
                 except Exception as e:  # keep the other keywords
-                    entry, notes = {"keyword": kw, "searchedAt": xp.now_cst(), "status": "error", "error": str(e)[:200], "related": None, "noteIds": []}, []
+                    entry, notes = {"keyword": kw, "searchedAt": xp.now_cst(), "status": "error", "error": str(e)[:200], "related": None, "suggest": None, "noteIds": []}, []
                 entries.append(entry)
                 all_notes.extend(notes)
                 if covers is not None and notes:
                     fetch_covers(ctx, notes, covers)
-                log(f"        노트 {len(notes)}개 (상세 {sum(1 for n in notes if n['detail'])}개)")
+                log(f"        노트 {len(notes)}개 (상세 {sum(1 for n in notes if n['detail'])}개) · 자동완성 {len(entry.get('suggest') or [])}개 · 연관 검색어 {len(entry.get('related') or [])}개")
                 if covers is not None and notes:
                     log(f"        표지 {sum(1 for n in notes if n['id'] in covers)}개 (주소 있음 {sum(1 for n in notes if n.get('_cover_url'))}개)")
                 if entry["status"] == "empty":
                     log("        小红书가 결과 0개라고 답했어요.")
                 elif entry["status"] == "error":
                     log(f"        결과를 읽지 못했어요(0개라는 뜻이 아니에요): {entry['error']}")
+            if all_notes and not any(e["status"] == "blocked" for e in entries):
+                progress("topics")
+                try:
+                    topics = read_topic_views(page, all_notes, log)
+                except Blocked:
+                    log("[话题] 보안 확인 요청으로 조회수 읽기를 멈췄어요.")
         finally:
             ctx.close()
     progress("saving")
-    path = write_file(out_dir, entries, all_notes)
+    path = write_file(out_dir, entries, all_notes, topics)
     if not all_notes:
         log(f"\n[저장] {path}\n읽은 노트가 없어요. 이 파일은 앱에 넣지 말고, 시간을 두고 다시 시도하세요.")
         return 1, path

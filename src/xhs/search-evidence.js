@@ -69,7 +69,9 @@ export function parseEvidence(data) {
     .map((k) => ({
       keyword: str(k?.keyword, 60),
       status: ['ok', 'empty', 'blocked', 'error'].includes(k?.status) ? k.status : 'error',
-      related: Array.isArray(k?.related) ? [...new Set(k.related.map((x) => str(x, 30)).filter(Boolean))].slice(0, 30) : null,
+      related: Array.isArray(k?.related) ? [...new Set(k.related.map((x) => str(x, 30)).filter(Boolean))].slice(0, 60) : null,
+      // The search box's suggestions, in 小红书's order (null = not collected).
+      suggest: Array.isArray(k?.suggest) ? [...new Set(k.suggest.map((x) => str(x, 30)).filter(Boolean))].slice(0, 20) : null,
       searchedAt: str(k?.searchedAt, 40),
     }))
     .filter((k) => k.keyword)
@@ -83,7 +85,14 @@ export function parseEvidence(data) {
     notes.push(n);
   }
   const collectedAt = str(data.collectedAt, 40);
-  return { id: `${collectedAt}|${keywords.map((k) => k.keyword).join(',')}`, collectedAt, keywords, notes };
+  // View counts of topic (话题) pages: how much people look at a tag, unlike how many creators used it.
+  const topics = Array.isArray(data.topics)
+    ? data.topics
+        .map((x) => ({ name: str(x?.name, 30), views: num(x?.views), approx: x?.approx === true }))
+        .filter((x) => x.name)
+        .slice(0, 30)
+    : null;
+  return { id: `${collectedAt}|${keywords.map((k) => k.keyword).join(',')}`, collectedAt, keywords, notes, topics };
 }
 
 const EMOJI_RE = /\p{Extended_Pictographic}/u;
@@ -133,6 +142,7 @@ export function analyzeEvidence(ev) {
       keyword: k.keyword,
       status: k.status,
       related: k.related,
+      suggest: k.suggest,
       count: notes.length,
       scored: scored.length,
       unscored: notes.length - scored.length,
@@ -154,12 +164,29 @@ export function analyzeEvidence(ev) {
       tagMap.set(key, e);
     }
   }
-  const tags = [...tagMap.values()]
-    .map((e) => ({ tag: e.tag, count: e.notes.length, medianLikes: median(e.notes.map((n) => n.likes)), keywords: [...e.keywords] }))
-    .sort((a, b) => b.count - a.count || (b.medianLikes ?? -1) - (a.medianLikes ?? -1))
-    .slice(0, 25);
-  const related = [...new Set(ev.keywords.flatMap((k) => k.related ?? []))].slice(0, 30);
-  return { keywords, tags, tagNotes: withTags.length, related, relatedCollected: ev.keywords.some((k) => k.related != null) };
+  const views = new Map((ev.topics ?? []).map((x) => [tagKey(x.name), x]));
+  const all = [...tagMap.entries()].map(([key, e]) => ({
+    tag: e.tag,
+    count: e.notes.length,
+    medianLikes: median(e.notes.map((n) => n.likes)),
+    keywords: [...e.keywords],
+    views: views.get(key)?.views ?? null,
+    viewsApprox: views.get(key)?.approx ?? false,
+  }));
+  const byViews = (a, b) => (b.views ?? -1) - (a.views ?? -1) || (b.medianLikes ?? -1) - (a.medianLikes ?? -1);
+  // A tag on one note says more about that note than about what people look for: kept apart.
+  const tags = all.filter((x) => x.count >= 2).sort((a, b) => b.count - a.count || byViews(a, b)).slice(0, 25);
+  const singleTags = all.filter((x) => x.count === 1).sort(byViews).slice(0, 60);
+  const related = [...new Set(ev.keywords.flatMap((k) => k.related ?? []))].slice(0, 60);
+  return {
+    keywords,
+    tags,
+    singleTags,
+    tagNotes: withTags.length,
+    topicsCollected: (ev.topics ?? []).some((x) => x.views != null),
+    related,
+    relatedCollected: ev.keywords.some((k) => k.related != null),
+  };
 }
 
 const fmt = (v) => (v == null ? '미수집' : String(v));
@@ -186,7 +213,8 @@ export function buildBrief(ev, an, { topic = '', hook = '' } = {}) {
   lines.push('너는 小红书 콘텐츠 기획 도우미야. 아래 [근거 자료]는 小红书 검색 결과를 실제로 수집한 것이야.');
   lines.push('규칙:');
   lines.push('1. 근거 자료 밖의 소문·일반론으로 추측하지 말고, 자료에서 보이는 패턴만 근거로 써.');
-  lines.push('2. 해시태그는 [자주 쓰인 해시태그] 목록에 있는 것만 써. 목록에 없는 태그가 꼭 필요하면 "(자료에 없음)"이라고 따로 표시해.');
+  lines.push('2. 해시태그는 [해시태그] 목록(2개 이상 노트·1개 노트 모두)에 있는 것만 써. 목록에 없는 태그가 꼭 필요하면 "(자료에 없음)"이라고 따로 표시해.');
+  lines.push('   사람들이 많이 찾는 말은 [사람들이 찾는 말]과 话题 조회수를 우선 근거로 써. 사용 노트 수는 작성자들이 붙인 횟수일 뿐이야.');
   lines.push('3. 제목마다 참고한 노트 번호(N1 등)와 이유를 한 줄로 적어.');
   lines.push('4. 다른 노트의 문장을 그대로 베끼지 마. 내 주제와 경험에 맞게 새로 써.');
   lines.push('5. 결과물(제목·본문·해시태그)은 중국어 간체로, 설명은 한국어로 써.');
@@ -207,10 +235,14 @@ export function buildBrief(ev, an, { topic = '', hook = '' } = {}) {
     if (k.terms.length) lines.push(`  爆款 제목에 반복된 말: ${k.terms.map((x) => `${x.term}(${x.count})`).join(', ')}`);
   }
   lines.push('');
-  lines.push(`[자주 쓰인 해시태그] (태그를 읽은 노트 ${an.tagNotes}개 기준, 괄호는 사용 노트 수 / 그 노트들의 좋아요 중앙값)`);
-  lines.push(an.tags.length ? an.tags.map((x) => `#${x.tag} (${x.count} / ${fmt(x.medianLikes)})`).join(', ') : '(태그 미수집)');
+  lines.push('[사람들이 찾는 말]');
+  for (const { k } of groups) lines.push(`- 검색창 자동완성 "${k.keyword}" (小红书가 보여 준 순서): ${k.suggest == null ? '(미수집)' : k.suggest.length ? k.suggest.join(', ') : '(없음)'}`);
+  lines.push(`- 연관 검색어: ${an.related.length ? an.related.join(', ') : an.relatedCollected ? '(없음)' : '(미수집)'}`);
+  const tagText = (x) => `#${x.tag} (${x.count} / ${fmt(x.medianLikes)}${x.views != null ? ` / 조회 ${x.views}${x.viewsApprox ? '(약)' : ''}` : ''})`;
   lines.push('');
-  lines.push(`[연관 검색어] ${an.related.length ? an.related.join(', ') : an.relatedCollected ? '(없음)' : '(미수집)'}`);
+  lines.push(`[해시태그] 태그를 읽은 노트 ${an.tagNotes}개 기준. 괄호는 사용 노트 수 / 그 노트들의 좋아요 중앙값${an.topicsCollected ? ' / 话题 조회수' : ''}`);
+  lines.push(`- 2개 이상 노트에서 쓰임: ${an.tags.length ? an.tags.map(tagText).join(', ') : an.tagNotes ? '(없음)' : '(태그 미수집)'}`);
+  if (an.singleTags.length) lines.push(`- 1개 노트에서만 쓰임(그 노트 성과와 구분 어려움): ${an.singleTags.map(tagText).join(', ')}`);
   const listed = new Set();
   for (const { k, notes } of groups) {
     lines.push('');

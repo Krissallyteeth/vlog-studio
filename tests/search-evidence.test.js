@@ -117,6 +117,30 @@ describe('brief and answer check', () => {
     expect(brief).not.toContain('[내 주제]');
   });
 
+  it('keeps search box suggestions and topic views apart from what creators used', () => {
+    const notes = [note(1, 100, { tags: ['收纳', '小户型'] }), note(2, 200, { tags: ['收纳'] }), note(3, 50, { tags: ['个人日常'] })];
+    const data = { ...file(notes, [{ keyword: '收纳', status: 'ok', related: ['a'], suggest: ['收纳技巧', '收纳盒', '收纳技巧'] }]), topics: [{ name: '收纳', views: 1230000000, approx: true }, { name: '个人日常', views: null }] };
+    const ev = parseEvidence(data);
+    expect(ev.keywords[0].suggest).toEqual(['收纳技巧', '收纳盒']);
+    const an = analyzeEvidence(ev);
+    expect(an.tags.map((x) => [x.tag, x.count, x.views])).toEqual([['收纳', 2, 1230000000]]);
+    expect(an.singleTags.map((x) => x.tag).sort()).toEqual(['个人日常', '小户型']);
+    expect(an.topicsCollected).toBe(true);
+    const brief = buildBrief(ev, an);
+    expect(brief).toContain('- 검색창 자동완성 "收纳" (小红书가 보여 준 순서): 收纳技巧, 收纳盒');
+    expect(brief).toContain('조회 1230000000(약)');
+    expect(brief).toContain('1개 노트에서만 쓰임');
+  });
+
+  it('old files without suggestions or topics say "not collected", never "none"', () => {
+    const ev = parseEvidence(file([note(1, 10)]));
+    expect(ev.keywords[0].suggest).toBe(null);
+    expect(ev.topics).toBe(null);
+    const an = analyzeEvidence(ev);
+    expect(an.topicsCollected).toBe(false);
+    expect(buildBrief(ev, an)).toContain('(小红书가 보여 준 순서): (미수집)');
+  });
+
   it('finds hashtags in both spellings', () => {
     expect(hashtagsIn('#收纳技巧 #小户型[话题]# 文字#家居')).toEqual(['收纳技巧', '小户型', '家居']);
     expect(tagKey('#Home Tour[话题]#')).toBe('hometour');

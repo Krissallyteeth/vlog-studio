@@ -224,6 +224,57 @@ class SearchKeyword(unittest.TestCase):
         entry, _ = self.run_search(page)
         self.assertEqual((entry["status"], entry["error"], page.n), ("error", "search API: HTTP 461", 1))
 
+    def test_no_search_box_means_suggestions_not_collected(self):
+        page = FakePage(lambda p: setattr(p, "feeds", [card()]))
+        entry, _ = self.run_search(page)
+        self.assertIsNone(entry["suggest"])  # unknown, not "no suggestions"
+
+
+class Suggestions(unittest.TestCase):
+    def test_typing_window_answers_are_suggestions(self):
+        page = FakePage(lambda p: setattr(p, "feeds", [card()]))
+        box = mock.Mock()
+        box.type.side_effect = lambda *a, **k: page.respond("/api/sns/web/v1/search/recommend", {"data": {"sug_items": [{"text": "收纳技巧"}, {"text": "收纳盒推荐"}]}})
+        page.locator = lambda _sel: mock.Mock(first=box)
+        page.keyboard = mock.Mock()
+        with mock.patch.object(xs, "pause"), mock.patch.object(xs, "RESULT_WAIT_S", 0.05):
+            entry, _ = xs.search_keyword(page, "收纳", 0)
+        self.assertEqual(entry["suggest"], ["收纳技巧", "收纳盒推荐"])
+        self.assertIsNone(entry["related"])  # suggestions are not mixed into related searches
+
+
+class FullKeyword(unittest.TestCase):
+    def test_keeps_the_answer_for_the_whole_keyword(self):
+        batches = [("keyword=收", ["收技巧"]), ("keyword=收纳", ["收纳技巧", "收纳盒"]), ("keyword=收纳&x=1", ["收纳技巧", "收纳神器"])]
+        self.assertEqual(xp.full_keyword_suggestions(batches, "收纳"), ["收纳技巧", "收纳神器"])
+        # Unknown request shape: the last answer is the one for the most text typed
+        self.assertEqual(xp.full_keyword_suggestions([("a=1", ["x"]), ("a=2", ["y", "y"])], "收纳"), ["y"])
+        self.assertEqual(xp.full_keyword_suggestions([], "收纳"), [])
+
+
+class Topics(unittest.TestCase):
+    def test_pick_topics(self):
+        notes = [{"_topics": [{"id": "t" * 10, "name": "收纳"}, {"id": "u" * 10, "name": "小户型"}]}, {"_topics": [{"id": "t" * 10, "name": "收纳"}]}, {}]
+        self.assertEqual([(t["name"], t["count"]) for t in xp.pick_topics(notes, 5)], [("收纳", 2), ("小户型", 1)])
+        self.assertEqual(len(xp.pick_topics(notes, 1)), 1)
+
+    def test_merge_keeps_topic_ids_out_of_the_file(self):
+        n = xp.note_from_card(card(), "k", 1)
+        xp.merge_detail(n, {"desc": "x", "tagList": [{"id": "5be00000000000000000aaaa", "name": "收纳技巧", "type": "topic"}, {"name": "无id"}]})
+        self.assertEqual(n["_topics"], [{"id": "5be00000000000000000aaaa", "name": "收纳技巧"}])
+        self.assertNotIn("5be00000000000000000aaaa", str(xp.evidence_file([], [n])))
+
+    def test_topic_views(self):
+        self.assertEqual(xp.topic_views([{"data": {"page_info": {"view_num": 123456}}}], ""), (123456, False))
+        self.assertEqual(xp.topic_views([], "收纳技巧 12.3亿浏览 · 5万篇笔记"), (1230000000, True))
+        self.assertEqual(xp.topic_views([], "3.5万 次浏览"), (35000, True))
+        self.assertEqual(xp.topic_views([{"x": 1}], "没有数字"), (None, False))  # not shown: unknown, never 0
+        self.assertEqual(xp.parse_count("2亿"), (200000000, True))
+
+    def test_file_topics(self):
+        self.assertNotIn("topics", xp.evidence_file([], []))
+        self.assertEqual(xp.evidence_file([], [], topics=[{"name": "a", "notes": 2, "views": None, "approx": False}])["topics"][0]["views"], None)
+
 
 if __name__ == "__main__":
     unittest.main()
