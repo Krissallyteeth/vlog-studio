@@ -175,7 +175,7 @@ export async function renderSearch({ isCurrent }) {
   const body = `
     <section class="card mb-3"><h2 class="text-[16px] font-semibold">${esc(t('se.run.title'))}</h2>
       <p class="mt-1 text-[13px] text-muted">${esc(t('se.run.hint', { max: MAX_KEYWORDS }))}</p>
-      <textarea class="textarea mt-3" rows="3" id="se-keywords" placeholder="${esc(t('se.run.ph'))}">${esc(draft.keywords)}</textarea>
+      <textarea class="textarea mt-3" rows="2" id="se-keywords" placeholder="${esc(t('se.run.ph'))}">${esc(draft.keywords)}</textarea>
       <button type="button" class="btn btn-primary mt-2" id="se-run-go" data-x="run" ${run.busy ? 'disabled' : ''}>${icon('search', 'size-5')}${esc(t('se.run.go'))}</button>
       <div id="se-run-state">${runStateHtml()}</div>
       <p class="mt-2 text-[12px] text-muted">${esc(t('se.run.setup'))}</p>

@@ -29,7 +29,7 @@ Google Chrome이 없으면 추가로 `python -m playwright install chromium`.
 ## 앱에서 바로 수집 (Windows, 추천)
 
 1. 처음 한 번: `tools/collector/install.bat`을 더블클릭합니다. 필요한 것을 설치하고, 앱이 수집기를 켤 수 있게 등록합니다.
-2. VLOG Studio → 더보기 → **검색 근거 추천** → 맨 위 칸에 검색어를 한 줄에 하나씩(최대 5개) 넣고 **검색하기**.
+2. VLOG Studio → 더보기 → **검색 근거 추천** → 맨 위 칸에 검색어를 쉼표(,)나 줄바꿈으로 나눠(최대 5개) 넣고 **검색하기**.
 3. Chrome이 열지 물으면 "항상 허용"에 체크하고 **열기**. 수집기 창(검은 창)과 수집용 Chrome 창이 뜹니다.
    처음이거나 로그인이 풀렸으면 그 Chrome 창에서 QR을 스캔합니다.
 4. 끝나면 결과가 앱에 바로 나옵니다. 파일도 `private-data/xhs-search/`에 남습니다.
