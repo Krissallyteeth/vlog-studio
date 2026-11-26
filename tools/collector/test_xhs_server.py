@@ -126,6 +126,12 @@ class Live(unittest.TestCase):
         self.req("/search", "POST", {"keywords": ["a"]})
         self.assertEqual(self.wait_job("failed")["reason"], "nothing")
 
+    def test_refused_run_reports_refused(self):
+        self.result_code = 3
+        self.gate.set()
+        self.req("/search", "POST", {"keywords": ["a"]})
+        self.assertEqual(self.wait_job("failed")["reason"], "refused")
+
     def test_bad_requests(self):
         self.assertEqual(self.req("/search", "POST", {"keywords": ["a"] * 6})[0], 400)
         self.assertEqual(self.req("/nope")[0], 404)

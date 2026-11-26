@@ -260,6 +260,16 @@ def related_words(obj, keyword, limit=30):
     return found[:limit]
 
 
+REFUSED_RE = re.compile(r"net::ERR_(HTTP_RESPONSE_CODE_FAILURE|CONNECTION_CLOSED|CONNECTION_RESET|CONNECTION_REFUSED|EMPTY_RESPONSE)")
+
+
+def refused_reason(error_text):
+    """The short net:: code when a page load failed because 小红书 refused or cut the connection
+    (what it does while it limits an account or network), else None."""
+    m = REFUSED_RE.search(str(error_text or ""))
+    return m.group(1) if m else None
+
+
 def merge_lists(general, popular):
     """Both result lists of one keyword as one note list. Each note says which lists it was in
     ("general" = 综合, the account's own default; "popular" = 最多点赞 within half a year) and its place there."""

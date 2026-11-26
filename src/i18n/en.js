@@ -1782,8 +1782,9 @@ export default {
   "se.bothHint": "In both 综合 (this account) and most liked (half a year): least affected by personalisation, the strongest evidence.",
   "se.bothBadge": "In both lists",
   "se.noBoth": "No note is in both lists.",
+  "se.run.fail.refused": "小红书 refused the connection, likely a temporary limit after several runs today. Wait a few hours before collecting again.",
   "se.status.ok": "",
   "se.status.empty": "小红书 answered with no results for this keyword. Try another keyword.",
-  "se.status.blocked": "小红书 asked for a login or security check, so collecting stopped here. Try again later.",
+  "se.status.blocked": "小红书 asked for a security check or refused the connection, so collecting stopped here. Only what was read so far is shown. Wait a few hours.",
   "se.status.error": "Results for this keyword could not be read (this does not mean zero). Collect again later.",
 };

@@ -103,7 +103,7 @@ class Collector:
             if path:
                 job["result"] = json.loads(Path(path).read_text(encoding="utf-8"))
                 job["file"] = Path(path).name
-            job["reason"] = None if code == 0 else ("nothing" if path else "login")
+            job["reason"] = None if code == 0 else "refused" if code == 3 else ("nothing" if path else "login")
         except Exception as e:  # shown in the window; the app gets a short reason only
             log(f"[오류] {e}")
             job["reason"] = "error"

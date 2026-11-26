@@ -48,7 +48,9 @@ COMPRESS_JS = """async ([b64, type, maxW, q]) => {
 RESULT_WAIT_S = 30
 POPULAR_FILTER = ("最多点赞", "半年内")  # second list: most liked within half a year (less personal than 综合)
 SCROLL_ROUNDS = 2  # scroll the results this many times to see more notes and "大家都在搜" cards
-TOPIC_MAX = 8  # topic pages opened per run for view counts
+# Topic pages opened per run for view counts. Off: the web address used (/page/topics/<id>) showed no
+# view count in two real runs, and opening pages that do not work looks automated. Turn on once known.
+TOPIC_MAX = 0
 SEARCH_BOX = "input#search-input, input.search-input, header input[type='text'], input[placeholder*='搜索']"
 SUGGEST_DOM_JS = """(kw) => {
   // The dropdown under the search box: leaf texts that contain the keyword, inside the box's own
@@ -88,7 +90,7 @@ CURRENT_USER_JS = """() => {
 
 
 class Blocked(Exception):
-    """The site asked for a login or a security check: stop and keep what we have."""
+    """The site asked for a login or a security check, or refused the connection: stop and keep what we have."""
 
     def __init__(self, reason, notes=None):
         super().__init__(reason)
@@ -97,6 +99,17 @@ class Blocked(Exception):
 
 def pause(a=4.0, b=8.0):
     time.sleep(random.uniform(a, b))
+
+
+def goto(page, url):
+    """page.goto that turns 小红书 refusing or cutting the connection into Blocked (stop, do not retry)."""
+    try:
+        return page.goto(url, wait_until="domcontentloaded", timeout=60000)
+    except Exception as e:
+        why = xp.refused_reason(e)
+        if why:
+            raise Blocked(f"refused: {why}") from None
+        raise
 
 
 def check_blocked(page):
@@ -133,7 +146,7 @@ def current_user(page):
 
 
 def wait_login(page, timeout_s=300, log=print, progress=lambda *a, **k: None):
-    page.goto(HOME, wait_until="domcontentloaded", timeout=60000)
+    goto(page, HOME)
     time.sleep(3)
     user = current_user(page)
     if user:
@@ -211,7 +224,7 @@ def search_keyword(page, keyword, details):
     try:
         entry["suggest"], why = read_suggestions(page, keyword, captured)
         entry["_suggest_why"] = why
-        page.goto(f"https://www.xiaohongshu.com/search_result?keyword={quote(keyword)}&source=web_search_result_notes", wait_until="domcontentloaded", timeout=60000)
+        goto(page, f"https://www.xiaohongshu.com/search_result?keyword={quote(keyword)}&source=web_search_result_notes")
         check_blocked(page)
         items = wait_results(page, captured)
         if not items and not captured["answered"] and not captured["problems"]:
@@ -243,7 +256,7 @@ def search_keyword(page, keyword, details):
                 continue
             pause()
             try:
-                page.goto(f"https://www.xiaohongshu.com/explore/{n['id']}?xsec_token={quote(n['_token'])}&xsec_source=pc_search", wait_until="domcontentloaded", timeout=60000)
+                goto(page, f"https://www.xiaohongshu.com/explore/{n['id']}?xsec_token={quote(n['_token'])}&xsec_source=pc_search")
                 time.sleep(2)
                 check_blocked(page)
                 xp.merge_detail(n, xp.detail_from_state(eval_json(page, STATE_DETAIL_JS), n["id"]))
@@ -377,7 +390,7 @@ def read_topic_views(page, notes, log):
         page.on("response", on_response)
         try:
             pause()
-            page.goto(f"https://www.xiaohongshu.com/page/topics/{t['id']}", wait_until="domcontentloaded", timeout=60000)
+            goto(page, f"https://www.xiaohongshu.com/page/topics/{t['id']}")
             page.wait_for_timeout(3000)
             check_blocked(page)
             state = eval_json(page, "() => { try { return JSON.stringify(window.__INITIAL_STATE__ || null); } catch (e) { return ''; } }")
@@ -485,7 +498,12 @@ def collect(keywords, details, out_dir, log=print, progress=lambda *a, **k: None
         ctx = open_browser(p)
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         try:
-            if not wait_login(page, log=log, progress=progress):
+            try:
+                logged_in = wait_login(page, log=log, progress=progress)
+            except Blocked as b:
+                log(f"[중단] 小红书가 접속을 막았어요({b}). 계정 보호를 위해 몇 시간 쉬었다가 다시 해 주세요.")
+                return 3, None
+            if not logged_in:
                 log("[로그인] 로그인하지 않으면 검색 결과를 읽을 수 없어요.")
                 return 1, None
             for i, kw in enumerate(keywords):
@@ -498,7 +516,10 @@ def collect(keywords, details, out_dir, log=print, progress=lambda *a, **k: None
                 except Blocked as b:
                     entries.append({"keyword": kw, "searchedAt": xp.now_cst(), "status": "blocked", "error": str(b), "related": None, "suggest": None, "noteIds": [n["id"] for n in b.notes]})
                     all_notes.extend(b.notes)
-                    log("[중단] 小红书가 로그인 또는 보안 확인을 요청했어요. 지금까지 읽은 것만 저장합니다. 잠시 뒤 다시 시도하세요.")
+                    if str(b).startswith("refused"):
+                        log(f"[중단] 小红书가 접속을 막았어요({b}). 지금까지 읽은 것만 저장합니다. 몇 시간 쉬었다가 다시 해 주세요.")
+                    else:
+                        log("[중단] 小红书가 로그인 또는 보안 확인을 요청했어요. 지금까지 읽은 것만 저장합니다. 잠시 뒤 다시 시도하세요.")
                     break
                 except Exception as e:  # keep the other keywords
                     entry, notes = {"keyword": kw, "searchedAt": xp.now_cst(), "status": "error", "error": str(e)[:200], "related": None, "suggest": None, "noteIds": []}, []

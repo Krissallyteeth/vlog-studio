@@ -265,6 +265,28 @@ class TwoLists(unittest.TestCase):
         self.assertFalse(xp.is_popular_request(None))
 
 
+class Refused(unittest.TestCase):
+    def test_refused_reason(self):
+        self.assertEqual(xp.refused_reason("Page.goto: net::ERR_CONNECTION_CLOSED at https://www.xiaohongshu.com/explore"), "CONNECTION_CLOSED")
+        self.assertEqual(xp.refused_reason("net::ERR_HTTP_RESPONSE_CODE_FAILURE at https://x"), "HTTP_RESPONSE_CODE_FAILURE")
+        self.assertIsNone(xp.refused_reason("Timeout 60000ms exceeded"))
+        self.assertIsNone(xp.refused_reason(None))
+
+    def test_refused_page_load_stops_instead_of_retrying(self):
+        page = FakePage(lambda p: (_ for _ in ()).throw(Exception("Page.goto: net::ERR_HTTP_RESPONSE_CODE_FAILURE at https://www.xiaohongshu.com/search_result")))
+        with mock.patch.object(xs, "pause"), mock.patch.object(xs, "RESULT_WAIT_S", 0.05):
+            with self.assertRaises(xs.Blocked) as cm:
+                xs.search_keyword(page, "收纳", 0)
+        self.assertEqual(str(cm.exception), "refused: HTTP_RESPONSE_CODE_FAILURE")
+        self.assertEqual(page.n, 0)  # one attempt, no reload
+
+    def test_other_errors_are_not_called_refused(self):
+        page = FakePage(lambda p: (_ for _ in ()).throw(Exception("Timeout 60000ms exceeded")))
+        with self.assertRaises(Exception) as cm:
+            xs.goto(page, "https://www.xiaohongshu.com/explore")
+        self.assertNotIsInstance(cm.exception, xs.Blocked)
+
+
 class FullKeyword(unittest.TestCase):
     def test_keeps_the_answer_for_the_whole_keyword(self):
         batches = [("keyword=收", ["收技巧"]), ("keyword=收纳", ["收纳技巧", "收纳盒"]), ("keyword=收纳&x=1", ["收纳技巧", "收纳神器"])]
