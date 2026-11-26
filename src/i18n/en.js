@@ -1745,6 +1745,7 @@ export default {
   "se.copy": "Copy data",
   "se.copied": "Copied. Paste it into a Claude chat.",
   "se.copyFail": "Could not copy. Please try again.",
+  "se.run.sealed": "The collector is sealed for now. The 小红书 account got a warning for automated access, so collecting is off to protect it. Files you already collected can still be imported in step 1 below.",
   "se.run.title": "Collect from keywords (PC)",
   "se.run.hint": "Separate keywords with commas (,) or new lines, up to {max}. Each is searched on its own, one after another. 검색하기 starts the collector on this PC and shows the results below. Nothing runs unless you press it.",
   "se.run.ph": "e.g. 海南 新家, 小户型 收纳, 租房改造",

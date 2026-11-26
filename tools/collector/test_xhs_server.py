@@ -143,5 +143,14 @@ class Live(unittest.TestCase):
             srv.make_server(self.port)
 
 
+class Sealed(unittest.TestCase):
+    def test_nothing_that_opens_xhs_runs_while_sealed(self):
+        import xhs_search
+
+        self.assertTrue(xhs_search.SEALED)
+        for cmd in (["login"], ["serve"], ["install"], ["search", "收纳"]):
+            self.assertEqual(xhs_search.main(cmd), 4, cmd)
+
+
 if __name__ == "__main__":
     unittest.main()

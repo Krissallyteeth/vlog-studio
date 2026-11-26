@@ -567,6 +567,12 @@ def cmd_serve(_args):
     return xhs_server.serve()
 
 
+# Sealed 2026-11-26: the user's 小红书 account got a warning for automated access. Nothing that opens
+# 小红书 runs while this is True (logout and uninstall still work). Only the user may lift it.
+SEALED = True
+SEALED_MESSAGE = ("[봉인] 수집기는 잠시 봉인되어 있어요. 小红书 계정이 자동 접속 경고를 받아서, "
+                  "계정 보호를 위해 小红书를 여는 명령(login·search·serve·install)은 실행되지 않아요.")
+
 LINK_KEY = r"Software\Classes\vlogstudio-collector"
 
 
@@ -627,7 +633,10 @@ def main(argv=None):
     sub.add_parser("install", help="Windows: 앱에서 링크로 대기 모드를 켤 수 있게 등록")
     sub.add_parser("uninstall", help="Windows: 링크로 켜기 등록 지우기")
     args = ap.parse_args(argv)
-    cmds = {"login": cmd_login, "logout": cmd_logout, "search": cmd_search, "serve": cmd_serve, "install": cmd_install, "uninstall": cmd_uninstall}
+    if SEALED and args.cmd in ("login", "search", "serve", "install"):
+        print(SEALED_MESSAGE)
+        return 4
+    cmds ={"login": cmd_login, "logout": cmd_logout, "search": cmd_search, "serve": cmd_serve, "install": cmd_install, "uninstall": cmd_uninstall}
     return cmds[args.cmd](args)
 
 

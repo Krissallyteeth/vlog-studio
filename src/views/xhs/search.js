@@ -3,7 +3,7 @@ import { navigate } from '../../router.js';
 import { confirmDialog, copyText, esc, toast } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { getMetaValue, setMetaValue } from '../../xhs/db.js';
-import { MAX_KEYWORDS, MAX_KEYWORD_LEN, cleanCovers, collectorStatus, followJob, launchCollector, parseKeywords, startCollect, waitForCollector } from '../../xhs/collector-client.js';
+import { COLLECTOR_SEALED, MAX_KEYWORDS, MAX_KEYWORD_LEN, cleanCovers, collectorStatus, followJob, launchCollector, parseKeywords, startCollect, waitForCollector } from '../../xhs/collector-client.js';
 import { HOT_RATIO, MIN_NOTES, analyzeEvidence, buildBrief, inBoth, noteLink, parseEvidence } from '../../xhs/search-evidence.js';
 import { xhsPage } from './shell.js';
 
@@ -64,7 +64,7 @@ function showJob(job) {
 }
 
 async function runCollect() {
-  if (run.busy) return;
+  if (run.busy || COLLECTOR_SEALED) return;
   const { keywords, error } = parseKeywords(draft.keywords);
   if (error) return toast(t(`se.run.${error}`, { max: MAX_KEYWORDS, len: MAX_KEYWORD_LEN }), { tone: 'error' });
   run.busy = true;
@@ -219,14 +219,20 @@ export async function renderSearch({ isCurrent }) {
        <button type="button" class="btn btn-ghost text-danger mt-1" data-x="remove">${icon('trash', 'size-4')}${esc(t('se.removeSet'))}</button>`
     : '';
 
-  const body = `
-    <section class="card"><h2 class="text-[16px] font-semibold">${esc(t('se.run.title'))}</h2>
+  const runCard = COLLECTOR_SEALED
+    ? `<section class="card"><h2 class="text-[16px] font-semibold">${esc(t('se.run.title'))}</h2>
+      <p class="mt-1 text-[13px] text-muted">${esc(t('se.run.sealed'))}</p>
+    </section>`
+    : `<section class="card"><h2 class="text-[16px] font-semibold">${esc(t('se.run.title'))}</h2>
       <p class="mt-1 text-[13px] text-muted">${esc(t('se.run.hint', { max: MAX_KEYWORDS }))}</p>
       <textarea class="textarea mt-3" rows="2" id="se-keywords" placeholder="${esc(t('se.run.ph'))}">${esc(draft.keywords)}</textarea>
       <button type="button" class="btn btn-primary mt-2" id="se-run-go" data-x="run" ${run.busy ? 'disabled' : ''}>${icon('search', 'size-5')}${esc(t('se.run.go'))}</button>
       <div id="se-run-state">${runStateHtml()}</div>
       <p class="mt-2 text-[12px] text-muted">${esc(t('se.run.setup'))}</p>
-    </section>
+    </section>`;
+
+  const body = `
+    ${runCard}
     <section class="card mt-3"><h2 class="text-[16px] font-semibold">${esc(t('se.step1'))}</h2>
       <p class="mt-1 text-[13px] text-muted">${esc(t('se.step1Hint'))}</p>
       <label class="btn btn-primary mt-3 cursor-pointer">${icon('upload', 'size-5')}${esc(t('se.import'))}<input type="file" id="se-file" accept="application/json,.json" class="sr-only" /></label>
