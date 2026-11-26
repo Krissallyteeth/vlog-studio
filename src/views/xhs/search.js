@@ -183,25 +183,20 @@ export async function renderSearch({ isCurrent }) {
     : '';
 
   const body = `
-    <section class="card mb-3"><h2 class="text-[16px] font-semibold">${esc(t('se.run.title'))}</h2>
+    <section class="card"><h2 class="text-[16px] font-semibold">${esc(t('se.run.title'))}</h2>
       <p class="mt-1 text-[13px] text-muted">${esc(t('se.run.hint', { max: MAX_KEYWORDS }))}</p>
       <textarea class="textarea mt-3" rows="2" id="se-keywords" placeholder="${esc(t('se.run.ph'))}">${esc(draft.keywords)}</textarea>
       <button type="button" class="btn btn-primary mt-2" id="se-run-go" data-x="run" ${run.busy ? 'disabled' : ''}>${icon('search', 'size-5')}${esc(t('se.run.go'))}</button>
       <div id="se-run-state">${runStateHtml()}</div>
       <p class="mt-2 text-[12px] text-muted">${esc(t('se.run.setup'))}</p>
     </section>
-    <section class="notice notice-strong">${icon('info', 'size-5 mt-0.5')}<div class="text-[14px] leading-relaxed"><b>${esc(t('se.howTitle'))}</b>
-      <ol class="mt-1 list-decimal pl-5 text-muted"><li>${esc(t('se.how1'))}</li><li>${esc(t('se.how2'))}</li><li>${esc(t('se.how3'))}</li><li>${esc(t('se.how4'))}</li></ol>
-      <p class="mt-1 text-[12px] text-muted">${esc(t('se.privacy'))}</p></div></section>
     <section class="card mt-3"><h2 class="text-[16px] font-semibold">${esc(t('se.step1'))}</h2>
       <p class="mt-1 text-[13px] text-muted">${esc(t('se.step1Hint'))}</p>
       <label class="btn btn-primary mt-3 cursor-pointer">${icon('upload', 'size-5')}${esc(t('se.import'))}<input type="file" id="se-file" accept="application/json,.json" class="sr-only" /></label>
       ${picker}
     </section>
     ${ev ? `<h2 class="mt-5 text-[17px] font-semibold">${esc(t('se.step2'))}</h2><p class="mt-1 text-[13px] text-muted">${esc(t('se.step2Hint', { r: HOT_RATIO }))}</p>${evidenceView(ev, an, covers)}
-    <section class="card mt-5"><h2 class="text-[16px] font-semibold">${esc(t('se.step3'))}</h2>
-      <button type="button" class="btn btn-primary mt-3" data-x="copy">${icon('copy', 'size-5')}${esc(t('se.copy'))}</button>
-    </section>` : ''}`;
+    <button type="button" class="btn btn-primary mt-5" data-x="copy">${icon('copy', 'size-5')}${esc(t('se.copy'))}</button>` : ''}`;
 
   const root = xhsPage({ nav: 'more', back: '#/more', title: t('se.title'), sub: t('se.sub'), body });
 
