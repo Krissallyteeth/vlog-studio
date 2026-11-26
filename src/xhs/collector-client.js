@@ -5,6 +5,10 @@
  * registered it. The collector answers only this app's address and only from 127.0.0.1.
  */
 
+// Sealed 2026-11-26: the user's 小红书 account got a warning for automated access, so the app
+// neither starts nor calls the collector. Only the user may lift it (also SEALED in xhs_search.py).
+export const COLLECTOR_SEALED = true;
+
 export const COLLECTOR_URL = 'http://127.0.0.1:47831';
 export const LAUNCH_URL = 'vlogstudio-collector://start';
 export const MAX_KEYWORDS = 5;
