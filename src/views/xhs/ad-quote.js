@@ -5,6 +5,9 @@ import { quoteOutcome } from '../../xhs/ad-sim.js';
 import { parseAdQuote } from '../../xhs/ocr-ad-quote.js';
 import { activeBaseline, getPost, listPosts, onXhsChange, savePosts } from '../../xhs/store.js';
 import { decisionCardHtml } from './ad-sim.js';
+import { calibrate } from '../../xhs/learn-apply.js';
+import { learnModel } from '../../xhs/learning.js';
+import { getMetaValue } from '../../xhs/db.js';
 
 /*
  * 薯条 purchase screen ("预计提升转化数 7-31") on the D+1 / D+2 upload screen: its own upload slot,
@@ -60,7 +63,8 @@ export function bindQuote(root, ctx) {
     const [posts, baseline] = await Promise.all([listPosts(), activeBaseline()]);
     const fresh = post && posts.find((p) => p.id === post.id);
     const has = fresh?.adQuotes?.some((q) => q.stage === stageLabel(stage));
-    box.innerHTML = has ? decisionCardHtml(fresh, posts, baseline) : '';
+    const model = learnModel(posts, baseline, (await getMetaValue('learning')) ?? {});
+    box.innerHTML = has ? decisionCardHtml(fresh, posts, baseline, model) : '';
   };
   drawDecision();
   const off = onXhsChange(() => (root.isConnected ? drawDecision() : off()));
@@ -116,7 +120,7 @@ export function bindQuote(root, ctx) {
 }
 
 /** The post's purchase-screen readings with what happened (post detail, 4 · 광고). */
-export function quotesHtml(post, posts) {
+export function quotesHtml(post, posts, model = null) {
   if (!post.adQuotes?.length) return '';
   const items = post.adQuotes.map((q) => {
     const o = quoteOutcome(post, q, posts);
@@ -127,9 +131,11 @@ export function quotesHtml(post, posts) {
         : t('aq.result.wait')
       : t(q.decision === 'skipped' ? 'aq.result.skipped' : 'aq.result.none');
     const sim = o.sim ? t('aq.sim', { r: range(o.sim.range), m: o.sim.median, n: o.sim.basedOn }) : t('aq.simNone');
+    const adj = calibrate(model, q.estimate);
+    const adjText = adj ? `<p class="mt-1 text-[12px]">${esc(t('aq.calibrated', { r: range(adj), x: Math.round(model.ads.ratio * 100), n: model.ads.n }))}</p>` : '';
     const tone = o.where === 'above' ? 'cf-good' : o.where === 'below' ? 'cf-mid' : 'bg-surface-2';
     return `<li class="rounded-[10px] ${tone} p-2.5 text-[13px]"><div class="flex items-start justify-between gap-2"><b>${esc(head)}</b><button type="button" class="link-btn text-[12px]" data-aq-del="${esc(q.id)}">${esc(t('common.delete'))}</button></div>
-      <p class="mt-1">${esc(result)}</p><p class="mt-1 text-[12px] text-muted">${esc(sim)} · ${esc(q.capturedAt.slice(0, 16).replace('T', ' '))}</p></li>`;
+      <p class="mt-1">${esc(result)}</p>${adjText}<p class="mt-1 text-[12px] text-muted">${esc(sim)} · ${esc(q.capturedAt.slice(0, 16).replace('T', ' '))}</p></li>`;
   });
   return `<div class="mt-3"><p class="text-[13px] font-semibold">${esc(t('aq.listTitle'))}</p><ul class="mt-1 flex flex-col gap-2">${items.join('')}</ul></div>`;
 }

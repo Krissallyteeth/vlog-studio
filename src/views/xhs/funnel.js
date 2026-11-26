@@ -34,19 +34,22 @@ function stepRow(s, i) {
     <ul class="mt-1 flex flex-col gap-0.5 text-[12px]">${lines}</ul></li>`;
 }
 
-function checkHtml(c, post, which) {
+function checkHtml(c, post, which, model) {
   const facts = c.evidence === 'segment'
     ? t('fb.segment', { to: c.to, loss: Math.round(c.loss * 100) })
     : c.metrics.map((m) => t('fn.fact', { m: name(m.key), now: val(m.key, m.value), base: val(m.key, m.base) })).join(' · ');
   const peer = c.metrics?.map((m) => post[`${which}Meta`]?.peer?.[m.key]).find((p) => p && isNum(p.value) && isNum(p.median));
   const peerKey = c.metrics?.find((m) => post[`${which}Meta`]?.peer?.[m.key])?.key;
   const peerText = peer ? `<p class="mt-1 text-[12px] text-muted">${esc(t('fb.peer', { m: name(peerKey), now: fmt(peerKey, peer.value), base: fmt(peerKey, peer.median) }))}</p>` : '';
+  // What happened after this check on earlier posts (learning.js, edit).
+  const track = model?.edit?.steps?.[c.step];
+  const trackText = track?.n ? `<p class="mt-2 text-[12px] ${track.verdict === 'unclear' ? 'text-muted' : ''}">${esc(t('fn.track', { m: track.improved, n: track.n, verdict: t(`lr.edit.v.${track.verdict}`) }))}</p>` : '';
   return `<li class="rounded-[10px] bg-surface-2 p-3"><p class="text-[13px] font-semibold">${esc(t(`fn.step.${c.step}`))} · ${esc(t(`fn.why.${c.step}`))}</p>
-    <p class="mt-1 text-[13px]"><b>${esc(t('fb.evidence'))}</b> ${esc(facts)}</p>${peerText}${editingPlanHtml(c)}</li>`;
+    <p class="mt-1 text-[13px]"><b>${esc(t('fb.evidence'))}</b> ${esc(facts)}</p>${peerText}${editingPlanHtml(c)}${trackText}</li>`;
 }
 
-export function funnelHtml(post, posts, baseline, which = 'd1') {
-  const f = postFunnel(post, posts, baseline, which);
+export function funnelHtml(post, posts, baseline, which = 'd1', model = null) {
+  const f = postFunnel(post, posts, baseline, which, model);
   const label = which === 'd1' ? 'D+1' : 'D+2';
   const toggle = `<div class="segmented !w-auto" role="radiogroup">${['d1', 'd2'].map((w) => `<button type="button" class="seg px-3 ${w === which ? 'is-active' : ''}" data-funnel="${w}">${w === 'd1' ? 'D+1' : 'D+2'}</button>`).join('')}</div>`;
   let head = '';
@@ -57,7 +60,7 @@ export function funnelHtml(post, posts, baseline, which = 'd1') {
   else head = t(`fn.status.${f.status}`);
   const steps = f.status === 'baseline' ? '' : `<ol class="mt-3 flex flex-col gap-3">${f.steps.map(stepRow).join('')}</ol>`;
   const search = isNum(f.searchShare) ? `<p class="mt-2 text-[12px] text-muted">${esc(t('fn.search', { p: (f.searchShare * 100).toFixed(1) }))}</p>` : '';
-  const checks = f.checks.length ? `<h4 class="mt-4 text-[14px] font-semibold">${esc(t('fn.checksTitle'))}</h4><ul class="mt-2 flex flex-col gap-3">${f.checks.map((c) => checkHtml(c, post, which)).join('')}</ul>` : '';
+  const checks = f.checks.length ? `<h4 class="mt-4 text-[14px] font-semibold">${esc(t('fn.checksTitle'))}</h4><ul class="mt-2 flex flex-col gap-3">${f.checks.map((c) => checkHtml(c, post, which, model)).join('')}</ul>${f.learned ? `<p class="mt-2 text-[12px]">${esc(t('fn.learned'))}</p>` : ''}` : '';
   const missing = f.missing.length ? `<p class="mt-2 text-[12px] text-muted">${esc(t('fn.missing', { list: f.missing.map((k) => t(`fn.step.${k}`)).join(', ') }))}</p>` : '';
   const refNote = f.ref ? `<p class="mt-2 text-[12px] text-muted">${esc(t(which === 'd1' ? 'fn.refD1' : 'fn.refD2', { v: f.ref.version ?? '', n: Math.max(0, ...Object.values(f.ref.counts)) }))}</p>` : '';
   return `<div id="funnel-card" class="mt-2 rounded-[12px] border border-line p-3">
@@ -68,11 +71,11 @@ export function funnelHtml(post, posts, baseline, which = 'd1') {
 }
 
 /** D+1 / D+2 switch inside the card (redraws only the card). */
-export function bindFunnel(root, post, posts, baseline) {
+export function bindFunnel(root, post, posts, baseline, model = null) {
   root.addEventListener('click', (e) => {
     const w = e.target.closest('[data-funnel]')?.dataset.funnel;
     if (!w) return;
     const card = root.querySelector('#funnel-card');
-    if (card) card.outerHTML = funnelHtml(post, posts, baseline, w);
+    if (card) card.outerHTML = funnelHtml(post, posts, baseline, w, model);
   });
 }

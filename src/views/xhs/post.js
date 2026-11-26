@@ -20,6 +20,7 @@ import { noteMetaHtml } from './note-meta.js';
 import { bindFunnel, funnelHtml } from './funnel.js';
 import { adSimHtml, bindAdSim } from './ad-sim.js';
 import { bindQuotes, quotesHtml } from './ad-quote.js';
+import { screenModel } from './learning.js';
 import { SPONSOR_TYPES } from '../../xhs/type-table.js';
 import { regionOptions } from './operating-insights.js';
 import { relativeNote, xhsPage } from './shell.js';
@@ -79,6 +80,7 @@ export async function renderPost([id], { isCurrent, keepY }) {
     return null;
   }
   const project = post.projectId ? await getProject(post.projectId) : null;
+  const model = await screenModel(posts, baseline);
   const report = analysePost(post, posts, baseline);
   // The funnel step to fix first, against my own records; plus what this post's ads showed.
   const focus = postFocus(post, posts, baseline);
@@ -205,9 +207,9 @@ export async function renderPost([id], { isCurrent, keepY }) {
         <div class="mt-3 flex flex-wrap gap-2">${['d1', 'd2'].map((w) => `<a class="btn btn-secondary btn-sm" href="#/ocr/${encodeURIComponent(post.id)}/${w}">${icon('scan', 'size-4')}${esc(t(Object.values(post[w] ?? {}).some((v) => v != null) ? 'post.reShot' : 'post.shot', { stage: w === 'd1' ? 'D+1' : 'D+2' }))}</a>`).join('')}</div>
         <p class="mt-1 text-[12px] text-muted">${esc(t('post.reShotHelp'))}</p>
       </section>
-      <section class="card mt-3"><h2 class="section-step">4 · ${esc(t('post.s.ads'))}</h2>${adFlowHtml(adTimeline(post, posts, baseline))}<div class="mt-2" id="p-ads">${adsHtml()}</div>${quotesHtml(post, posts)}${adSimHtml(posts, { post, baseline })}</section>
+      <section class="card mt-3"><h2 class="section-step">4 · ${esc(t('post.s.ads'))}</h2>${adFlowHtml(adTimeline(post, posts, baseline))}<div class="mt-2" id="p-ads">${adsHtml()}</div>${quotesHtml(post, posts, model)}${adSimHtml(posts, { post, baseline, model })}</section>
       <section class="card mt-3"><h2 class="section-step">5 · ${esc(t('post.s.analysis'))}</h2>
-        ${funnelHtml(post, posts, baseline, 'd1')}
+        ${funnelHtml(post, posts, baseline, 'd1', model)}
         ${insightList('pf', focus.items.filter((item) => item.key === 'profileConv'))}
         ${expHtml()}
         ${noteMetaHtml(post.d1Meta, post, 'D+1', { posts })}${noteMetaHtml(post.d2Meta, post, 'D+2', { posts })}
@@ -215,8 +217,8 @@ export async function renderPost([id], { isCurrent, keepY }) {
       <button type="button" class="btn btn-ghost text-danger mt-4" id="p-delete">${icon('trash', 'size-4')}${esc(t('post.delete'))}</button>`,
   });
 
-  bindFunnel(root, post, posts, baseline);
-  bindAdSim(root, posts, { post, baseline });
+  bindFunnel(root, post, posts, baseline, model);
+  bindAdSim(root, posts, { post, baseline, model });
   bindQuotes(root, post);
   const save = async (patch, msg = t('common.saved')) => {
     await savePosts([{ ...post, ...patch }]);

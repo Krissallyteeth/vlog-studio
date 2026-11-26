@@ -2,6 +2,7 @@ import { adInWindow } from './ad-report.js';
 import { editingPlan } from './feedback.js';
 import { METRIC } from './metrics.js';
 import { median, relDiff, stage } from './stats.js';
+import { applies } from './learn-apply.js';
 
 /*
  * Funnel card for one post: 노출 → 클릭 → 시청(오프닝) → 시청(중후반) → 반응 → 팔로우.
@@ -97,7 +98,12 @@ function checksFor(step, post) {
  * status: 'baseline' (no reference) | 'metrics' (no values) | 'mixed' (ads in the window or not a
  * valid record: shown, not judged) | 'checks' | 'steady' | 'partial'.
  */
-export function postFunnel(post, posts, baseline, which = 'd1') {
+/**
+ * `model` (optional, from learning.js): when active and not locked, weak steps are ordered by how
+ * closely each step goes with the follow rate on my account (funnel) and checks that rarely helped
+ * the next post go last (edit). Without it: top-down, as before.
+ */
+export function postFunnel(post, posts, baseline, which = 'd1', model = null) {
   const ref = funnelReference(posts, baseline, which);
   const values = funnelValues(post, which);
   const hasValues = STEPS.some((s) => s.metrics.some((k) => isNum(values[k])));
@@ -119,12 +125,25 @@ export function postFunnel(post, posts, baseline, which = 'd1') {
   }
 
   const checks = [];
-  let firstWeak = -1;
-  steps.forEach((s, i) => {
-    if (s.state !== 'weak') return;
-    if (firstWeak < 0) firstWeak = i;
-    if (checks.length < MAX_CHECKS) checks.push({ step: s.key, evidence: 'metric', metrics: s.metrics.filter((m) => m.state === 'weak'), ...checksFor(s, post) });
-  });
+  const firstWeak = steps.findIndex((s) => s.state === 'weak');
+  let weak = steps.filter((s) => s.state === 'weak');
+  let learned = false;
+  if (applies(model, 'funnel') && weak.length > 1) {
+    const rank = (k) => {
+      const i = model.funnel.order.indexOf(k);
+      return i < 0 ? model.funnel.order.length : i; // the follow step itself has no rank: keep it last
+    };
+    const before = weak.map((s) => s.key).join();
+    weak = [...weak].sort((a, b) => rank(a.key) - rank(b.key));
+    learned = learned || weak.map((s) => s.key).join() !== before;
+  }
+  if (applies(model, 'edit') && weak.length > 1) {
+    const before = weak.map((s) => s.key).join();
+    const unclear = (k) => (model.edit.steps[k]?.verdict === 'unclear' ? 1 : 0);
+    weak = [...weak].sort((a, b) => unclear(a.key) - unclear(b.key));
+    learned = learned || weak.map((s) => s.key).join() !== before;
+  }
+  for (const s of weak.slice(0, MAX_CHECKS)) checks.push({ step: s.key, evidence: 'metric', metrics: s.metrics.filter((m) => m.state === 'weak'), ...checksFor(s, post) });
   steps.forEach((s, i) => {
     s.bottleneck = checks.some((c) => c.step === s.key);
     // Below the first weak step the sample of viewers is already smaller: read it for reference only.
@@ -136,5 +155,5 @@ export function postFunnel(post, posts, baseline, which = 'd1') {
     checks.push({ step: 'opening', evidence: 'segment', loss: seg.loss, to: seg.to, ...editingPlan('retain5s', post) });
   }
   const missing = steps.filter((s) => s.state === 'missing').map((s) => s.key);
-  return { ...base, checks, missing, status: checks.length ? 'checks' : missing.length ? 'partial' : 'steady' };
+  return { ...base, checks, missing, learned, status: checks.length ? 'checks' : missing.length ? 'partial' : 'steady' };
 }

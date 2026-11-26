@@ -18,6 +18,8 @@ import { verdictBadge } from './ad-flow.js';
 import { adInWindow, postRows } from '../../xhs/ad-report.js';
 import { operatingInsightsHtml } from './operating-insights.js';
 import { bindTypeTable, typeTableHtml } from './type-table.js';
+import { bindLearning, learningCardHtml, loadLearning, updateLearningLog } from './learning.js';
+import { learnModel } from '../../xhs/learning.js';
 
 const CHARTS = [
   { key: 'views' },
@@ -30,7 +32,9 @@ const CHARTS = [
 const CF = { good: 'cf-good', mid: 'cf-mid', bad: 'cf-bad' };
 
 export async function renderDashboard({ isCurrent, keepY }) {
-  const [posts, income, baseline, settings] = await Promise.all([listPosts(), listIncome(), activeBaseline(), getSettings()]);
+  const [posts, income, baseline, settings, learning] = await Promise.all([listPosts(), listIncome(), activeBaseline(), getSettings(), loadLearning()]);
+  const model = learnModel(posts, baseline, learning);
+  const learnLog = posts.length ? await updateLearningLog(model, learning) : learning.log;
   if (!isCurrent()) return null;
   const list = ordered(posts);
   const valid = validPosts(posts);
@@ -156,6 +160,7 @@ export async function renderDashboard({ isCurrent, keepY }) {
             <p class="mt-2 text-[12px] text-muted">${esc(t('dash.clickRow'))}</p>
           </section>
           ${typeTableHtml(posts)}
+          ${learningCardHtml(model, learnLog)}
           ${longTermHtml(posts, baseline, crit)}
         </aside>
       </div>
@@ -210,6 +215,7 @@ export async function renderDashboard({ isCurrent, keepY }) {
   }
   if (!empty) analysis.bind(root);
   if (!empty) bindTypeTable(root, posts, settings);
+  if (!empty) bindLearning(root);
   // Opened from Data → 광고기록 "see the analysis": go to that section.
   try {
     const to = sessionStorage.getItem('xhs-scroll');

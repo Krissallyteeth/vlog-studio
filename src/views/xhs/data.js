@@ -77,8 +77,9 @@ export async function renderData([tab = 'posts', focus], { isCurrent, keepY }) {
     const stats = adAnalysisSection({ posts, income, settings, baseline }, () => navigate('/data/ads', { replace: true }));
     const split = sec.html.indexOf('<section');
     const { adSimHtml, bindAdSim } = await import('./ad-sim.js');
-    body.innerHTML = `${sec.html.slice(0, split)}${stats.top}${adSimHtml(posts)}<div class="mt-3">${sec.html.slice(split)}</div>${stats.rest}`;
-    bindAdSim(body, posts);
+    const model = await (await import('./learning.js')).screenModel(posts, baseline);
+    body.innerHTML = `${sec.html.slice(0, split)}${stats.top}${adSimHtml(posts, { model })}<div class="mt-3">${sec.html.slice(split)}</div>${stats.rest}`;
+    bindAdSim(body, posts, { model });
     sec.bind(body);
     stats.bind(body);
   }

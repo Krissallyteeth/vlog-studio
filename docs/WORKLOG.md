@@ -30,7 +30,7 @@
 - [ ] 앱 '검색하기' → 수집기 자동 켜기: 사용자 PC에서 install.bat 실행 후 실제로 1회 확인(Chrome 확인 창, 배포 주소에서 동작).
 - [ ] 수집기 수정분(0개 구분·새로고침 1회, 덮어쓰기 방지, 필터 메뉴 글자 제외)을 실제 小红书에서 1회 확인. 간헐적 0개의 원인은 아직 모름(다음에 생기면 파일의 `error` 확인).
 
-- [ ] **개편 진행 중** `docs/PLAN-funnel.md`: 1~4단계(검색 근거·퍼널 카드·유형별 전환율·광고 시뮬레이터) 개발됨. 다음은 5단계(써 본 뒤 필요한 것만 다시 판단). 되돌리기 기준 커밋 `bfc3d8d`.
+- [ ] **개편 진행 중** `docs/PLAN-funnel.md`: 1~4단계와 학습 1차(퍼널 순서·편집 점검 효과·광고 예상 보정) 개발됨. 다음은 학습 2차(인사이트 요인 순위, 광고 판단 가중치). 되돌리기 기준 커밋 `bfc3d8d`.
 
 - [ ] 기존 콘텐츠의 촬영 지역을 배포 기록에서 설정하고, 동일 D+1 시점의 두 추천 경로 상세 캡처를 추가하면 비교 표본을 늘릴 수 있음.
 
@@ -80,6 +80,7 @@
 | 유형별 전환 | `src/xhs/type-table.js`(주 유형 기준 표·보조 태그 비교·협찬 옮기기), 화면 `src/views/xhs/type-table.js`(대시보드) |
 | 광고 시뮬레이터 | `src/xhs/ad-sim.js`(과거 关注 주문 비율·단가 범위·예상 정확도·구매 전 예상 결과), 화면 `src/views/xhs/ad-sim.js`(③광고기록·게시물 4 · 광고) |
 | 구매 전 예상치 | `src/xhs/ocr-ad-quote.js`(薯条 결제 화면 읽기), 화면 `src/views/xhs/ad-quote.js`(D+1/D+2 캡처 화면의 별도 칸, 게시물 4 · 광고 목록) |
+| 학습 | `src/xhs/learning.js`(모델: 퍼널·편집·광고), `src/xhs/learn-apply.js`(적용 도우미), 화면 `src/views/xhs/learning.js`(대시보드 학습 현황, 잠금, 바뀐 내용) |
 | 화면 | `src/views/xhs/dashboard.js`, `post.js`(콘텐츠 목록·게시물 상세), `data.js`(데이터 탭 5개), `note-meta.js`, `charts.js` |
 | DB 스키마 | `supabase/schema.sql` |
 
@@ -495,3 +496,14 @@
 - 예상치 단가 비교 문구가 "비슷한 글의 평소 단가"인지 "내 평소 단가"인지 밝힘.
 - 주요 파일: `src/xhs/ad-sim.js`, `src/views/xhs/ad-sim.js`(`decisionCardHtml`), `src/views/xhs/ad-quote.js`, `src/i18n/{ko,en,zh}.js`(CRLF 유지), `tests/ad-sim-post.test.js`(+4).
 - 검증: Vitest 289개, 빌드·하위 경로 검사, 브라우저에서 예상치 저장 직후 카드 표시·D+2 전환 시 숨김(PC·390px).
+
+### [Claude] 2026-11-26 — 학습 1차: 내 기록으로 제안을 조금씩 조정
+- 사용자 요청: 광고뿐 아니라 인사이트·퍼널 등 모든 제안이 데이터가 쌓일수록 나아지게. 1차 승인. AGENTS.md에 학습 원칙 추가.
+- `src/xhs/learning.js`: 기록에서 매번 다시 계산하는 모델(저장 안 함). 영역별 최소 건수 전에는 "학습 중", 잠그면 원래 규칙.
+  - 퍼널: 유효 D+1(광고가 D·D+1에 없는 글) 8편부터, 단계 대표 지표(노출·클릭률·5초 유지율·시청 비율·상호작용률)와 팔로워 전환율의 순위 상관을 n/(n+10)로 당김 → `postFunnel`의 부족 단계 순서.
+  - 편집: 기본 규칙의 점검마다 다음 유효 글의 같은 지표가 좋아졌는지, 3건부터 "자주 좋아짐/반반/효과 잘 안 보임" → 퍼널 카드에 표시, 효과 안 보인 점검은 뒤로.
+  - 광고: 실제 ÷ 플랫폼 예상 중간의 중앙값(3건부터) → 구매 전 예상치·코멘트에 보정 범위. 关注 주문 3건부터 시뮬레이터 중앙값에 최근 가중(5건마다 무게 절반).
+- 대시보드 "학습 현황" 카드: 영역별 상태(학습 중 n/필요·반영 중·잠김), 배운 내용, 잠그기/다시 학습, 최근 바뀐 내용(동기화되는 meta `learning`에 잠금·최근 값·기록 30개).
+- 주요 파일: `src/xhs/learning.js`, `src/xhs/learn-apply.js`, `src/xhs/funnel.js`, `src/xhs/ad-sim.js`, `src/views/xhs/{learning,funnel,ad-sim,ad-quote,post,data,dashboard}.js`,
+  `src/i18n/{ko,en,zh}.js`(35개, CRLF 유지), `tests/learning.test.js`(11개).
+- 검증: Vitest 300개, 빌드·하위 경로 검사, 가상 게시물 11편으로 PC·390px(학습 현황 표시, 잠금 시 퍼널이 원래 순서로·다시 학습 시 배운 순서로, 콘솔 오류·가로 넘침 없음).

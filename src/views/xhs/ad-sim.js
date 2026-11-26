@@ -59,14 +59,15 @@ function postCommentHtml(ctx) {
 }
 
 /** The "if this post gets an ad" card alone (upload screen, right after saving an estimate). */
-export function decisionCardHtml(post, posts, baseline) {
-  return postCommentHtml(postAdContext(post, posts, baseline));
+export function decisionCardHtml(post, posts, baseline, model = null) {
+  return postCommentHtml(postAdContext(post, posts, baseline, model));
 }
 
 /** `opts.post` (with `opts.baseline`): the card on a post, using orders on posts like this one. */
 export function adSimHtml(posts, opts = {}) {
-  const ctx = opts.post ? postAdContext(opts.post, posts, opts.baseline) : null;
-  const h = ctx?.history ?? followHistory(posts);
+  const ctx = opts.post ? postAdContext(opts.post, posts, opts.baseline, opts.model) : null;
+  const recent = !!opts.model && !opts.model.ads?.locked && !!opts.model.ads?.recency;
+  const h = ctx?.history ?? followHistory(posts, { recent });
   const spend = isNum(h.spend) ? Math.round(h.spend) : '';
   const hist = h.n
     ? `<p class="mt-1 text-[13px] leading-relaxed">${esc(ctx?.similar ? t('sim.historySimilar', { n: h.n, cost: range(h.cost), side: t(`sim.c.side.${ctx.similar.high ? 'high' : 'low'}`), stage: ctx.which === 'd2' ? 'D+2' : 'D+1' }) : t('sim.history', { n: h.n, cost: range(h.cost) }))}${h.zeroFollow ? ` ${esc(t('sim.zero', { n: h.zeroFollow }))}` : ''}${h.reference ? ` <span class="badge bg-surface-2" title="${esc(t('sim.refHelp', { n: MIN_ORDERS }))}">${esc(t('ops.ref'))}</span>` : ''}</p>`
@@ -76,12 +77,13 @@ export function adSimHtml(posts, opts = {}) {
       <label class="field"><span class="field-label">${esc(t('sim.spend'))}</span><input class="input tabular-nums" inputmode="decimal" id="sim-spend" value="${spend}" placeholder="0" /></label>
       <label class="field"><span class="field-label">${esc(t('sim.credit'))}</span><input class="input tabular-nums" inputmode="decimal" id="sim-credit" value="" placeholder="0" /></label></div>` : ''}
     <div id="sim-out">${resultHtml(h, spend === '' ? null : spend, 0)}</div>
-    <p class="mt-2 text-[12px] text-muted">${esc(t('sim.note'))}</p>${ctx ? postCommentHtml(ctx) : ''}${accuracyHtml(posts)}</section>`;
+    <p class="mt-2 text-[12px] text-muted">${esc(t('sim.note'))}${h.recent ? ` ${esc(t('sim.recentNote'))}` : ''}</p>${ctx ? postCommentHtml(ctx) : ''}${accuracyHtml(posts)}</section>`;
 }
 
 /** Recalculates while typing. */
 export function bindAdSim(root, posts, opts = {}) {
-  const h = opts.post ? postAdContext(opts.post, posts, opts.baseline).history : followHistory(posts);
+  const recent = !!opts.model && !opts.model.ads?.locked && !!opts.model.ads?.recency;
+  const h = opts.post ? postAdContext(opts.post, posts, opts.baseline, opts.model).history : followHistory(posts, { recent });
   const read = (id) => {
     const v = Number(String(root.querySelector(id)?.value ?? '').replace(/[,元¥\s]/g, ''));
     return Number.isFinite(v) ? v : null;

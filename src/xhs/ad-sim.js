@@ -2,6 +2,7 @@ import { adviceAt } from './ad-advice.js';
 import { adInWindow, adOrders, goalType } from './ad-report.js';
 import { postFunnel } from './funnel.js';
 import { isValid, median, ordered, stage } from './stats.js';
+import { applies, calibrate, recentMedian } from './learn-apply.js';
 
 /*
  * Promotion simulator for 关注 (follower) 薯条 orders, from my own past orders only.
@@ -29,17 +30,20 @@ export function followOrders(posts) {
 }
 
 /** Past results in one place: per-follower real cost range and the follower rate range. */
-export function followHistory(posts) {
-  const orders = followOrders(posts);
+/** `opts.recent`: the median rate counts recent orders more (learned from my records, see learning.js). */
+export function followHistory(posts, opts = {}) {
+  const orders = followOrders(posts).sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const rates = orders.map((o) => o.rate).sort((a, b) => a - b);
+  const mid = opts.recent ? recentMedian(orders.map((o) => o.rate)) : median(rates);
   const costs = orders.map((o) => o.realCost).filter(isNum).sort((a, b) => a - b);
   return {
     n: orders.length,
     reference: orders.length < MIN_ORDERS,
     zeroFollow: orders.filter((o) => o.follows === 0).length,
-    rate: rates.length ? { min: rates[0], median: median(rates), max: rates.at(-1) } : null,
+    rate: rates.length ? { min: rates[0], median: mid, max: rates.at(-1) } : null,
     cost: costs.length ? { min: costs[0], median: median(costs), max: costs.at(-1) } : null,
     spend: orders.length ? median(orders.map((o) => o.spend)) : null,
+    recent: !!opts.recent,
     orders,
   };
 }
@@ -144,10 +148,12 @@ export const MIN_SIMILAR = 2;
 export const CHEAP = 0.9; // ≤ 90% of my usual cost per follower
 export const DEAR = 1.3; // ≥ 130%
 
-export function postAdContext(post, posts, baseline) {
+/** `model` (optional, learning.js): recent orders count more; the platform's quote gets an adjusted range. */
+export function postAdContext(post, posts, baseline, model = null) {
+  const recent = applies(model, 'ads') || (!!model && !model.ads?.locked && model.ads?.recency);
   const which = isNum(stage(post, 'd2').views) ? 'd2' : isNum(stage(post, 'd1').views) ? 'd1' : null;
-  const all = followHistory(posts);
-  const out = { which, all, similar: null, history: all, advice: null, funnel: null, quote: null, comments: [] };
+  const all = followHistory(posts, { recent });
+  const out = { which, all, similar: null, history: all, advice: null, funnel: null, quote: null, comments: [], recent };
   // Without views yet: no verdict, no "posts like this one"; the quote is still compared with all orders.
   if (which) out.advice = adviceAt(post, posts, baseline, which);
   const views = (p) => stage(p, which).views;
@@ -157,7 +163,7 @@ export function postAdContext(post, posts, baseline) {
     const high = views(post) >= medView;
     const keys = new Set(adOrders(posts.filter((p) => p.id !== post.id)).filter((o) => !o.multi && isNum(views(o.links[0].post)) && (views(o.links[0].post) >= medView) === high).map((o) => o.key));
     const subset = posts.filter((p) => p.id !== post.id);
-    const h = followHistory(subset);
+    const h = followHistory(subset, { recent });
     const orders = h.orders.filter((o) => keys.has(o.key));
     if (orders.length >= MIN_SIMILAR) {
       const rates = orders.map((o) => o.rate).sort((a, b) => a - b);
@@ -165,7 +171,7 @@ export function postAdContext(post, posts, baseline) {
       out.similar = {
         n: orders.length, high, medView, which,
         reference: orders.length < MIN_ORDERS,
-        rate: { min: rates[0], median: median(rates), max: rates.at(-1) },
+        rate: { min: rates[0], median: recent ? recentMedian(orders.map((o) => o.rate)) : median(rates), max: rates.at(-1) },
         cost: costs.length ? { min: costs[0], median: median(costs), max: costs.at(-1) } : null,
         spend: median(orders.map((o) => o.spend)),
       };
@@ -186,6 +192,8 @@ export function postAdContext(post, posts, baseline) {
     const mine = simulate(out.history, { spend: q.pay, credit: q.credit ?? 0 });
     const usual = out.history.cost?.median ?? all.cost?.median;
     out.quote = { quote: q, quoteCost, mine };
+    const adjusted = calibrate(model, q.estimate);
+    if (adjusted) c.push({ key: 'quoteCalibrated', tone: 'info', vars: { lo: q.estimate[0], hi: q.estimate[1], alo: adjusted[0], ahi: adjusted[1], r: Math.round(model.ads.ratio * 100), n: model.ads.n } });
     if (isNum(quoteCost) && isNum(usual)) {
       const r = quoteCost / usual;
       c.push({ key: r <= CHEAP ? 'quoteCheap' : r >= DEAR ? 'quoteDear' : 'quoteSame', tone: r <= CHEAP ? 'good' : r >= DEAR ? 'warn' : 'info', vars: { lo: q.estimate[0], hi: q.estimate[1], pay: q.pay, cost: Math.round(quoteCost * 100) / 100, usual: Math.round(usual * 100) / 100, basis: out.similar?.cost ? 'similar' : 'all' } });
@@ -198,7 +206,7 @@ export function postAdContext(post, posts, baseline) {
   }
   // 3. An ad buys exposure: weak click or opening at this stage wastes part of it.
   if (baseline && which) {
-    const f = postFunnel(post, posts, baseline, which);
+    const f = postFunnel(post, posts, baseline, which, model);
     out.funnel = f;
     const weak = f.checks.map((x) => x.step).filter((s) => ['click', 'opening'].includes(s));
     if (weak.length) c.push({ key: 'funnelWeak', tone: 'warn', vars: { steps: weak } });
