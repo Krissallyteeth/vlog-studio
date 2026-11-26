@@ -298,7 +298,11 @@ def is_popular_request(post_data):
 
 def full_keyword_suggestions(batches, keyword):
     """The search box answers after every keystroke. Keep the answer for the whole keyword
-    (its request names the keyword); if none names it, the last answer."""
+    (its request names the keyword); if none names it, the last answer. Only words that contain
+    the keyword count, so other page requests answered meanwhile do not slip in."""
+    k = "".join(keyword.split())
+    batches = [(q, [w for w in words if k in "".join(w.split())]) for q, words in batches]
+    batches = [(q, words) for q, words in batches if words]
     if not batches:
         return []
     full = [words for query, words in batches if f"={keyword}" in query or query.endswith(keyword)]

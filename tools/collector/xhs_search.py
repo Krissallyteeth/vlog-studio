@@ -50,12 +50,20 @@ POPULAR_FILTER = ("最多点赞", "半年内")  # second list: most liked within
 SCROLL_ROUNDS = 2  # scroll the results this many times to see more notes and "大家都在搜" cards
 TOPIC_MAX = 8  # topic pages opened per run for view counts
 SEARCH_BOX = "input#search-input, input.search-input, header input[type='text'], input[placeholder*='搜索']"
-SUGGEST_DOM_JS = """() => {
+SUGGEST_DOM_JS = """(kw) => {
+  // The dropdown under the search box: leaf texts that contain the keyword, inside the box's own
+  // header area (not the feed below it).
+  const box = document.querySelector('input#search-input') || document.querySelector('input.search-input');
+  if (!box) return '';
+  const area = box.closest('header') || box.parentElement?.parentElement?.parentElement || document.body;
+  const k = kw.replace(/\\s+/g, '');
   const out = [];
-  for (const el of document.querySelectorAll('[class*="sug"] *, [class*="Sug"] *')) {
-    if (el.children.length) continue;
+  for (const el of area.querySelectorAll('*')) {
+    if (el.children.length || el.tagName === 'INPUT') continue;
     const s = (el.innerText || '').trim();
-    if (s.length >= 2 && s.length <= 30 && !out.includes(s)) out.push(s);
+    if (s.length < 2 || s.length > 30 || !s.replace(/\\s+/g, '').includes(k) || out.includes(s)) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width && r.height) out.push(s);
   }
   return JSON.stringify(out.slice(0, 20));
 }"""
@@ -167,7 +175,13 @@ def search_keyword(page, keyword, details):
     def on_response(resp):
         try:
             path = urlparse(resp.url).path
-            if "/api/sns/web/" not in path or "search" not in path:
+            if "/api/sns/web/" not in path:
+                return
+            if captured["typing"] and not path.endswith("/search/notes") and "racing" not in path:
+                # One answer per keystroke, whatever the endpoint is called: remember which text each was for.
+                captured["suggest"].append((unquote_plus(urlparse(resp.url).query), xp.related_words(resp.json(), keyword)))
+                return
+            if "search" not in path:
                 return
             if path.endswith("/search/notes"):
                 if resp.request.method == "OPTIONS":
@@ -189,18 +203,14 @@ def search_keyword(page, keyword, details):
                     captured["api"].extend(found)
             elif not xp.is_filter_path(path):
                 # While the keyword is being typed, the answers are the search box's suggestions.
-                words = xp.related_words(resp.json(), keyword)
-                if captured["typing"]:
-                    # One answer per keystroke: remember which text each answer was for.
-                    captured["suggest"].append((unquote_plus(urlparse(resp.url).query), words))
-                else:
-                    captured["related"].extend(words)
+                captured["related"].extend(xp.related_words(resp.json(), keyword))
         except Exception:
             pass
 
     page.on("response", on_response)
     try:
-        entry["suggest"] = read_suggestions(page, keyword, captured)
+        entry["suggest"], why = read_suggestions(page, keyword, captured)
+        entry["_suggest_why"] = why
         page.goto(f"https://www.xiaohongshu.com/search_result?keyword={quote(keyword)}&source=web_search_result_notes", wait_until="domcontentloaded", timeout=60000)
         check_blocked(page)
         items = wait_results(page, captured)
@@ -301,21 +311,36 @@ def read_popular(page, captured):
 
 def read_suggestions(page, keyword, captured):
     """Types the keyword into the page's search box (without searching) and reads what 小红书 suggests.
-    The suggestions are the words people search most, in 小红书's own order. None if not readable."""
+    The suggestions are the words people search most, in 小红书's own order.
+    Returns (words or None, why not) — None means not collected, with the reason for the log."""
+    box = None
+    for sel in ("input#search-input", SEARCH_BOX):  # the page has two search inputs stacked on each other
+        try:
+            loc = page.locator(sel)
+            if loc.count():
+                box = loc.first
+                break
+        except Exception:
+            continue
+    if box is None:
+        return None, "검색창을 찾지 못함"
     try:
-        box = page.locator(SEARCH_BOX).first
-        box.click(timeout=5000)
+        try:
+            box.click(timeout=3000)
+        except Exception:
+            box.click(timeout=3000, force=True)  # the other input lies on top and takes the click
         box.fill("")
         captured["typing"] = True
         box.type(keyword, delay=150)
         page.wait_for_timeout(2500)
         words = xp.full_keyword_suggestions(captured["suggest"], keyword)
         if not words:
-            words = [w for w in (eval_json(page, SUGGEST_DOM_JS) or []) if w != keyword]
+            raw = page.evaluate(SUGGEST_DOM_JS, keyword)
+            words = [w for w in (json.loads(raw) if raw else []) if w != keyword]
         page.keyboard.press("Escape")
-        return words[:20] or None
-    except Exception:
-        return None
+        return (words[:20], None) if words else (None, f"자동완성 응답·목록 없음(응답 {len(captured['suggest'])}개)")
+    except Exception as e:
+        return None, f"검색창 입력 실패: {str(e).splitlines()[0][:80]}"
     finally:
         captured["typing"] = False
 
@@ -363,6 +388,12 @@ def read_topic_views(page, notes, log):
             views, approx = None, False
         finally:
             page.remove_listener("response", on_response)
+        if views is None and not any(o["views"] is None for o in out):
+            try:  # first miss: where the page went, so the next fix is not a guess
+                u = urlparse(page.url)
+                log(f"[话题] 조회수를 못 읽은 페이지: {u.netloc}{u.path} · 제목 '{(page.title() or '')[:40]}'")
+            except Exception:
+                pass
         out.append({"name": t["name"], "notes": t["count"], "views": views, "approx": approx})
     if picked:
         log(f"[话题] 조회수 {sum(1 for t in out if t['views'] is not None)}개 / 태그 {len(picked)}개")
@@ -475,7 +506,8 @@ def collect(keywords, details, out_dir, log=print, progress=lambda *a, **k: None
                 all_notes.extend(notes)
                 if covers is not None and notes:
                     fetch_covers(ctx, notes, covers)
-                log(f"        노트 {len(notes)}개 (상세 {sum(1 for n in notes if n['detail'])}개) · 자동완성 {len(entry.get('suggest') or [])}개 · 연관 검색어 {len(entry.get('related') or [])}개")
+                why = entry.pop("_suggest_why", None)
+                log(f"        노트 {len(notes)}개 (상세 {sum(1 for n in notes if n['detail'])}개) · 자동완성 {len(entry.get('suggest') or [])}개{f' ({why})' if why else ''} · 연관 검색어 {len(entry.get('related') or [])}개")
                 pop = entry.get("popular")
                 if pop:
                     both = sum(1 for n in notes if len(n.get("lists") or []) == 2)

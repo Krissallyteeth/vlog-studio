@@ -270,7 +270,10 @@ class FullKeyword(unittest.TestCase):
         batches = [("keyword=收", ["收技巧"]), ("keyword=收纳", ["收纳技巧", "收纳盒"]), ("keyword=收纳&x=1", ["收纳技巧", "收纳神器"])]
         self.assertEqual(xp.full_keyword_suggestions(batches, "收纳"), ["收纳技巧", "收纳神器"])
         # Unknown request shape: the last answer is the one for the most text typed
-        self.assertEqual(xp.full_keyword_suggestions([("a=1", ["x"]), ("a=2", ["y", "y"])], "收纳"), ["y"])
+        self.assertEqual(xp.full_keyword_suggestions([("a=1", ["收纳x"]), ("a=2", ["收纳y", "收纳y"])], "收纳"), ["收纳y"])
+        # Answers from other requests in the meantime (words without the keyword) are ignored
+        self.assertEqual(xp.full_keyword_suggestions([("keyword=收纳", ["收纳技巧"]), ("page=2", ["推荐", "热门"])], "收纳"), ["收纳技巧"])
+        self.assertEqual(xp.full_keyword_suggestions([("a=1", ["别的"])], "收纳"), [])
         self.assertEqual(xp.full_keyword_suggestions([], "收纳"), [])
 
 
