@@ -47,12 +47,14 @@ export async function buildWorkbook({ posts, income, baseline, settings, docs })
   ws.getCell('AB5').value = 'D+2';
   const cols = postsTable(list);
   const extraKeys = [...new Set(list.flatMap((p) => Object.keys(p.extra ?? {})))];
-  const extraStart = 51; // after AX
+  const extraStart = 53; // after AX, then AY 유형 · AZ 보조 유형 · BA 협찬 (app columns)
   cols.forEach(([col, header]) => {
     ws.getCell(`${col}7`).value = header;
     ws.getCell(`${col}7`).font = { bold: true };
   });
   ws.getCell('AY7').value = '유형(앱)';
+  ws.getCell('AZ7').value = '보조 유형(앱)';
+  ws.getCell('BA7').value = '협찬(앱)';
   extraKeys.forEach((k, i) => (ws.getCell(7, extraStart + 1 + i).value = k));
   list.forEach((p, i) => {
     const r = 8 + i;
@@ -69,6 +71,8 @@ export async function buildWorkbook({ posts, income, baseline, settings, docs })
       }
     }
     ws.getCell(`AY${r}`).value = p.contentType || null;
+    ws.getCell(`AZ${r}`).value = p.subTypes?.length ? p.subTypes.join(', ') : null;
+    ws.getCell(`BA${r}`).value = p.sponsored ? 'Y' : null;
     extraKeys.forEach((k, j) => (ws.getCell(r, extraStart + 1 + j).value = p.extra?.[k] ?? null));
     const aw = ws.getCell(`AW${r}`);
     aw.fill = fill(p.validity === '유효' ? FILL.good : FILL.mid);
@@ -125,7 +129,7 @@ export function postsCsv(posts) {
     const s = String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const lines = [[...cols.map(([, h]) => h), '유형(앱)'].map(q).join(',')];
-  for (const p of list) lines.push([...cols.map(([, , get]) => get(p)), p.contentType].map(q).join(','));
+  const lines = [[...cols.map(([, h]) => h), '유형(앱)', '보조 유형(앱)', '협찬(앱)'].map(q).join(',')];
+  for (const p of list) lines.push([...cols.map(([, , get]) => get(p)), p.contentType, (p.subTypes ?? []).join(', '), p.sponsored ? 'Y' : ''].map(q).join(','));
   return `﻿${lines.join('\n')}\n`;
 }

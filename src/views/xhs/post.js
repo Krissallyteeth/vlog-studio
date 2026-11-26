@@ -7,7 +7,7 @@ import { adEffect, analysePost, orderEfficiency } from '../../xhs/analysis.js';
 import { fmt, signedPct, yuan } from '../../xhs/format.js';
 import { METRICS, METRIC, VALIDITY } from '../../xhs/metrics.js';
 import { judge, ordered, stage } from '../../xhs/stats.js';
-import { activeBaseline, deletePost, getPost, getSettings, listPosts, normalizeAd, normalizeStage, onXhsChange, savePosts } from '../../xhs/store.js';
+import { activeBaseline, deletePost, getPost, getSettings, listIncome, listPosts, normalizeAd, normalizeStage, onXhsChange, savePosts } from '../../xhs/store.js';
 import { AD_METRICS } from '../../xhs/ocr-ad-parse.js';
 import { memoDuplicateOf } from '../../xhs/ad-orders.js';
 import { experimentResults, postFocus } from '../../xhs/insights.js';
@@ -18,6 +18,7 @@ import { adFlowHtml } from './ad-flow.js';
 import { emph, insightList } from './insight-text.js';
 import { noteMetaHtml } from './note-meta.js';
 import { bindFunnel, funnelHtml } from './funnel.js';
+import { SPONSOR_TYPES } from '../../xhs/type-table.js';
 import { regionOptions } from './operating-insights.js';
 import { relativeNote, xhsPage } from './shell.js';
 
@@ -68,7 +69,7 @@ export async function renderContents({ isCurrent, previous, keepY }) {
 
 // ── 게시물 상세: 기획 → 배포 → 통계 → 광고 → 분석 ─────────
 export async function renderPost([id], { isCurrent, keepY }) {
-  const [post, posts, baseline, settings, projects] = await Promise.all([getPost(id), listPosts(), activeBaseline(), getSettings(), listProjects()]);
+  const [post, posts, baseline, settings, projects, income] = await Promise.all([getPost(id), listPosts(), activeBaseline(), getSettings(), listProjects(), listIncome()]);
   if (!isCurrent()) return null;
   if (!post) {
     toast(t('post.notFound'));
@@ -183,6 +184,10 @@ export async function renderPost([id], { isCurrent, keepY }) {
           <label class="field"><span class="field-label">${esc(t('oi.regionField'))}</span><select class="input" id="p-region">${regionOptions(post.shootRegion)}</select></label>
           <div class="field"><span class="field-label">推广判断</span><p>${esc([post.adDecisionD1, post.adAux, post.adDecisionD2].filter(Boolean).join(' / ') || '–')}</p></div>
         </div>
+        <div class="mt-3"><p class="field-label">${esc(t('tt.subTypes'))} <span class="font-normal text-muted">${esc(t('tt.subTypesHelp'))}</span></p>
+          <div class="mt-1 flex flex-wrap gap-1.5">${settings.contentTypes.filter((x) => x !== post.contentType && !SPONSOR_TYPES.includes(x)).map((x) => `<button type="button" class="pill ${post.subTypes.includes(x) ? 'cf-good' : 'pill-muted'}" aria-pressed="${post.subTypes.includes(x)}" data-subtype="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+          <label class="mt-2 flex items-center gap-2 text-[13px]"><input type="checkbox" id="p-sponsored" ${post.sponsored ? 'checked' : ''} /> <b>${esc(t('tt.sponsored'))}</b> <span class="text-muted">${esc(t('tt.sponsoredHelp'))}</span></label>
+          ${!post.sponsored && income.some((x) => x.postId === post.id) ? `<p class="mt-1 text-[12px] cf-mid rounded-[8px] px-2 py-1">${esc(t('tt.incomeHint'))}</p>` : ''}</div>
         <div class="mt-3"><p class="field-label">${esc(t('xp.title'))}</p>
           <div class="mt-1 flex flex-col gap-2">${settings.experiments.map((ex) => `<div class="flex flex-wrap items-center gap-2 text-[13px]"><span class="min-w-[6rem] font-medium">${esc(ex.name)}</span><div class="segmented !w-auto" role="radiogroup">${['', ...ex.options].map((o) => `<button type="button" class="seg px-3 ${(post.experiments?.[ex.id] ?? '') === o ? 'is-active' : ''}" data-exp="${esc(ex.id)}" data-opt="${esc(o)}">${esc(o || '–')}</button>`).join('')}</div></div>`).join('')}</div>
           <p class="mt-1 text-[12px] text-muted">${esc(t('xp.help'))} <a class="link-btn" href="#/data/rules">${esc(t('xp.manage'))}</a></p>
@@ -215,7 +220,8 @@ export async function renderPost([id], { isCurrent, keepY }) {
   };
   root.addEventListener('change', (e) => {
     if (e.target.id === 'p-project') save({ projectId: e.target.value });
-    if (e.target.id === 'p-type') save({ contentType: e.target.value });
+    if (e.target.id === 'p-type') save({ contentType: e.target.value, subTypes: post.subTypes.filter((x) => x !== e.target.value) });
+    if (e.target.id === 'p-sponsored') save({ sponsored: e.target.checked });
     if (e.target.id === 'p-region') save({ shootRegion: e.target.value });
     if (e.target.id === 'p-validity') save({ validity: e.target.value });
     if (e.target.id === 'p-xnote') save({ experimentNote: e.target.value.trim() });
@@ -227,6 +233,11 @@ export async function renderPost([id], { isCurrent, keepY }) {
     }
   });
   root.addEventListener('click', async (e) => {
+    const sub = e.target.closest('[data-subtype]')?.dataset.subtype;
+    if (sub) {
+      const next = post.subTypes.includes(sub) ? post.subTypes.filter((x) => x !== sub) : [...post.subTypes, sub];
+      return save({ subTypes: next });
+    }
     const ex = e.target.closest('[data-exp]');
     if (ex) {
       const next = { ...(post.experiments ?? {}) };

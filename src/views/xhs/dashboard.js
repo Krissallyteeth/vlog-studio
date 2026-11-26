@@ -4,7 +4,7 @@ import { $, confirmDialog, esc, toast } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { fmt, signedPct, won, yuan } from '../../xhs/format.js';
 import { METRIC } from '../../xhs/metrics.js';
-import { BASELINE_SIZE, adTotals, buildBaseline, byContentType, criteria, judge, median, medians, ordered, relDiff, stage, validPosts } from '../../xhs/stats.js';
+import { BASELINE_SIZE, adTotals, buildBaseline, criteria, judge, median, medians, ordered, relDiff, stage, validPosts } from '../../xhs/stats.js';
 import { activeBaseline, addBaseline, getBaselines, getSettings, listIncome, listPosts, onXhsChange } from '../../xhs/store.js';
 import { chartLegend, lineChart } from './charts.js';
 import { relativeNote, xhsPage } from './shell.js';
@@ -17,6 +17,7 @@ import { emph } from './insight-text.js';
 import { verdictBadge } from './ad-flow.js';
 import { adInWindow, postRows } from '../../xhs/ad-report.js';
 import { operatingInsightsHtml } from './operating-insights.js';
+import { bindTypeTable, typeTableHtml } from './type-table.js';
 
 const CHARTS = [
   { key: 'views' },
@@ -154,7 +155,7 @@ export async function renderDashboard({ isCurrent, keepY }) {
               .join('')}</tbody></table></div>
             <p class="mt-2 text-[12px] text-muted">${esc(t('dash.clickRow'))}</p>
           </section>
-          ${typesHtml(posts)}
+          ${typeTableHtml(posts)}
           ${longTermHtml(posts, baseline, crit)}
         </aside>
       </div>
@@ -208,6 +209,7 @@ export async function renderDashboard({ isCurrent, keepY }) {
     });
   }
   if (!empty) analysis.bind(root);
+  if (!empty) bindTypeTable(root, posts, settings);
   // Opened from Data → 광고기록 "see the analysis": go to that section.
   try {
     const to = sessionStorage.getItem('xhs-scroll');
@@ -225,16 +227,6 @@ export async function renderDashboard({ isCurrent, keepY }) {
   const off = onXhsChange(() => navigate('/xhs', { replace: true }));
   settleScroll({ keepY });
   return { kind: 'xhs-dash', destroy: off };
-}
-
-function typesHtml(posts) {
-  const groups = byContentType(posts);
-  if (!groups.length) return '';
-  const keys = ['views', 'ctr', 'retain5s', 'completion'];
-  return `<section class="card"><h3 class="text-[15px] font-semibold">${esc(t('dash.types'))}</h3>
-    <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th>${esc(t('xg.type'))}</th><th class="num">n</th>${keys.map((k) => `<th class="num">${esc(METRIC[k].zh)}</th>`).join('')}<th class="num">涨粉丝</th></tr></thead>
-    <tbody>${groups.map((g) => `<tr><td>${esc(g.type || t('data.noType'))}${g.reliable ? '' : ` <span class="badge cf-mid" title="${esc(t('dash.lowN'))}">${esc(t('dash.lowNShort'))}</span>`}</td><td class="num">${g.count}</td>${keys.map((k) => `<td class="num">${esc(fmt(k, g.medians[k]))}</td>`).join('')}<td class="num">${g.followers}</td></tr>`).join('')}</tbody></table></div>
-    <p class="mt-2 text-[12px] text-muted">${esc(t('dash.typesNote'))}</p></section>`;
 }
 
 /** Long-term view: fixed baseline vs recent 5 / recent 10 / all valid posts (shown from 20 posts). */

@@ -30,7 +30,7 @@
 - [ ] 앱 '검색하기' → 수집기 자동 켜기: 사용자 PC에서 install.bat 실행 후 실제로 1회 확인(Chrome 확인 창, 배포 주소에서 동작).
 - [ ] 수집기 수정분(0개 구분·새로고침 1회, 덮어쓰기 방지, 필터 메뉴 글자 제외)을 실제 小红书에서 1회 확인. 간헐적 0개의 원인은 아직 모름(다음에 생기면 파일의 `error` 확인).
 
-- [ ] **개편 진행 중** `docs/PLAN-funnel.md`: 1단계(검색 근거)·2단계(퍼널 카드) 개발됨. 다음은 3단계 유형별 팔로워 전환율 표(주 유형+보조 태그+협찬 분리). 되돌리기 기준 커밋 `bfc3d8d`.
+- [ ] **개편 진행 중** `docs/PLAN-funnel.md`: 1~3단계(검색 근거·퍼널 카드·유형별 전환율) 개발됨. 다음은 4단계 광고 화면의 팔로워 단가 범위. 되돌리기 기준 커밋 `bfc3d8d`.
 
 - [ ] 기존 콘텐츠의 촬영 지역을 배포 기록에서 설정하고, 동일 D+1 시점의 두 추천 경로 상세 캡처를 추가하면 비교 표본을 늘릴 수 있음.
 
@@ -77,6 +77,7 @@
 | 인사이트 | `src/xhs/insights.js`(광고 인사이트·고칠 것·운영 브리핑·실험), `channels.js`(채널 분석), `conclusions.js`(카드별 결론), 문구 `src/views/xhs/insight-text.js`(강조 `emph`) |
 | 검색 근거 추천 | `tools/collector/`(PC 수집기, Python, 읽기 전용), `src/xhs/search-evidence.js`(爆款 후보·제목 패턴·태그·Claude 자료·답 검사), 화면 `src/views/xhs/search.js`(`#/search`) |
 | 퍼널 카드 | `src/xhs/funnel.js`(6단계 판정·병목 최대 2개), `src/views/xhs/funnel.js`(게시물 상세 5 · 분석, D+1/D+2) |
+| 유형별 전환 | `src/xhs/type-table.js`(주 유형 기준 표·보조 태그 비교·협찬 옮기기), 화면 `src/views/xhs/type-table.js`(대시보드) |
 | 화면 | `src/views/xhs/dashboard.js`, `post.js`(콘텐츠 목록·게시물 상세), `data.js`(데이터 탭 5개), `note-meta.js`, `charts.js` |
 | DB 스키마 | `supabase/schema.sql` |
 
@@ -425,3 +426,14 @@
   함수와 테스트는 남김(대시보드 운영 브리핑의 같은 점검은 그대로).
 - 주요 파일: `src/xhs/funnel.js`, `src/views/xhs/funnel.js`, `src/views/xhs/post.js`, `src/styles.css`, `src/i18n/{ko,en,zh}.js`(41개, CRLF 유지), `tests/funnel.test.js`(13개).
 - 검증: Vitest 249개, 빌드·하위 경로 검사, 가상 게시물 12편으로 PC·390px 화면(D+1/D+2 전환, 콘솔 오류·가로 넘침 없음).
+
+### [Claude] 2026-11-26 — 3단계: 유형별 팔로워 전환율 (주 유형 + 보조 태그, 협찬 분리)
+- 사용자 요청: 기획안 3단계. 게시물에 `subTypes`(보조 태그, 주 유형과 겹치지 않음)·`sponsored`(협찬 체크) 추가. 기존 `contentType`이 그대로 주 유형.
+- 대시보드의 기존 "콘텐츠 유형별" 표를 새 카드로 바꿈: 유효 D+1, 주 유형 기준 한 편 한 번, 편수·조회 중앙값·클릭률·팔로워 전환율(涨粉÷观看) 중앙값·涨粉 중앙값.
+  3편 미만 "참고", 전환율 높은 순. 협찬 포함/제외 전환(기기별 기억). 보조 태그는 "들어간 글 vs 안 들어간 글", 양쪽 2편 이상일 때만 숫자, 항상 참고.
+- 유형이 '협찬 콘텐츠' 등인 글이 있으면 "협찬 체크로 옮기기": 체크한 글만 협찬 체크 + 고른 주 유형으로 바꿈, 모두 옮기면 유형 목록에서 협찬 항목 빼기(선택). 자동 변경 없음.
+- 게시물 상세 2 · 배포: 보조 태그 버튼, 협찬 체크, 연결된 수익 기록이 있는데 협찬 체크가 없으면 안내.
+- 엑셀: 내보내기 AZ "보조 유형(앱)"·BA "협찬(앱)"(추가 열은 BB부터), CSV도 두 열 추가. 가져오기는 두 열을 읽고, 기존 게시물과 합칠 때는 앱 값을 유지(유형과 같음).
+- 주요 파일: `src/xhs/store.js`, `src/xhs/type-table.js`, `src/views/xhs/type-table.js`, `src/views/xhs/dashboard.js`, `src/views/xhs/post.js`, `src/xhs/excel-{import,export}.js`,
+  `src/i18n/{ko,en,zh}.js`(36개, CRLF 유지), `tests/type-table.test.js`(9개).
+- 검증: Vitest 258개, 빌드·하위 경로 검사, 가상 게시물 12편으로 PC·390px(필터 전환, 옮기기 저장·유형 목록 정리, 보조 태그·협찬 체크 저장, 폰에서 전환율 열 표시).

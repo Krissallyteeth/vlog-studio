@@ -144,6 +144,8 @@ const FIXED_HEADERS = {
   'D+1 유효성': 'validity',
   유효순번: 'validSeq',
   '유형(앱)': 'contentType', // written by the app's own Excel export
+  '보조 유형(앱)': 'subTypes',
+  '협찬(앱)': 'sponsored',
 };
 
 function headerField(name) {
@@ -159,6 +161,11 @@ function headerField(name) {
 
 const TEXT_FIELDS = ['contentType', 'title', 'date', 'time', 'adDecisionD1', 'adAux', 'adDecisionD2', 'memo', 'validity'];
 const NUM_FIELDS = ['no', 'followers', 'expectedFollowersD1', 'expectedFollowersD2'];
+
+/** App-only columns written by the app's own export: '보조 유형' = "a, b", '협찬' = Y. */
+export const splitTypes = (v) => (v == null ? [] : String(v).split(/[,，、\n]+/).map((x) => x.trim()).filter(Boolean));
+export const isYes = (v) => v === true || /^(y|yes|o|true|1|예|협찬|是)$/i.test(String(v ?? '').trim());
+const APP_TEXT = { subTypes: (p) => (p.subTypes ?? []).join(', '), sponsored: (p) => (p.sponsored ? 'Y' : '') };
 
 const toNum = (c) => (c && typeof c.v === 'number' ? c.v : null);
 const close = (a, b) => (a == null && b == null) || (typeof a === 'number' && typeof b === 'number' && Math.abs(a - b) < 1e-9);
@@ -246,6 +253,8 @@ function parsePosts(ws, fileName) {
       else if (map.stage) raw[map.stage][map.metric] = toNum(c);
       else if (NUM_FIELDS.includes(map.field)) raw[map.field] = toNum(c);
       else if (TEXT_FIELDS.includes(map.field)) raw[map.field] = c.v == null ? '' : String(c.v);
+      else if (map.field === 'subTypes') raw.subTypes = splitTypes(c.v);
+      else if (map.field === 'sponsored') raw.sponsored = isYes(c.v);
     }
     // D+2 duration was a formula copying D+1 (AO = U); no separate input exists.
     const post = normalizePost({
@@ -269,8 +278,8 @@ function parsePosts(ws, fileName) {
         const bad = c.v != null && typeof c.v !== 'number';
         comparisons.push({ ...base, field: `${map.stage}.${map.metric}`, app: fmtApp(map.metric, stored), status: bad ? 'check' : close(c.v, stored) ? 'ok' : 'mismatch', note: bad ? 'not-a-number' : '' });
       } else if (map.field) {
-        const stored = post[map.field];
-        const same = NUM_FIELDS.includes(map.field) ? close(toNum(c), stored) : String(c.v ?? '') === String(stored ?? '') || (map.field === 'time' && String(c.v).slice(0, 5) === stored);
+        const stored = APP_TEXT[map.field] ? APP_TEXT[map.field](post) : post[map.field];
+        const same = APP_TEXT[map.field] ? APP_TEXT[map.field](normalizePost({ contentType: post.contentType, [map.field]: map.field === 'subTypes' ? splitTypes(c.v) : isYes(c.v) })) === stored : NUM_FIELDS.includes(map.field) ? close(toNum(c), stored) : String(c.v ?? '') === String(stored ?? '') || (map.field === 'time' && String(c.v).slice(0, 5) === stored);
         const check = map.field === 'validity' && !['유효', '광고혼입', '미확인'].includes(String(c.v));
         comparisons.push({ ...base, field: map.field, app: String(stored ?? ''), status: check ? 'check' : same ? 'ok' : 'mismatch' });
       }
@@ -498,7 +507,7 @@ export function matchExisting(records, existingPosts) {
 /** Merges an Excel record into an existing post, keeping app-only fields (type, link, screenshots, manual ads). */
 export function mergeInto(existing, incoming) {
   const manualAds = existing.ads.filter((a) => !a.sourceText);
-  return { ...incoming, id: existing.id, contentType: existing.contentType, projectId: existing.projectId, screenshots: existing.screenshots, ads: [...manualAds, ...incoming.ads], createdAt: existing.createdAt };
+  return { ...incoming, id: existing.id, contentType: existing.contentType, subTypes: existing.subTypes, sponsored: existing.sponsored, projectId: existing.projectId, screenshots: existing.screenshots, ads: [...manualAds, ...incoming.ads], createdAt: existing.createdAt };
 }
 
 // ── Entry point ───────────────────────────────────────

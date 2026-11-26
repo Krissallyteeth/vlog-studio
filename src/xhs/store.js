@@ -116,6 +116,10 @@ export function normalizePost(raw = {}, now = Date.now()) {
     date: DATE_RE.test(raw.date) ? raw.date : '',
     time: TIME_RE.test(raw.time) ? raw.time.slice(0, 5) : '',
     contentType: str(raw.contentType),
+    // Other kinds of content in the same video (the main type is the one the title and cover promise).
+    subTypes: [...new Set((Array.isArray(raw.subTypes) ? raw.subTypes : []).map((x) => str(x).trim()).filter((x) => x && x !== str(raw.contentType)))].slice(0, 10),
+    // A sponsored post (brand collaboration): a flag, not a content type.
+    sponsored: raw.sponsored === true,
     shootRegion: ['cn', 'kr', 'other'].includes(raw.shootRegion) ? raw.shootRegion : '',
     projectId: str(raw.projectId),
     validity: VALIDITY.includes(raw.validity) ? raw.validity : '미확인',
