@@ -107,6 +107,28 @@ export function normalizeAd(raw = {}) {
   };
 }
 
+const pair = (v) => (Array.isArray(v) && v.length === 2 && v.every((x) => num(x) != null) && v[0] <= v[1] ? [v[0], v[1]] : null);
+/** One reading of the 薯条 purchase screen. Missing values stay null. */
+export function normalizeAdQuote(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const estimate = pair(raw.estimate);
+  const options = (Array.isArray(raw.options) ? raw.options : []).map((o) => ({ estimate: pair(o?.estimate), price: num(o?.price), listPrice: num(o?.listPrice), bonus: pair(o?.bonus) })).filter((o) => o.estimate).slice(0, 8);
+  if (!estimate && !options.length) return null;
+  return {
+    id: raw.id || uid(),
+    stage: ['D', 'D+1', 'D+2'].includes(raw.stage) ? raw.stage : '',
+    capturedAt: str(raw.capturedAt).slice(0, 30), // ISO with +08:00
+    goal: str(raw.goal).slice(0, 20),
+    estimate,
+    bonusEstimate: pair(raw.bonusEstimate),
+    pay: num(raw.pay),
+    credit: num(raw.credit),
+    hours: num(raw.hours),
+    options,
+    decision: ['bought', 'skipped'].includes(raw.decision) ? raw.decision : '',
+  };
+}
+
 export function normalizePost(raw = {}, now = Date.now()) {
   return {
     id: raw.id || uid(),
@@ -140,6 +162,8 @@ export function normalizePost(raw = {}, now = Date.now()) {
     }),
     // Titles this post had in 薯条 screenshots (they can differ from the workbook title).
     adTitles: Array.isArray(raw.adTitles) ? raw.adTitles.filter((x) => typeof x === 'string' && x).slice(-10) : [],
+    // What the 薯条 purchase screen promised before paying (D+1 / D+2), bought or not.
+    adQuotes: (Array.isArray(raw.adQuotes) ? raw.adQuotes : []).map(normalizeAdQuote).filter(Boolean).slice(-20),
     extra: raw.extra && typeof raw.extra === 'object' ? { ...raw.extra } : {},
     // This post's choice for each experiment item: { face: '없음', intro: '없음' }.
     experiments: Object.fromEntries(Object.entries(raw.experiments && typeof raw.experiments === 'object' ? raw.experiments : {}).filter(([k, v]) => typeof k === 'string' && typeof v === 'string' && v)),

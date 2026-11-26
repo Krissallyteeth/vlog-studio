@@ -1,4 +1,5 @@
 import { compressImage } from '../../data/media.js';
+import { bindQuote, quoteCardHtml } from './ad-quote.js';
 import { uid } from '../../lib/ids.js';
 import { t } from '../../i18n/index.js';
 import { navigate } from '../../router.js';
@@ -78,11 +79,13 @@ export async function renderOcr([postId, stageParam], { isCurrent }) {
         <button type="button" class="btn btn-primary mt-3 w-full sm:w-auto" id="ocr-run" disabled>${icon('scan', 'size-5')}${esc(t('ocr.run'))}</button>
         <p class="mt-2 text-[12px] text-muted">${esc(t('ocr.privacy'))}</p>
       </section>
+      ${quoteCardHtml()}
       <div id="ocr-result" class="mt-4"></div>
       ${savedShotsHtml(shots, posts, postId)}`,
   });
 
   const thumbs = $('#ocr-thumbs', root);
+  bindQuote(root, () => ({ post: post(), stage: state.stage }));
   const result = $('#ocr-result', root);
   // D+2 of an existing post: the "ad before the D+2 cut?" question, right on the upload screen.
   const drawAdAsk = () => {

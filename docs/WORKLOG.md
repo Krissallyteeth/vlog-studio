@@ -78,7 +78,8 @@
 | 검색 근거 추천 | `tools/collector/`(PC 수집기, Python, 읽기 전용), `src/xhs/search-evidence.js`(爆款 후보·제목 패턴·태그·Claude 자료·답 검사), 화면 `src/views/xhs/search.js`(`#/search`) |
 | 퍼널 카드 | `src/xhs/funnel.js`(6단계 판정·병목 최대 2개), `src/views/xhs/funnel.js`(게시물 상세 5 · 분석, D+1/D+2) |
 | 유형별 전환 | `src/xhs/type-table.js`(주 유형 기준 표·보조 태그 비교·협찬 옮기기), 화면 `src/views/xhs/type-table.js`(대시보드) |
-| 광고 시뮬레이터 | `src/xhs/ad-sim.js`(과거 关注 주문 비율·단가 범위), 화면 `src/views/xhs/ad-sim.js`(③광고기록·게시물 4 · 광고) |
+| 광고 시뮬레이터 | `src/xhs/ad-sim.js`(과거 关注 주문 비율·단가 범위·예상 정확도·구매 전 예상 결과), 화면 `src/views/xhs/ad-sim.js`(③광고기록·게시물 4 · 광고) |
+| 구매 전 예상치 | `src/xhs/ocr-ad-quote.js`(薯条 결제 화면 읽기), 화면 `src/views/xhs/ad-quote.js`(D+1/D+2 캡처 화면의 별도 칸, 게시물 4 · 광고 목록) |
 | 화면 | `src/views/xhs/dashboard.js`, `post.js`(콘텐츠 목록·게시물 상세), `data.js`(데이터 탭 5개), `note-meta.js`, `charts.js` |
 | DB 스키마 | `supabase/schema.sql` |
 
@@ -462,3 +463,16 @@
 - 주요 파일: `src/xhs/ad-sim.js`, `src/views/xhs/ad-sim.js`, `src/views/xhs/data.js`, `src/views/xhs/post.js`, `src/i18n/{ko,en,zh}.js`(18개, CRLF 유지), `tests/ad-sim.test.js`(7개).
 - 검증: Vitest 266개, 빌드·하위 경로 검사, 가상 주문 3건으로 PC·390px(입력 60元+20元 → 20명, 범위 8~40명, 단가 3元, 손 계산과 같음).
 - 배포 전 `main`의 수집기 봉인 커밋(`0e6630c`, 다른 Claude 세션)을 합침. 봉인은 그대로 유지(이 단계는 수집기와 무관).
+
+### [Claude] 2026-11-26 — 광고 예상 정확도 + 구매 전 예상치 화면 업로드 칸
+- 사용자 제안: 광고를 돌릴 때의 예상치 캡처를 넣어 플랫폼 예상과 비교. D+1/D+2 캡처 때 넣되, 섞이면 잊으니 업로드 칸을 따로.
+- 정확도(새 입력 없음): 실제 집행한 关注 주문은 주문 보고서의 预估转化가 이미 OCR로 저장돼 있어, 시뮬레이터 카드에 "예상은 얼마나 맞았나" 표를 추가.
+  플랫폼 예상은 목표 결과(증정 포함)와, 내 시뮬레이터는 그 주문 이전 주문만으로 계산한 범위를 新增关注와 비교(나중 정보 사용 안 함). 3건 미만은 참고.
+- 구매 전 화면: D+1/D+2 캡처 화면(`#/ocr`)에 별도 카드. 사용자 실제 캡처 3장으로 OCR 결과를 보고 파서를 만듦(`private-data/ad-quote-samples/`, 커밋 안 함).
+  읽는 값: 预计提升转化数(하단 막대), 금액별 카드(범위·가격·정가·含赠, 단어 위치로 열 맞춤, ¥를 Y로 읽는 경우 처리), 实付现金·推广总金额·总计, 已赠/满…赠 n元流量, 推广多久.
+  지불=총액=선택 카드 가격 교차 확인, 다르면 노란 경고. 확인 폼에서 고친 뒤 저장, 구매함/안 함/미정. 시각은 +08:00. 캡처 원본은 저장하지 않음.
+- 게시물 상세 4 · 광고: "구매 전 예상치 vs 결과" — 같은 시점 关注 주문과 연결해 실제가 범위 안·아래·위인지, 그때 내 시뮬레이터 범위, 삭제.
+- 주요 파일: `src/xhs/ocr-ad-quote.js`, `src/xhs/ad-sim.js`, `src/xhs/store.js`(`adQuotes`, `normalizeAdQuote`), `src/views/xhs/ad-quote.js`, `src/views/xhs/ad-sim.js`,
+  `src/views/xhs/ocr.js`, `src/views/xhs/post.js`, `src/i18n/{ko,en,zh}.js`(46개, CRLF 유지), `tests/ad-quote.test.js`(11개, 가상 숫자).
+- 검증: Vitest 277개, 빌드·하위 경로 검사. 배포본과 같은 브라우저 OCR로 사용자 캡처 3장을 넣어 6개 값(예상 범위·지불·증정·기간·목표) 모두 맞게 읽음, 저장·게시물 목록·정확도 표 확인(PC·390px).
+- 한계: 캡처 1장만 넣으면 그 화면에 없는 값은 미수집(예: 첫 화면만으로는 증정·기간 없음). "추천 사람" 등 선택 상태(분홍 버튼)는 글자로 구분되지 않아 읽지 않음.
