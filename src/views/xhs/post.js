@@ -18,6 +18,7 @@ import { adFlowHtml } from './ad-flow.js';
 import { emph, insightList } from './insight-text.js';
 import { noteMetaHtml } from './note-meta.js';
 import { bindFunnel, funnelHtml } from './funnel.js';
+import { adSimHtml, bindAdSim } from './ad-sim.js';
 import { SPONSOR_TYPES } from '../../xhs/type-table.js';
 import { regionOptions } from './operating-insights.js';
 import { relativeNote, xhsPage } from './shell.js';
@@ -203,7 +204,7 @@ export async function renderPost([id], { isCurrent, keepY }) {
         <div class="mt-3 flex flex-wrap gap-2">${['d1', 'd2'].map((w) => `<a class="btn btn-secondary btn-sm" href="#/ocr/${encodeURIComponent(post.id)}/${w}">${icon('scan', 'size-4')}${esc(t(Object.values(post[w] ?? {}).some((v) => v != null) ? 'post.reShot' : 'post.shot', { stage: w === 'd1' ? 'D+1' : 'D+2' }))}</a>`).join('')}</div>
         <p class="mt-1 text-[12px] text-muted">${esc(t('post.reShotHelp'))}</p>
       </section>
-      <section class="card mt-3"><h2 class="section-step">4 · ${esc(t('post.s.ads'))}</h2>${adFlowHtml(adTimeline(post, posts, baseline))}<div class="mt-2" id="p-ads">${adsHtml()}</div></section>
+      <section class="card mt-3"><h2 class="section-step">4 · ${esc(t('post.s.ads'))}</h2>${adFlowHtml(adTimeline(post, posts, baseline))}<div class="mt-2" id="p-ads">${adsHtml()}</div>${adSimHtml(posts)}</section>
       <section class="card mt-3"><h2 class="section-step">5 · ${esc(t('post.s.analysis'))}</h2>
         ${funnelHtml(post, posts, baseline, 'd1')}
         ${insightList('pf', focus.items.filter((item) => item.key === 'profileConv'))}
@@ -214,6 +215,7 @@ export async function renderPost([id], { isCurrent, keepY }) {
   });
 
   bindFunnel(root, post, posts, baseline);
+  bindAdSim(root, posts);
   const save = async (patch, msg = t('common.saved')) => {
     await savePosts([{ ...post, ...patch }]);
     toast(msg);
