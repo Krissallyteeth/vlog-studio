@@ -15,6 +15,17 @@ const MIN_SIDE = 2; // pattern comparison only with ≥2 notes on each side
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
 const str = (v, n = 600) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
 const ID_RE = /^[0-9a-zA-Z]{8,40}$/;
+const NOTE_URL_RE = /^https:\/\/www\.xiaohongshu\.com\/explore\/([0-9a-zA-Z]{8,40})\?xsec_token=[A-Za-z0-9%._~-]{1,400}&xsec_source=[a-z_]{1,30}$/;
+
+/**
+ * Where a note opens. 小红书 shows "page not available" for a bare note address, so the link
+ * with the note's xsec_token is used; older files without it fall back to searching the title.
+ */
+export function noteLink(n) {
+  const m = typeof n?.url === 'string' ? n.url.match(NOTE_URL_RE) : null;
+  if (m && m[1] === n.id) return n.url;
+  return `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(n?.title || n?.keyword || '')}`;
+}
 
 export function median(list) {
   const v = list.filter((x) => num(x) != null).sort((a, b) => a - b);
@@ -31,6 +42,7 @@ function normNote(raw) {
   const approx = Array.isArray(raw.approx) ? raw.approx.filter((x) => ['likes', 'collects', 'comments', 'shares'].includes(x)) : [];
   return {
     id: raw.id,
+    url: str(raw.url, 600),
     keyword: str(raw.keyword, 60),
     rank: num(raw.rank),
     type: raw.type === 'video' || raw.type === 'normal' ? raw.type : '',

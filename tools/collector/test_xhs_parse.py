@@ -67,7 +67,9 @@ class Cards(unittest.TestCase):
         self.assertEqual(xp.cover_url({"cover": {"infoList": [{"imageScene": "WB_DFT", "url": dft}]}}), dft)
         self.assertEqual(xp.cover_url({"cover": {"url_default": dft}}), dft)
         self.assertIsNone(xp.cover_url({"cover": {"urlPre": "https://evil.example/x.jpg"}}))
-        self.assertIsNone(xp.cover_url({"cover": {"urlPre": "http://sns-webpic-qc.xhscdn.com/x"}}))
+        # 小红书 hands out http:// addresses; they are fetched over https
+        self.assertEqual(xp.cover_url({"cover": {"urlPre": "http://sns-webpic-qc.xhscdn.com/x"}}), "https://sns-webpic-qc.xhscdn.com/x")
+        self.assertIsNone(xp.cover_url({"cover": {"urlPre": "ftp://sns-webpic-qc.xhscdn.com/x"}}))
         self.assertIsNone(xp.cover_url({}))
         self.assertFalse(xp.is_image_url("https://xhscdn.com.evil.example/x"))
 
@@ -80,11 +82,13 @@ class Cards(unittest.TestCase):
         self.assertIsNone(xp.note_from_card({"id": "abc", "modelType": "hot_query"}, "k", 1))
         self.assertIsNone(xp.note_from_card(card(id="bad id!"), "k", 1))
 
-    def test_token_not_written(self):
+    def test_token_only_in_the_link(self):
         n = xp.note_from_card(card(), "k", 1)
         data = xp.evidence_file([], [n], collected_at="2026-01-01T10:00:00+08:00")
         self.assertNotIn("_token", data["notes"][0])
-        self.assertNotIn("TOKEN-ONLY-FOR-SESSION", str(data))
+        self.assertEqual(data["notes"][0]["url"], "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f6a7b8c9d0e1?xsec_token=TOKEN-ONLY-FOR-SESSION&xsec_source=pc_search")
+        self.assertEqual(xp.note_from_card(card(xsecToken=None), "k", 1)["url"], "https://www.xiaohongshu.com/explore/64a1b2c3d4e5f6a7b8c9d0e1")
+        self.assertEqual(xp.note_url("abc12345", "a+b/c="), "https://www.xiaohongshu.com/explore/abc12345?xsec_token=a%2Bb%2Fc%3D&xsec_source=pc_search")
         self.assertEqual(data["schema"], xp.SCHEMA)
 
 

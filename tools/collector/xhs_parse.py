@@ -6,6 +6,7 @@ Rules: a value that is not on the page stays None (never 0); counts shown as
 """
 
 import re
+from urllib.parse import quote
 from datetime import datetime, timedelta, timezone
 
 SCHEMA = "vlog-studio.xhs-search/1"
@@ -111,11 +112,11 @@ def note_from_card(item, keyword, rank):
         "ipLocation": None,
         "duration": duration if isinstance(duration, (int, float)) and duration > 0 else None,
         "author": {"nickname": _text(_pick(user, "nickname", "nickName", "nick_name"), 60), "followers": None},
-        "url": f"https://www.xiaohongshu.com/explore/{note_id}",
+        "url": note_url(note_id, _pick(item, "xsecToken", "xsec_token")),
         "detail": False,
     }
     note.update(_counts(_pick(card, "interactInfo", "interact_info")))
-    # The token opens the note page in this session only; it is never written to the file.
+    # Kept apart for opening note pages here; the file has it only inside "url" (as every shared link does).
     note["_token"] = _pick(item, "xsecToken", "xsec_token")
     # The cover is shown once in the app right after collecting; it is never written to the file either.
     note["_cover_url"] = cover_url(card)
@@ -134,16 +135,22 @@ def cover_url(card):
     candidates += [cover.get(k) for k in ("urlDefault", "url_default", "url")]
     for url in candidates:
         if is_image_url(url):
-            return url
+            return re.sub(r"^http://", "https://", url)  # fetch over https
     return None
 
 
 def is_image_url(url):
-    """Only 小红书's own picture servers over https."""
+    """Only 小红书's own picture servers (their addresses often start with http://)."""
     if not isinstance(url, str) or len(url) > 2000:
         return False
-    m = re.match(r"https://([a-z0-9.-]+)/", url)
+    m = re.match(r"https?://([a-z0-9.-]+)/", url)
     return bool(m) and (m.group(1).endswith(".xhscdn.com") or m.group(1).endswith(".xiaohongshu.com"))
+
+
+def note_url(note_id, token):
+    """The note page. 小红书 refuses it without the xsec_token every shared link carries."""
+    base = f"https://www.xiaohongshu.com/explore/{note_id}"
+    return f"{base}?xsec_token={quote(token, safe='')}&xsec_source=pc_search" if isinstance(token, str) and token else base
 
 
 def tags_from_desc(desc):

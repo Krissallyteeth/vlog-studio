@@ -322,6 +322,8 @@ def collect(keywords, details, out_dir, log=print, progress=lambda *a, **k: None
                 if covers is not None and notes:
                     fetch_covers(ctx, notes, covers)
                 log(f"        노트 {len(notes)}개 (상세 {sum(1 for n in notes if n['detail'])}개)")
+                if covers is not None and notes:
+                    log(f"        표지 {sum(1 for n in notes if n['id'] in covers)}개 (주소 있음 {sum(1 for n in notes if n.get('_cover_url'))}개)")
                 if entry["status"] == "empty":
                     log("        小红书가 결과 0개라고 답했어요.")
                 elif entry["status"] == "error":
