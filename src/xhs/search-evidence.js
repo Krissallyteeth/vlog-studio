@@ -59,8 +59,13 @@ function normNote(raw) {
     author: str(raw.author?.nickname, 60),
     followers: num(raw.author?.followers),
     detail: raw.detail === true,
+    // Which result lists the note was in: 综合 (this account's default) and/or 最多点赞·半年内. Older files: 综合 only.
+    lists: Array.isArray(raw.lists) && raw.lists.some((x) => x === 'general' || x === 'popular') ? raw.lists.filter((x) => x === 'general' || x === 'popular') : ['general'],
+    rankPopular: num(raw.rankPopular),
   };
 }
+
+export const inBoth = (n) => n.lists.includes('general') && n.lists.includes('popular');
 
 /** Reads and validates an evidence file. Throws Error('schema') for anything else. */
 export function parseEvidence(data) {
@@ -72,6 +77,8 @@ export function parseEvidence(data) {
       related: Array.isArray(k?.related) ? [...new Set(k.related.map((x) => str(x, 30)).filter(Boolean))].slice(0, 60) : null,
       // The search box's suggestions, in 小红书's order (null = not collected).
       suggest: Array.isArray(k?.suggest) ? [...new Set(k.suggest.map((x) => str(x, 30)).filter(Boolean))].slice(0, 20) : null,
+      // The second list (最多点赞·半年内); null = not collected.
+      popular: k?.popular && typeof k.popular === 'object' ? { status: ['ok', 'empty', 'error'].includes(k.popular.status) ? k.popular.status : 'error', count: num(k.popular.count) } : null,
       searchedAt: str(k?.searchedAt, 40),
     }))
     .filter((k) => k.keyword)
@@ -132,7 +139,10 @@ export function frequentTerms(titles, exclude = [], limit = 10) {
 /** Per keyword: median likes, 爆款 candidates, title patterns; across keywords: hashtags, related searches. */
 export function analyzeEvidence(ev) {
   const keywords = ev.keywords.map((k) => {
-    const notes = ev.notes.filter((n) => n.keyword === k.keyword);
+    const all = ev.notes.filter((n) => n.keyword === k.keyword);
+    // Median and 爆款 candidates stay on the 综合 list, the one a searcher sees first.
+    const notes = all.filter((n) => n.lists.includes('general'));
+    const both = all.filter(inBoth).sort((a, b) => (b.likes ?? -1) - (a.likes ?? -1));
     const scored = notes.filter((n) => n.likes != null);
     const med = scored.length >= MIN_NOTES ? median(scored.map((n) => n.likes)) : null;
     const hot = med ? scored.filter((n) => n.likes >= HOT_RATIO * Math.max(med, 1)).sort((a, b) => b.likes - a.likes).map((n) => ({ ...n, ratio: n.likes / Math.max(med, 1) })) : [];
@@ -143,6 +153,9 @@ export function analyzeEvidence(ev) {
       status: k.status,
       related: k.related,
       suggest: k.suggest,
+      popular: k.popular,
+      popularCount: all.filter((n) => n.lists.includes('popular')).length,
+      both,
       count: notes.length,
       scored: scored.length,
       unscored: notes.length - scored.length,
@@ -204,7 +217,7 @@ export function buildBrief(ev, an, { topic = '', hook = '' } = {}) {
     k,
     notes: ev.notes
       .filter((n) => n.keyword === k.keyword)
-      .sort((a, b) => Number(hotIds.has(b.id)) - Number(hotIds.has(a.id)) || (b.likes ?? -1) - (a.likes ?? -1)),
+      .sort((a, b) => Number(inBoth(b)) - Number(inBoth(a)) || Number(hotIds.has(b.id)) - Number(hotIds.has(a.id)) || (b.likes ?? -1) - (a.likes ?? -1)),
   }));
   const ref = new Map();
   for (const g of groups) for (const n of g.notes) if (!ref.has(n.id)) ref.set(n.id, `N${ref.size + 1}`);
@@ -215,6 +228,7 @@ export function buildBrief(ev, an, { topic = '', hook = '' } = {}) {
   lines.push('1. 근거 자료 밖의 소문·일반론으로 추측하지 말고, 자료에서 보이는 패턴만 근거로 써.');
   lines.push('2. 해시태그는 [해시태그] 목록(2개 이상 노트·1개 노트 모두)에 있는 것만 써. 목록에 없는 태그가 꼭 필요하면 "(자료에 없음)"이라고 따로 표시해.');
   lines.push('   사람들이 많이 찾는 말은 [사람들이 찾는 말]과 话题 조회수를 우선 근거로 써. 사용 노트 수는 작성자들이 붙인 횟수일 뿐이야.');
+  lines.push('6. [종합]은 수집한 계정 기준이라 개인화가 섞일 수 있어. [종합]과 [좋아요순·반년] 두 목록에 모두 나온 노트를 가장 강한 근거로 써.');
   lines.push('3. 제목마다 참고한 노트 번호(N1 등)와 이유를 한 줄로 적어.');
   lines.push('4. 다른 노트의 문장을 그대로 베끼지 마. 내 주제와 경험에 맞게 새로 써.');
   lines.push('5. 결과물(제목·본문·해시태그)은 중국어 간체로, 설명은 한국어로 써.');
@@ -227,7 +241,8 @@ export function buildBrief(ev, an, { topic = '', hook = '' } = {}) {
   lines.push(`爆款 후보 = 같은 검색어 안에서 좋아요가 중앙값의 ${HOT_RATIO}배 이상인 노트 (노트 ${MIN_NOTES}개 미만이면 계산 안 함)`);
   for (const { k } of groups) {
     lines.push('');
-    lines.push(`- 검색어 "${k.keyword}"${statusText[k.status] ?? ''}: 노트 ${k.count}개 (좋아요 미수집 ${k.unscored}개), 좋아요 중앙값 ${fmt(k.median)}`);
+    lines.push(`- 검색어 "${k.keyword}"${statusText[k.status] ?? ''}: [종합] 노트 ${k.count}개 (좋아요 미수집 ${k.unscored}개), 좋아요 중앙값 ${fmt(k.median)}`);
+    lines.push(`  [좋아요순·반년] ${k.popular == null ? '(미수집)' : k.popular.status === 'error' ? '(읽지 못함)' : `노트 ${k.popularCount}개`}, 두 목록 모두: ${k.both.length ? k.both.map((n) => ref.get(n.id)).join(', ') : '없음'}`);
     if (k.median == null && k.status === 'ok') lines.push(`  좋아요를 읽은 노트가 ${k.scored}개라 중앙값과 爆款 후보는 계산하지 않음`);
     if (k.hot.length) lines.push(`  爆款 후보: ${k.hot.map((n) => `${ref.get(n.id)}(중앙값의 ${n.ratio.toFixed(1)}배)`).join(', ')}`);
     else if (k.median != null) lines.push(`  爆款 후보: 없음 (중앙값의 ${HOT_RATIO}배를 넘는 노트 없음)`);
@@ -246,7 +261,7 @@ export function buildBrief(ev, an, { topic = '', hook = '' } = {}) {
   const listed = new Set();
   for (const { k, notes } of groups) {
     lines.push('');
-    lines.push(`[노트 · ${k.keyword}] ${notes.length}개, 爆款 후보 먼저 그다음 좋아요 순`);
+    lines.push(`[노트 · ${k.keyword}] ${notes.length}개, 두 목록 모두 → 爆款 후보 → 좋아요 순`);
     for (const n of notes) {
       if (listed.has(n.id)) {
         lines.push(`${ref.get(n.id)} (위 검색어에 같은 노트)`);
@@ -255,7 +270,8 @@ export function buildBrief(ev, an, { topic = '', hook = '' } = {}) {
       listed.add(n.id);
       const r = ratio.get(`${k.keyword}|${n.id}`);
       const counts = `좋아요 ${fmt(n.likes)}${n.approx.includes('likes') ? '(약)' : ''}${r ? ` (중앙값의 ${r.toFixed(1)}배)` : ''} · 수집 ${fmt(n.collects)} · 댓글 ${fmt(n.comments)} · 공유 ${fmt(n.shares)}`;
-      lines.push(`${ref.get(n.id)}${hotIds.has(n.id) ? ' [爆款 후보]' : ''} "${n.title || '(제목 없음)'}" — ${counts}${n.type === 'video' ? ' · 영상' : n.type ? ' · 이미지' : ''}${n.publishedAt ? ` · 발행 ${n.publishedAt.slice(0, 10)}` : ''}`);
+      const where = [n.lists.includes('general') && n.rank ? `종합 ${n.rank}위` : n.lists.includes('general') ? '종합' : '', n.lists.includes('popular') ? `좋아요순·반년 ${n.rankPopular ?? ''}위`.replace(' 위', '') : ''].filter(Boolean).join(' · ');
+      lines.push(`${ref.get(n.id)}${inBoth(n) ? ' [두 목록 모두]' : ''}${hotIds.has(n.id) ? ' [爆款 후보]' : ''} [${where}] "${n.title || '(제목 없음)'}" — ${counts}${n.type === 'video' ? ' · 영상' : n.type ? ' · 이미지' : ''}${n.publishedAt ? ` · 발행 ${n.publishedAt.slice(0, 10)}` : ''}`);
       if (n.tags?.length) lines.push(`   태그: ${n.tags.map((x) => `#${x}`).join(' ')}`);
       if (n.desc) lines.push(`   본문 앞부분: ${n.desc.replace(/\s+/g, ' ').slice(0, 120)}`);
     }

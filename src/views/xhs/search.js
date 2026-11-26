@@ -4,7 +4,7 @@ import { confirmDialog, copyText, esc, toast } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { getMetaValue, setMetaValue } from '../../xhs/db.js';
 import { MAX_KEYWORDS, MAX_KEYWORD_LEN, cleanCovers, collectorStatus, followJob, launchCollector, parseKeywords, startCollect, waitForCollector } from '../../xhs/collector-client.js';
-import { HOT_RATIO, MIN_NOTES, analyzeEvidence, buildBrief, noteLink, parseEvidence } from '../../xhs/search-evidence.js';
+import { HOT_RATIO, MIN_NOTES, analyzeEvidence, buildBrief, inBoth, noteLink, parseEvidence } from '../../xhs/search-evidence.js';
 import { xhsPage } from './shell.js';
 
 /*
@@ -124,7 +124,7 @@ function keywordCard(k, ev, covers) {
     ? `<ol class="mt-2 flex flex-col gap-2">${k.hot
         .map(
           (n) => `<li class="flex gap-2.5 rounded-lg border border-line p-2.5 text-[14px]">${covers?.[n.id] ? coverImg(covers[n.id], n.title, 'h-20 w-16 shrink-0') : ''}<div class="min-w-0">
-            <a class="font-semibold underline-offset-2 hover:underline" href="${esc(noteLink(n))}" target="_blank" rel="noopener noreferrer">${esc(n.title || t('se.noTitle'))}</a>
+            <a class="font-semibold underline-offset-2 hover:underline" href="${esc(noteLink(n))}" target="_blank" rel="noopener noreferrer">${esc(n.title || t('se.noTitle'))}</a>${inBoth(n) ? ` <span class="pill cf-good text-[11px]">${esc(t('se.bothBadge'))}</span>` : ''}
             <p class="mt-1 text-[13px] text-muted tabular-nums">${esc(t('se.likes'))} ${n0(n.likes)}${n.approx.includes('likes') ? esc(t('se.approx')) : ''} · <b>${esc(t('se.times', { x: n.ratio.toFixed(1) }))}</b> · ${esc(t('se.collects'))} ${n0(n.collects)} · ${esc(t('se.comments'))} ${n0(n.comments)}</p>
             ${n.tags?.length ? `<p class="mt-1 text-[12px] text-muted">${n.tags.map((x) => `#${esc(x)}`).join(' ')}</p>` : ''}
           </div></li>`,
@@ -143,10 +143,30 @@ function keywordCard(k, ev, covers) {
       </tbody></table></div><p class="mt-1 text-[12px] text-muted">${esc(t('se.patternNote'))}</p>`
     : '';
   const terms = k.terms.length ? `<p class="mt-2 text-[13px]"><b>${esc(t('se.terms'))}</b> ${k.terms.map((x) => `<span class="pill pill-muted">${esc(x.term)} ${x.count}</span>`).join(' ')}</p>` : '';
+  const lists = `<p class="mt-1 text-[13px] text-muted tabular-nums">${esc(
+    k.popular == null || k.popular.status === 'error'
+      ? t('se.popularMissing')
+      : t('se.listsSummary', { g: k.count, p: k.popularCount, b: k.both.length }),
+  )}</p>`;
+  const both = k.popular && k.popular.status !== 'error'
+    ? `<h4 class="mt-3 text-[14px] font-semibold">${esc(t('se.bothTitle', { n: k.both.length }))}</h4>
+      <p class="mt-0.5 text-[12px] text-muted">${esc(t('se.bothHint'))}</p>${
+        k.both.length
+          ? `<ol class="mt-2 flex flex-col gap-1.5">${k.both
+              .slice(0, 10)
+              .map(
+                (n) => `<li class="flex items-center gap-2.5 text-[13px]">${covers?.[n.id] ? coverImg(covers[n.id], n.title, 'h-12 w-9 shrink-0') : ''}<div class="min-w-0">
+                  <a class="font-semibold underline-offset-2 hover:underline" href="${esc(noteLink(n))}" target="_blank" rel="noopener noreferrer">${esc(n.title || t('se.noTitle'))}</a>
+                  <span class="block text-muted tabular-nums">${esc(t('se.likes'))} ${n0(n.likes)} · ${esc(t('se.collects'))} ${n0(n.collects)}</span></div></li>`,
+              )
+              .join('')}</ol>`
+          : `<p class="mt-1 text-[13px] text-muted">${esc(t('se.noBoth'))}</p>`
+      }`
+    : '';
   return `<section class="card mt-3">
     <h3 class="text-[16px] font-semibold">${icon('search', 'size-4 inline -mt-0.5')} ${esc(k.keyword)}</h3>
     <p class="mt-1 text-[13px] text-muted tabular-nums">${esc(t('se.kwSummary', { n: k.count, unscored: k.unscored }))} · ${esc(t('se.medianLikes'))} ${n0(k.median)}</p>
-    ${status}${few}
+    ${lists}${status}${few}${both}
     ${k.hot.length ? `<h4 class="mt-3 text-[14px] font-semibold">${esc(t('se.hotTitle', { r: HOT_RATIO }))}</h4>` : ''}${hot}${covers ? topCovers(k, ev, covers) : ''}${patterns}${terms}
   </section>`;
 }

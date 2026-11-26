@@ -46,6 +46,7 @@ COMPRESS_JS = """async ([b64, type, maxW, q]) => {
   return 'data:image/webp;base64,' + btoa(bin);
 }"""
 RESULT_WAIT_S = 30
+POPULAR_FILTER = ("最多点赞", "半年内")  # second list: most liked within half a year (less personal than 综合)
 SCROLL_ROUNDS = 2  # scroll the results this many times to see more notes and "大家都在搜" cards
 TOPIC_MAX = 8  # topic pages opened per run for view counts
 SEARCH_BOX = "input#search-input, input.search-input, header input[type='text'], input[placeholder*='搜索']"
@@ -160,8 +161,8 @@ def wait_results(page, captured):
 
 
 def search_keyword(page, keyword, details):
-    entry = {"keyword": keyword, "searchedAt": xp.now_cst(), "status": "ok", "error": None, "related": None, "suggest": None, "noteIds": []}
-    captured = {"api": [], "related": [], "suggest": [], "typing": False, "answered": False, "problems": []}
+    entry = {"keyword": keyword, "searchedAt": xp.now_cst(), "status": "ok", "error": None, "related": None, "suggest": None, "popular": None, "noteIds": []}
+    captured = {"api": [], "related": [], "suggest": [], "typing": False, "answered": False, "problems": [], "popular_asked": False}
 
     def on_response(resp):
         try:
@@ -176,6 +177,11 @@ def search_keyword(page, keyword, details):
                 except Exception:
                     data = None
                 found, problem = xp.search_result(resp.status, data)
+                try:
+                    if xp.is_popular_request(resp.request.post_data):
+                        captured["popular_asked"] = True
+                except Exception:
+                    pass
                 if problem:
                     captured["problems"].append(problem)
                 else:
@@ -206,19 +212,23 @@ def search_keyword(page, keyword, details):
             items = wait_results(page, captured)
         if items:
             items = scroll_results(page, captured, items)
+        general = cards_to_notes(items, keyword)
+        first_status = xp.no_notes_status(len(items), captured["answered"], captured["problems"]) if not general else ("ok", None)
+        hot_cards = [i for i in items if isinstance(i, dict) and i.get("modelType") not in (None, "note")]
+        popular, entry["popular"] = [], None
+        if general:
+            pop_items, entry["popular"] = read_popular(page, captured)
+            popular = cards_to_notes(pop_items, keyword)
+            hot_cards += [i for i in pop_items if isinstance(i, dict) and i.get("modelType") not in (None, "note")]
         # Hot-query cards inside the results are real search phrases too.
-        related = list(dict.fromkeys(captured["related"] + xp.related_words([i for i in items if isinstance(i, dict) and i.get("modelType") not in (None, "note")], keyword)))
+        related = list(dict.fromkeys(captured["related"] + xp.related_words(hot_cards, keyword)))
         entry["related"] = related or None
-        notes = []
-        for item in items:
-            n = xp.note_from_card(item, keyword, len(notes) + 1)
-            if n:
-                notes.append(n)
+        notes = xp.merge_lists(general, popular)
         if not notes:
-            entry["status"], entry["error"] = xp.no_notes_status(len(items), captured["answered"], captured["problems"])
+            entry["status"], entry["error"] = first_status
             return entry, []
         entry["noteIds"] = [n["id"] for n in notes]
-        for n in notes[:details]:
+        for n in xp.detail_order(notes)[:details]:
             if not n.get("_token"):
                 continue
             pause()
@@ -235,6 +245,58 @@ def search_keyword(page, keyword, details):
         return entry, notes
     finally:
         page.remove_listener("response", on_response)
+
+
+def cards_to_notes(items, keyword):
+    notes = []
+    for item in items:
+        n = xp.note_from_card(item, keyword, len(notes) + 1)
+        if n and all(n["id"] != m["id"] for m in notes):
+            notes.append(n)
+    return notes
+
+
+def click_label(page, label):
+    loc = page.get_by_text(label, exact=True).first
+    loc.click(timeout=5000)
+    page.wait_for_timeout(int(random.uniform(1200, 2000)))
+
+
+def read_popular(page, captured):
+    """On the result page, picks 最多点赞 and 半年内 in the filter and reads that list too.
+    Returns (items, info); info["status"] is "ok", "empty" or "error" (could not set the filter)."""
+    captured.update(api=[], answered=False, problems=[], popular_asked=False)
+    try:
+        pause(2, 4)
+        try:
+            if not page.get_by_text(POPULAR_FILTER[0], exact=True).first.is_visible():
+                trigger = page.get_by_text("筛选", exact=True).first
+                trigger.hover(timeout=5000)
+                page.wait_for_timeout(800)
+                if not page.get_by_text(POPULAR_FILTER[0], exact=True).first.is_visible():
+                    trigger.click(timeout=5000)
+                    page.wait_for_timeout(800)
+        except Blocked:
+            raise
+        except Exception:
+            pass  # the labels may already be on the page
+        for label in POPULAR_FILTER:
+            click_label(page, label)
+        end = time.time() + RESULT_WAIT_S
+        while time.time() < end and not (captured["answered"] or captured["problems"]):
+            page.wait_for_timeout(1000)
+            check_blocked(page)
+        if captured["answered"] and captured["api"]:
+            scroll_results(page, captured, captured["api"])
+        items = list(captured["api"])
+        status = "ok" if items else "empty" if captured["answered"] else "error"
+        info = {"filter": "·".join(POPULAR_FILTER), "status": status, "count": len(items), "confirmed": captured["popular_asked"],
+                "error": None if status != "error" else ", ".join(dict.fromkeys(captured["problems"])) or "no answer"}
+        return items, info
+    except Blocked:
+        raise
+    except Exception as e:
+        return [], {"filter": "·".join(POPULAR_FILTER), "status": "error", "count": 0, "confirmed": False, "error": str(e)[:120]}
 
 
 def read_suggestions(page, keyword, captured):
@@ -414,6 +476,10 @@ def collect(keywords, details, out_dir, log=print, progress=lambda *a, **k: None
                 if covers is not None and notes:
                     fetch_covers(ctx, notes, covers)
                 log(f"        노트 {len(notes)}개 (상세 {sum(1 for n in notes if n['detail'])}개) · 자동완성 {len(entry.get('suggest') or [])}개 · 연관 검색어 {len(entry.get('related') or [])}개")
+                pop = entry.get("popular")
+                if pop:
+                    both = sum(1 for n in notes if len(n.get("lists") or []) == 2)
+                    log(f"        좋아요 순·반년: {pop['status']} {pop['count']}개 (둘 다 {both}개, 필터 확인 {'됨' if pop['confirmed'] else '안 됨'}){' · ' + pop['error'] if pop.get('error') else ''}")
                 if covers is not None and notes:
                     log(f"        표지 {sum(1 for n in notes if n['id'] in covers)}개 (주소 있음 {sum(1 for n in notes if n.get('_cover_url'))}개)")
                 if entry["status"] == "empty":

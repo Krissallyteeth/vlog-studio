@@ -100,7 +100,7 @@ describe('brief and answer check', () => {
     const ev = parseEvidence(sample());
     const brief = buildBrief(ev, analyzeEvidence(ev), { topic: '小户型租房收纳' });
     expect(brief).toContain('[내 주제] 小户型租房收纳');
-    expect(brief).toMatch(/N1 \[爆款 후보\] "小户型收纳技巧🔥5个方法"/);
+    expect(brief).toMatch(/N1 \[爆款 후보\] \[종합 \d+위\] "小户型收纳技巧🔥5个方法"/);
     expect(brief).toContain('#收纳技巧 (2 / 60)');
     expect(brief).toContain('수집 미수집'); // collects unknown is not written as 0
   });
@@ -139,6 +139,24 @@ describe('brief and answer check', () => {
     const an = analyzeEvidence(ev);
     expect(an.topicsCollected).toBe(false);
     expect(buildBrief(ev, an)).toContain('(小红书가 보여 준 순서): (미수집)');
+  });
+
+  it('keeps 综合 for the median and shows notes in both lists first', () => {
+    const g = [1, 2, 3, 4, 5].map((i) => note(i, i * 10, { lists: ['general'] }));
+    const both = note(6, 900, { lists: ['general', 'popular'], rankPopular: 1 });
+    const pop = note(7, 5000, { lists: ['popular'], rankPopular: 2, rank: null });
+    const ev = parseEvidence({ ...file([...g, both, pop]), keywords: [{ keyword: '收纳', status: 'ok', related: null, popular: { status: 'ok', count: 2 } }] });
+    const k = analyzeEvidence(ev).keywords[0];
+    expect(k.count).toBe(6); // the popular-only note is not in the 综合 median
+    expect(k.popularCount).toBe(2);
+    expect(k.both.map((n) => n.id)).toEqual([both.id]);
+    expect(k.hot.map((n) => n.id)).toEqual([both.id]);
+    const brief = buildBrief(ev, analyzeEvidence(ev));
+    expect(brief).toMatch(/N1 \[두 목록 모두\] \[爆款 후보\] \[종합 6위 · 좋아요순·반년 1위\]/);
+    expect(brief).toContain('[좋아요순·반년 2위]');
+    // old files: everything counts as 综合, the second list is "not collected"
+    const old = analyzeEvidence(parseEvidence(file(g))).keywords[0];
+    expect([old.popular, old.both.length, old.count]).toEqual([null, 0, 5]);
   });
 
   it('finds hashtags in both spellings', () => {

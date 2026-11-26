@@ -243,6 +243,28 @@ class Suggestions(unittest.TestCase):
         self.assertIsNone(entry["related"])  # suggestions are not mixed into related searches
 
 
+class TwoLists(unittest.TestCase):
+    def test_merge_lists(self):
+        g = [{"id": "aaaaaaaa01"}, {"id": "aaaaaaaa02"}]
+        p = [{"id": "aaaaaaaa03"}, {"id": "aaaaaaaa02"}]
+        out = xp.merge_lists(g, p)
+        self.assertEqual([(n["id"], n["lists"], n["rank"], n["rankPopular"]) for n in out], [
+            ("aaaaaaaa01", ["general"], 1, None),
+            ("aaaaaaaa02", ["general", "popular"], 2, 2),
+            ("aaaaaaaa03", ["popular"], None, 1),
+        ])
+
+    def test_detail_order_opens_notes_in_both_lists_first(self):
+        notes = xp.merge_lists([{"id": "g1"}, {"id": "both"}], [{"id": "p1"}, {"id": "both"}])
+        self.assertEqual([n["id"] for n in xp.detail_order(notes)], ["both", "p1", "g1"])
+
+    def test_popular_request(self):
+        body = '{"keyword":"收纳","sort":"popularity_descending","filters":[{"tags":["半年内"],"type":"filter_note_time"}]}'
+        self.assertTrue(xp.is_popular_request(body))
+        self.assertFalse(xp.is_popular_request('{"sort":"general"}'))
+        self.assertFalse(xp.is_popular_request(None))
+
+
 class FullKeyword(unittest.TestCase):
     def test_keeps_the_answer_for_the_whole_keyword(self):
         batches = [("keyword=收", ["收技巧"]), ("keyword=收纳", ["收纳技巧", "收纳盒"]), ("keyword=收纳&x=1", ["收纳技巧", "收纳神器"])]

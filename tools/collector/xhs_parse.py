@@ -260,6 +260,42 @@ def related_words(obj, keyword, limit=30):
     return found[:limit]
 
 
+def merge_lists(general, popular):
+    """Both result lists of one keyword as one note list. Each note says which lists it was in
+    ("general" = 综合, the account's own default; "popular" = 最多点赞 within half a year) and its place there."""
+    out, by_id = [], {}
+    for i, n in enumerate(general):
+        n["lists"], n["rankPopular"] = ["general"], None
+        n["rank"] = i + 1
+        by_id[n["id"]] = n
+        out.append(n)
+    for i, n in enumerate(popular):
+        if n["id"] in by_id:
+            by_id[n["id"]]["lists"].append("popular")
+            by_id[n["id"]]["rankPopular"] = i + 1
+            continue
+        n["lists"], n["rankPopular"], n["rank"] = ["popular"], i + 1, None
+        by_id[n["id"]] = n
+        out.append(n)
+    return out
+
+
+def detail_order(notes):
+    """Which notes get their page opened first: in both lists, then the popular list, then the rest."""
+    def key(n):
+        lists = n.get("lists") or ["general"]
+        both = "general" in lists and "popular" in lists
+        return (0 if both else 1 if "popular" in lists else 2, n.get("rankPopular") or n.get("rank") or 999)
+
+    return sorted(notes, key=key)
+
+
+def is_popular_request(post_data):
+    """True when a result request asked for 最多点赞 within half a year."""
+    s = post_data or ""
+    return "popularity_descending" in s and "半年内" in s
+
+
 def full_keyword_suggestions(batches, keyword):
     """The search box answers after every keystroke. Keep the answer for the whole keyword
     (its request names the keyword); if none names it, the last answer."""
