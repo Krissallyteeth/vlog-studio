@@ -2,8 +2,8 @@
  * 薯条 purchase screen (before paying): what the platform says an order would bring.
  *
  * Read from the screen, as OCR lines (spaces between Chinese characters are ignored):
- *  - 预计提升转化数 5-25          the estimate for the chosen amount (the sticky bar, on every screen)
- *  - 预计提升粉丝关注量 / 5 ~ 25 / (含赠0~2) / ¥60 ¥65   one card per amount (price, list price)
+ *  - 预计提升转化数 7-31          the estimate for the chosen amount (the sticky bar, on every screen)
+ *  - 预计提升粉丝关注量 / 7 ~ 31 / (含赠0~3) / ¥80 ¥90   one card per amount (price, list price)
  *  - 实付现金 60 · 推广总金额 60元 · 总计 60元             real money paid
  *  - 已赠5元流量 · 满60赠5元流量                        bonus traffic (credit, 元)
  *  - 推广多久 24小时                                   duration
@@ -17,7 +17,7 @@ const flat = (s) => String(s ?? '').replace(/\s+/g, '').replace(/[～〜]/g, '~'
 export const QUOTE_GOALS = { 粉丝关注量: '关注', 点赞收藏量: '点赞收藏量', 笔记阅读量: '阅读', 主页浏览量: '主页浏览' };
 const GOAL_RE = new RegExp(`预计提升(${Object.keys(QUOTE_GOALS).join('|')})`);
 
-/** "5~25" / "5-25" → [5, 25] (low ≤ high), else null. */
+/** "7~31" / "7-31" → [7, 31] (low ≤ high), else null. */
 export function rangeOf(s) {
   const m = /(\d{1,6})[~-](\d{1,6})/.exec(flat(s));
   if (!m) return null;
@@ -30,7 +30,7 @@ export function rangeOf(s) {
 function cardsFrom(lines) {
   const words = lines.flatMap((l, li) => (l.words ?? []).map((w) => ({ ...w, li, t: flat(w.text), cx: (w.bbox.x0 + w.bbox.x1) / 2 })));
   const ranges = [];
-  // A range can be one word ("5~25") or three ("15", "~", "71").
+  // A range can be one word ("7~31") or three ("20", "~", "90").
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
     let m = /^(\d{1,5})~(\d{1,5})$/.exec(w.t);
@@ -43,7 +43,7 @@ function cardsFrom(lines) {
   const goalLines = new Set(lines.map((l, i) => (GOAL_RE.test(flat(l.text)) ? i : -1)).filter((i) => i >= 0));
   const cards = [];
   for (const r of ranges) {
-    // Only ranges right under a "预计提升…" line are cards (not "含赠0~2" or the sticky bar).
+    // Only ranges right under a "预计提升…" line are cards (not "含赠0~3" or the sticky bar).
     if (![...goalLines].some((g) => g < r.li && r.li - g <= 2) || r.r[0] > r.r[1]) continue;
     const col = (w) => w.cx >= r.x0 - 40 && w.cx <= r.x0 + 300;
     const prices = words.filter((w) => w.li > r.li && w.li <= r.li + 3 && col(w) && /^[¥Y]\d{2,5}$/.test(w.t)).map((w) => Number(w.t.slice(1)));

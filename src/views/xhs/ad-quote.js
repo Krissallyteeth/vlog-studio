@@ -6,7 +6,7 @@ import { parseAdQuote } from '../../xhs/ocr-ad-quote.js';
 import { getPost, savePosts } from '../../xhs/store.js';
 
 /*
- * 薯条 purchase screen ("预计提升转化数 5-25") on the D+1 / D+2 upload screen: its own upload slot,
+ * 薯条 purchase screen ("预计提升转化数 7-31") on the D+1 / D+2 upload screen: its own upload slot,
  * read on this device, confirmed by the user, kept on the post (adQuotes). Screenshots are not
  * stored. Keys: aq.*
  */
