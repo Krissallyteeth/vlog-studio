@@ -17,8 +17,8 @@ import { adInWindow } from '../../xhs/ad-report.js';
 import { adFlowHtml } from './ad-flow.js';
 import { emph, insightList } from './insight-text.js';
 import { noteMetaHtml } from './note-meta.js';
-import { feedbackHtml } from './feedback.js';
-import { postReachHtml, regionOptions } from './operating-insights.js';
+import { bindFunnel, funnelHtml } from './funnel.js';
+import { regionOptions } from './operating-insights.js';
 import { relativeNote, xhsPage } from './shell.js';
 
 const CF = { good: 'cf-good', mid: 'cf-mid', bad: 'cf-bad' };
@@ -200,15 +200,15 @@ export async function renderPost([id], { isCurrent, keepY }) {
       </section>
       <section class="card mt-3"><h2 class="section-step">4 · ${esc(t('post.s.ads'))}</h2>${adFlowHtml(adTimeline(post, posts, baseline))}<div class="mt-2" id="p-ads">${adsHtml()}</div></section>
       <section class="card mt-3"><h2 class="section-step">5 · ${esc(t('post.s.analysis'))}</h2>
-        ${feedbackHtml(post, baseline)}
-        ${postReachHtml(post, baseline)}
-        ${insightList('pf', focus.items.filter((item) => ['followRate', 'profileConv'].includes(item.key)))}
+        ${funnelHtml(post, posts, baseline, 'd1')}
+        ${insightList('pf', focus.items.filter((item) => item.key === 'profileConv'))}
         ${expHtml()}
         ${noteMetaHtml(post.d1Meta, post, 'D+1', { posts })}${noteMetaHtml(post.d2Meta, post, 'D+2', { posts })}
         <div class="mt-3">${reportHtml()}</div></section>
       <button type="button" class="btn btn-ghost text-danger mt-4" id="p-delete">${icon('trash', 'size-4')}${esc(t('post.delete'))}</button>`,
   });
 
+  bindFunnel(root, post, posts, baseline);
   const save = async (patch, msg = t('common.saved')) => {
     await savePosts([{ ...post, ...patch }]);
     toast(msg);
