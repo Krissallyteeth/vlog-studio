@@ -1,7 +1,7 @@
 import { t } from '../../i18n/index.js';
 import { esc } from '../../ui/dom.js';
 import { yuan } from '../../xhs/format.js';
-import { MIN_ORDERS, estimateAccuracy, followHistory, simulate } from '../../xhs/ad-sim.js';
+import { MIN_ORDERS, estimateAccuracy, followHistory, postAdContext, simulate } from '../../xhs/ad-sim.js';
 
 /* Promotion simulator card (Data → 광고기록, post detail 4 · 광고). Keys: sim.* */
 
@@ -34,23 +34,47 @@ function accuracyHtml(posts) {
     <p class="mt-1 text-[12px] text-muted">${esc(t('sim.acc.note'))}${few ? ` ${esc(t('sim.acc.few', { n: MIN_ORDERS }))}` : ''}</p>`;
 }
 
-export function adSimHtml(posts) {
-  const h = followHistory(posts);
+const TONE = { good: 'cf-good', warn: 'cf-mid', info: 'bg-surface-2' };
+function commentText(c) {
+  const v = { ...c.vars };
+  for (const k of ['cost', 'all', 'usual']) if (k in v) v[k] = y(v[k]);
+  if (v.side) v.side = t(`sim.c.side.${v.side}`);
+  if (v.steps) v.steps = v.steps.map((s) => t(`fn.step.${s}`)).join(' · ');
+  return t(`sim.c.${c.key}`, v);
+}
+
+/** For one post: verdict of the ad advice at its latest stage, and comments on price and effect. */
+function postCommentHtml(ctx) {
+  if (!ctx.which) return `<p class="mt-3 text-[13px] text-muted">${esc(t('sim.c.noStage'))}</p>`;
+  const stageName = ctx.which === 'd2' ? 'D+2' : 'D+1';
+  const verdict = ctx.advice?.verdict;
+  const head = verdict && verdict !== 'unknown'
+    ? `<p class="text-[14px]"><span class="badge ${verdict === 'go' ? 'cf-good' : verdict === 'skip' ? 'cf-bad' : 'cf-mid'}">${esc(t(`adv.v.${verdict}`))}</span> ${esc(t('sim.c.verdictWhy', { stage: stageName }))}</p>`
+    : `<p class="text-[13px] text-muted">${esc(t('sim.c.verdictUnknown', { stage: stageName }))}</p>`;
+  const items = ctx.comments.map((c) => `<li class="rounded-[8px] px-2 py-1.5 text-[13px] leading-relaxed ${TONE[c.tone]}">${esc(commentText(c))}</li>`).join('');
+  return `<div class="mt-3 rounded-[12px] border border-line p-3" id="sim-comment"><p class="text-[13px] font-semibold">${esc(t('sim.c.title'))}</p><div class="mt-2">${head}</div>
+    ${items ? `<ul class="mt-2 flex flex-col gap-1.5">${items}</ul>` : ''}<p class="mt-2 text-[11px] text-muted">${esc(t('sim.c.note'))}</p></div>`;
+}
+
+/** `opts.post` (with `opts.baseline`): the card on a post, using orders on posts like this one. */
+export function adSimHtml(posts, opts = {}) {
+  const ctx = opts.post ? postAdContext(opts.post, posts, opts.baseline) : null;
+  const h = ctx?.history ?? followHistory(posts);
   const spend = isNum(h.spend) ? Math.round(h.spend) : '';
   const hist = h.n
-    ? `<p class="mt-1 text-[13px] leading-relaxed">${esc(t('sim.history', { n: h.n, cost: range(h.cost) }))}${h.zeroFollow ? ` ${esc(t('sim.zero', { n: h.zeroFollow }))}` : ''}${h.reference ? ` <span class="badge bg-surface-2" title="${esc(t('sim.refHelp', { n: MIN_ORDERS }))}">${esc(t('ops.ref'))}</span>` : ''}</p>`
+    ? `<p class="mt-1 text-[13px] leading-relaxed">${esc(ctx?.similar ? t('sim.historySimilar', { n: h.n, cost: range(h.cost), side: t(`sim.c.side.${ctx.similar.high ? 'high' : 'low'}`), stage: ctx.which === 'd2' ? 'D+2' : 'D+1' }) : t('sim.history', { n: h.n, cost: range(h.cost) }))}${h.zeroFollow ? ` ${esc(t('sim.zero', { n: h.zeroFollow }))}` : ''}${h.reference ? ` <span class="badge bg-surface-2" title="${esc(t('sim.refHelp', { n: MIN_ORDERS }))}">${esc(t('ops.ref'))}</span>` : ''}</p>`
     : '';
   return `<section class="card mt-3" id="ad-sim"><h2 class="text-[16px] font-semibold">${esc(t('sim.title'))}</h2>${hist}
     ${h.n ? `<div class="mt-3 grid grid-cols-2 gap-3 sm:max-w-md">
       <label class="field"><span class="field-label">${esc(t('sim.spend'))}</span><input class="input tabular-nums" inputmode="decimal" id="sim-spend" value="${spend}" placeholder="0" /></label>
       <label class="field"><span class="field-label">${esc(t('sim.credit'))}</span><input class="input tabular-nums" inputmode="decimal" id="sim-credit" value="" placeholder="0" /></label></div>` : ''}
     <div id="sim-out">${resultHtml(h, spend === '' ? null : spend, 0)}</div>
-    <p class="mt-2 text-[12px] text-muted">${esc(t('sim.note'))}</p>${accuracyHtml(posts)}</section>`;
+    <p class="mt-2 text-[12px] text-muted">${esc(t('sim.note'))}</p>${ctx ? postCommentHtml(ctx) : ''}${accuracyHtml(posts)}</section>`;
 }
 
 /** Recalculates while typing. */
-export function bindAdSim(root, posts) {
-  const h = followHistory(posts);
+export function bindAdSim(root, posts, opts = {}) {
+  const h = opts.post ? postAdContext(opts.post, posts, opts.baseline).history : followHistory(posts);
   const read = (id) => {
     const v = Number(String(root.querySelector(id)?.value ?? '').replace(/[,元¥\s]/g, ''));
     return Number.isFinite(v) ? v : null;

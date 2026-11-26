@@ -1,5 +1,7 @@
-import { adOrders, goalType } from './ad-report.js';
-import { median } from './stats.js';
+import { adviceAt } from './ad-advice.js';
+import { adInWindow, adOrders, goalType } from './ad-report.js';
+import { postFunnel } from './funnel.js';
+import { isValid, median, ordered, stage } from './stats.js';
 
 /*
  * Promotion simulator for 关注 (follower) 薯条 orders, from my own past orders only.
@@ -129,4 +131,77 @@ export function quoteOutcome(post, quote, posts) {
     orderEstimate: ad?.estimate ?? null,
     sim: sim ? { range: [sim.followers.min, sim.followers.max], median: sim.followers.median, basedOn: earlier.length } : null,
   };
+}
+
+/* ── For one post: the same "posts like this one" rule as the D+1/D+2 ad advice ───────────────
+ * At the latest stage with views (D+2, else D+1): posts published before this one, valid and
+ * without ads in that window, give my median views. Past 关注 orders (one note each) on posts on
+ * the same side of that median are "orders on posts like this one". With ≥ MIN_SIMILAR of them the
+ * simulator uses only those; otherwise all orders. Comments compare prices and flag weak steps.
+ */
+
+export const MIN_SIMILAR = 2;
+export const CHEAP = 0.9; // ≤ 90% of my usual cost per follower
+export const DEAR = 1.3; // ≥ 130%
+
+export function postAdContext(post, posts, baseline) {
+  const which = isNum(stage(post, 'd2').views) ? 'd2' : isNum(stage(post, 'd1').views) ? 'd1' : null;
+  const all = followHistory(posts);
+  const out = { which, all, similar: null, history: all, advice: null, funnel: null, quote: null, comments: [] };
+  if (!which) return out;
+  out.advice = adviceAt(post, posts, baseline, which);
+  const views = (p) => stage(p, which).views;
+  const before = ordered(posts).filter((p) => p.id !== post.id && p.date && p.date < post.date && isValid(p) && !adInWindow(p, which).any && isNum(views(p)));
+  const medView = before.length >= 3 ? median(before.map(views)) : null;
+  if (isNum(medView)) {
+    const high = views(post) >= medView;
+    const keys = new Set(adOrders(posts.filter((p) => p.id !== post.id)).filter((o) => !o.multi && isNum(views(o.links[0].post)) && (views(o.links[0].post) >= medView) === high).map((o) => o.key));
+    const subset = posts.filter((p) => p.id !== post.id);
+    const h = followHistory(subset);
+    const orders = h.orders.filter((o) => keys.has(o.key));
+    if (orders.length >= MIN_SIMILAR) {
+      const rates = orders.map((o) => o.rate).sort((a, b) => a - b);
+      const costs = orders.map((o) => o.realCost).filter(isNum).sort((a, b) => a - b);
+      out.similar = {
+        n: orders.length, high, medView, which,
+        reference: orders.length < MIN_ORDERS,
+        rate: { min: rates[0], median: median(rates), max: rates.at(-1) },
+        cost: costs.length ? { min: costs[0], median: median(costs), max: costs.at(-1) } : null,
+        spend: median(orders.map((o) => o.spend)),
+      };
+      out.history = { ...out.similar, zeroFollow: orders.filter((o) => o.follows === 0).length, orders };
+    }
+  }
+  const c = out.comments;
+  // 1. Price of followers on posts like this one, against all my orders.
+  if (out.similar?.cost && all.cost) {
+    const r = out.similar.cost.median / all.cost.median;
+    c.push({ key: r <= CHEAP ? 'similarCheap' : r >= DEAR ? 'similarDear' : 'similarSame', tone: r <= CHEAP ? 'good' : r >= DEAR ? 'warn' : 'info', vars: { cost: out.similar.cost.median, all: all.cost.median, n: out.similar.n, side: out.similar.high ? 'high' : 'low', stage: which === 'd2' ? 'D+2' : 'D+1' } });
+  } else if (all.n) c.push({ key: 'similarFew', tone: 'info', vars: { n: out.similar?.n ?? 0, min: MIN_SIMILAR } });
+  // 2. The platform's quote for this post (latest one), against my costs and my simulator.
+  const q = [...(post.adQuotes ?? [])].reverse().find((x) => x.estimate && isNum(x.pay) && x.pay > 0);
+  if (q && out.history?.rate) {
+    const mid = (q.estimate[0] + q.estimate[1]) / 2;
+    const quoteCost = mid > 0 ? q.pay / mid : null;
+    const mine = simulate(out.history, { spend: q.pay, credit: q.credit ?? 0 });
+    const usual = out.history.cost?.median ?? all.cost?.median;
+    out.quote = { quote: q, quoteCost, mine };
+    if (isNum(quoteCost) && isNum(usual)) {
+      const r = quoteCost / usual;
+      c.push({ key: r <= CHEAP ? 'quoteCheap' : r >= DEAR ? 'quoteDear' : 'quoteSame', tone: r <= CHEAP ? 'good' : r >= DEAR ? 'warn' : 'info', vars: { lo: q.estimate[0], hi: q.estimate[1], pay: q.pay, cost: Math.round(quoteCost * 100) / 100, usual: Math.round(usual * 100) / 100 } });
+    }
+    if (mine) {
+      const myMid = mine.followers.median;
+      const key = myMid < q.estimate[0] ? 'quoteOptimistic' : myMid > q.estimate[1] ? 'quoteCautious' : 'quoteAgrees';
+      c.push({ key, tone: key === 'quoteOptimistic' ? 'warn' : 'info', vars: { lo: q.estimate[0], hi: q.estimate[1], min: mine.followers.min, max: mine.followers.max, m: myMid } });
+    }
+  }
+  // 3. An ad buys exposure: weak click or opening at this stage wastes part of it.
+  if (baseline) {
+    const f = postFunnel(post, posts, baseline, which);
+    out.funnel = f;
+    const weak = f.checks.map((x) => x.step).filter((s) => ['click', 'opening'].includes(s));
+    if (weak.length) c.push({ key: 'funnelWeak', tone: 'warn', vars: { steps: weak } });
+  }
+  return out;
 }
