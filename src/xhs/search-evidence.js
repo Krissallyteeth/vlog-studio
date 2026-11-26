@@ -166,13 +166,22 @@ const fmt = (v) => (v == null ? '미수집' : String(v));
 const pct = (v) => (v == null ? '미수집' : `${Math.round(v * 100)}%`);
 
 /**
- * The brief for the user's Claude chat. Every note gets a reference (N1, N2 …) so each suggestion
- * can name its evidence. Instructions are in Korean; the content asked for is Chinese.
+ * The brief for the user's Claude chat: everything steps 1 and 2 of the screen show, plus the rules.
+ * Every note gets a reference (N1, N2 …) so each suggestion can name its evidence; all notes are
+ * listed, grouped by keyword like the screen. Instructions are in Korean; the content asked for is Chinese.
  */
-export function buildBrief(ev, an, { topic = '', hook = '', maxNotes = 30 } = {}) {
+export function buildBrief(ev, an, { topic = '', hook = '' } = {}) {
   const hotIds = new Set(an.keywords.flatMap((k) => k.hot.map((n) => n.id)));
-  const ordered = [...ev.notes].sort((a, b) => Number(hotIds.has(b.id)) - Number(hotIds.has(a.id)) || (b.likes ?? -1) - (a.likes ?? -1)).slice(0, maxNotes);
-  const ref = new Map(ordered.map((n, i) => [n.id, `N${i + 1}`]));
+  const ratio = new Map(an.keywords.flatMap((k) => k.hot.map((n) => [`${k.keyword}|${n.id}`, n.ratio])));
+  const groups = an.keywords.map((k) => ({
+    k,
+    notes: ev.notes
+      .filter((n) => n.keyword === k.keyword)
+      .sort((a, b) => Number(hotIds.has(b.id)) - Number(hotIds.has(a.id)) || (b.likes ?? -1) - (a.likes ?? -1)),
+  }));
+  const ref = new Map();
+  for (const g of groups) for (const n of g.notes) if (!ref.has(n.id)) ref.set(n.id, `N${ref.size + 1}`);
+  const statusText = { ok: '', empty: ' (小红书가 결과 0개라고 답함)', blocked: ' (보안 확인으로 중단)', error: ' (읽지 못함, 0개 아님)' };
   const lines = [];
   lines.push('너는 小红书 콘텐츠 기획 도우미야. 아래 [근거 자료]는 小红书 검색 결과를 실제로 수집한 것이야.');
   lines.push('규칙:');
@@ -183,28 +192,41 @@ export function buildBrief(ev, an, { topic = '', hook = '', maxNotes = 30 } = {}
   lines.push('5. 결과물(제목·본문·해시태그)은 중국어 간체로, 설명은 한국어로 써.');
   lines.push('');
   lines.push('요청: 제목 후보 10개(각 20자 안팎), 본문 1개(300~500자, 첫 줄에 Hook), 해시태그 8~10개, 표지 문구 후보 3개.');
-  lines.push('');
-  lines.push(`[내 주제] ${topic.trim() || '(입력 안 함)'}`);
+  if (topic.trim()) lines.push(`[내 주제] ${topic.trim()}`);
   if (hook.trim()) lines.push(`[내 Hook·핵심 장면] ${hook.trim()}`);
   lines.push('');
-  lines.push(`[근거 자료] 수집 ${ev.collectedAt || '시각 미상'} (중국 표준시), 검색어 ${ev.keywords.map((k) => k.keyword).join(', ')}`);
-  for (const k of an.keywords) {
-    lines.push(`- 검색어 "${k.keyword}": 노트 ${k.count}개, 좋아요 중앙값 ${fmt(k.median)}, 爆款 후보(중앙값 ${HOT_RATIO}배 이상) ${k.hot.map((n) => ref.get(n.id)).filter(Boolean).join(', ') || '없음'}`);
-    if (k.patterns) lines.push(`  제목 패턴 爆款 vs 나머지: 길이 ${fmt(k.patterns.hot.length)} vs ${fmt(k.patterns.rest.length)}자, 숫자 ${pct(k.patterns.hot.digits)} vs ${pct(k.patterns.rest.digits)}, 이모지 ${pct(k.patterns.hot.emoji)} vs ${pct(k.patterns.rest.emoji)}, 질문형 ${pct(k.patterns.hot.question)} vs ${pct(k.patterns.rest.question)}`);
-    if (k.terms.length) lines.push(`  爆款 제목에 반복된 단어: ${k.terms.map((x) => `${x.term}(${x.count})`).join(', ')}`);
+  lines.push(`[근거 자료] 수집 ${ev.collectedAt || '시각 미상'} (중국 표준시), 검색어 ${an.keywords.map((k) => `${k.keyword}${statusText[k.status] ?? ''}`).join(', ')}`);
+  lines.push(`爆款 후보 = 같은 검색어 안에서 좋아요가 중앙값의 ${HOT_RATIO}배 이상인 노트 (노트 ${MIN_NOTES}개 미만이면 계산 안 함)`);
+  for (const { k } of groups) {
+    lines.push('');
+    lines.push(`- 검색어 "${k.keyword}"${statusText[k.status] ?? ''}: 노트 ${k.count}개 (좋아요 미수집 ${k.unscored}개), 좋아요 중앙값 ${fmt(k.median)}`);
+    if (k.median == null && k.status === 'ok') lines.push(`  좋아요를 읽은 노트가 ${k.scored}개라 중앙값과 爆款 후보는 계산하지 않음`);
+    if (k.hot.length) lines.push(`  爆款 후보: ${k.hot.map((n) => `${ref.get(n.id)}(중앙값의 ${n.ratio.toFixed(1)}배)`).join(', ')}`);
+    else if (k.median != null) lines.push(`  爆款 후보: 없음 (중앙값의 ${HOT_RATIO}배를 넘는 노트 없음)`);
+    if (k.patterns) lines.push(`  제목 패턴 爆款 ${k.patterns.hot.n}편 vs 나머지 ${k.patterns.rest.n}편: 길이(중앙값) ${fmt(k.patterns.hot.length)} vs ${fmt(k.patterns.rest.length)}자, 숫자 포함 ${pct(k.patterns.hot.digits)} vs ${pct(k.patterns.rest.digits)}, 이모지 ${pct(k.patterns.hot.emoji)} vs ${pct(k.patterns.rest.emoji)}, 질문형 ${pct(k.patterns.hot.question)} vs ${pct(k.patterns.rest.question)} (관찰일 뿐 원인은 아님)`);
+    if (k.terms.length) lines.push(`  爆款 제목에 반복된 말: ${k.terms.map((x) => `${x.term}(${x.count})`).join(', ')}`);
   }
   lines.push('');
   lines.push(`[자주 쓰인 해시태그] (태그를 읽은 노트 ${an.tagNotes}개 기준, 괄호는 사용 노트 수 / 그 노트들의 좋아요 중앙값)`);
   lines.push(an.tags.length ? an.tags.map((x) => `#${x.tag} (${x.count} / ${fmt(x.medianLikes)})`).join(', ') : '(태그 미수집)');
   lines.push('');
   lines.push(`[연관 검색어] ${an.related.length ? an.related.join(', ') : an.relatedCollected ? '(없음)' : '(미수집)'}`);
-  lines.push('');
-  lines.push('[노트]');
-  for (const n of ordered) {
-    const counts = `좋아요 ${fmt(n.likes)}${n.approx.includes('likes') ? '(약)' : ''} · 수집 ${fmt(n.collects)} · 댓글 ${fmt(n.comments)}`;
-    lines.push(`${ref.get(n.id)}${hotIds.has(n.id) ? ' [爆款 후보]' : ''} "${n.title || '(제목 없음)'}" — ${counts}${n.type === 'video' ? ' · 영상' : n.type ? ' · 이미지' : ''}`);
-    if (n.tags?.length) lines.push(`   태그: ${n.tags.map((x) => `#${x}`).join(' ')}`);
-    if (n.desc) lines.push(`   본문 앞부분: ${n.desc.replace(/\s+/g, ' ').slice(0, 120)}`);
+  const listed = new Set();
+  for (const { k, notes } of groups) {
+    lines.push('');
+    lines.push(`[노트 · ${k.keyword}] ${notes.length}개, 爆款 후보 먼저 그다음 좋아요 순`);
+    for (const n of notes) {
+      if (listed.has(n.id)) {
+        lines.push(`${ref.get(n.id)} (위 검색어에 같은 노트)`);
+        continue;
+      }
+      listed.add(n.id);
+      const r = ratio.get(`${k.keyword}|${n.id}`);
+      const counts = `좋아요 ${fmt(n.likes)}${n.approx.includes('likes') ? '(약)' : ''}${r ? ` (중앙값의 ${r.toFixed(1)}배)` : ''} · 수집 ${fmt(n.collects)} · 댓글 ${fmt(n.comments)} · 공유 ${fmt(n.shares)}`;
+      lines.push(`${ref.get(n.id)}${hotIds.has(n.id) ? ' [爆款 후보]' : ''} "${n.title || '(제목 없음)'}" — ${counts}${n.type === 'video' ? ' · 영상' : n.type ? ' · 이미지' : ''}${n.publishedAt ? ` · 발행 ${n.publishedAt.slice(0, 10)}` : ''}`);
+      if (n.tags?.length) lines.push(`   태그: ${n.tags.map((x) => `#${x}`).join(' ')}`);
+      if (n.desc) lines.push(`   본문 앞부분: ${n.desc.replace(/\s+/g, ' ').slice(0, 120)}`);
+    }
   }
   return lines.join('\n');
 }

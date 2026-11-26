@@ -105,6 +105,18 @@ describe('brief and answer check', () => {
     expect(brief).toContain('수집 미수집'); // collects unknown is not written as 0
   });
 
+  it('copies everything steps 1 and 2 show: every note of every keyword, no empty topic line', () => {
+    const many = (kw, n) => Array.from({ length: n }, (_, i) => ({ ...note(i + 1, 10 + i), id: `${kw === 'a' ? 'aa' : 'bb'}${String(i).padStart(10, '0')}`, keyword: kw }));
+    const ev = parseEvidence(file([...many('a', 25), ...many('b', 25)], [{ keyword: 'a', status: 'ok', related: null }, { keyword: 'b', status: 'empty', related: null }]));
+    const brief = buildBrief(ev, analyzeEvidence(ev));
+    expect(brief).toContain('[노트 · a] 25개');
+    expect(brief).toContain('[노트 · b] 25개');
+    expect(brief).toContain('N50 ');
+    expect(brief).toContain('(小红书가 결과 0개라고 답함)');
+    expect(brief).toContain('좋아요 미수집 0개');
+    expect(brief).not.toContain('[내 주제]');
+  });
+
   it('finds hashtags in both spellings', () => {
     expect(hashtagsIn('#收纳技巧 #小户型[话题]# 文字#家居')).toEqual(['收纳技巧', '小户型', '家居']);
     expect(tagKey('#Home Tour[话题]#')).toBe('hometour');
