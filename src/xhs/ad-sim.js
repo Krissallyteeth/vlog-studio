@@ -66,3 +66,67 @@ export function simulate(history, { spend, credit = 0 }) {
     perTotal: followers.median > 0 ? round2(total / followers.median) : null,
   };
 }
+
+/* ── How good were the estimates? ─────────────────────────────────────────────────────────
+ * For each past 关注 order: the platform's own estimate (预估转化, read from the order report),
+ * and what this simulator would have said from the orders before it only (no hindsight),
+ * against the actual result. The platform's estimate is about its goal result (粉丝关注量,
+ * bonus included); the simulator works on 新增关注, so each is checked against its own number.
+ */
+
+const where = (actual, range) => (actual < range[0] ? 'below' : actual > range[1] ? 'above' : 'in');
+
+function summarise(rows, pick) {
+  const list = rows.map(pick).filter(Boolean);
+  const ratios = list.map((x) => x.ratio).filter(isNum);
+  return {
+    n: list.length,
+    in: list.filter((x) => x.where === 'in').length,
+    below: list.filter((x) => x.where === 'below').length,
+    above: list.filter((x) => x.where === 'above').length,
+    ratio: ratios.length ? median(ratios) : null, // actual ÷ middle of the range
+  };
+}
+
+export function estimateAccuracy(posts) {
+  const all = adOrders(posts)
+    .filter((o) => !o.ad.pending && goalType(o.goal) === 'follow' && isNum(o.spend) && o.spend > 0)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const known = followOrders(posts);
+  const rows = all.map((o) => {
+    const est = Array.isArray(o.estimate) && o.estimate.length === 2 && o.estimate.every(isNum) ? o.estimate : null;
+    const goalActual = isNum(o.goalResult) ? o.goalResult : isNum(o.metrics.follows) ? o.metrics.follows : null;
+    const platform = est && isNum(goalActual) ? { range: est, actual: goalActual, where: where(goalActual, est), ratio: (est[0] + est[1]) / 2 > 0 ? goalActual / ((est[0] + est[1]) / 2) : null } : null;
+    // The simulator from earlier orders only (orders on an unknown date are not "earlier").
+    const earlier = known.filter((k) => k.key !== o.key && k.date && o.date && k.date < o.date);
+    let sim = null;
+    if (earlier.length && isNum(o.metrics.follows)) {
+      const h = { rate: { min: Math.min(...earlier.map((k) => k.rate)), median: median(earlier.map((k) => k.rate)), max: Math.max(...earlier.map((k) => k.rate)) } };
+      const r = simulate(h, { spend: o.spend, credit: isNum(o.credit) ? o.credit : 0 });
+      if (r) sim = { range: [r.followers.min, r.followers.max], median: r.followers.median, actual: o.metrics.follows, where: where(o.metrics.follows, [r.followers.min, r.followers.max]), ratio: r.followers.median > 0 ? o.metrics.follows / r.followers.median : null, basedOn: earlier.length };
+    }
+    return { key: o.key, date: o.date, spend: o.spend, platform, sim };
+  });
+  return { rows, platform: summarise(rows, (r) => r.platform), sim: summarise(rows, (r) => r.sim) };
+}
+
+/**
+ * A purchase-screen reading on a post, with what happened: the 关注 order of the same stage on that
+ * post (if bought), and what this simulator said from the orders before that day.
+ */
+export function quoteOutcome(post, quote, posts) {
+  const day = String(quote.capturedAt).slice(0, 10);
+  const ad = (post.ads ?? []).find((a) => a.executed !== false && !a.pending && goalType(a.goal) === 'follow' && (!quote.stage || a.stage === quote.stage));
+  const actual = ad ? (isNum(ad.goalResult) ? ad.goalResult : isNum(ad.order?.follows) ? ad.order.follows : null) : null;
+  const earlier = followOrders(posts).filter((k) => k.date && day && k.date < day);
+  const sim = earlier.length && isNum(quote.pay)
+    ? simulate({ rate: { min: Math.min(...earlier.map((k) => k.rate)), median: median(earlier.map((k) => k.rate)), max: Math.max(...earlier.map((k) => k.rate)) } }, { spend: quote.pay, credit: quote.credit ?? 0 })
+    : null;
+  return {
+    bought: !!ad,
+    actual,
+    where: isNum(actual) && quote.estimate ? where(actual, quote.estimate) : null,
+    orderEstimate: ad?.estimate ?? null,
+    sim: sim ? { range: [sim.followers.min, sim.followers.max], median: sim.followers.median, basedOn: earlier.length } : null,
+  };
+}

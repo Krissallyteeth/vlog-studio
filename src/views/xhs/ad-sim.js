@@ -1,7 +1,7 @@
 import { t } from '../../i18n/index.js';
 import { esc } from '../../ui/dom.js';
 import { yuan } from '../../xhs/format.js';
-import { MIN_ORDERS, followHistory, simulate } from '../../xhs/ad-sim.js';
+import { MIN_ORDERS, estimateAccuracy, followHistory, simulate } from '../../xhs/ad-sim.js';
 
 /* Promotion simulator card (Data → 광고기록, post detail 4 · 광고). Keys: sim.* */
 
@@ -22,6 +22,18 @@ function resultHtml(history, spend, credit) {
     </div>`;
 }
 
+function accuracyHtml(posts) {
+  const acc = estimateAccuracy(posts);
+  if (!acc.platform.n && !acc.sim.n) return '';
+  const pct = (a) => (isNum(a.ratio) ? `${Math.round(a.ratio * 100)}%` : '–');
+  const row = (key, a) => `<tr><td>${esc(t(`sim.acc.${key}`))}</td><td class="num" data-m="inline">${a.n}</td><td class="num" data-m="key">${a.n ? `${a.in}/${a.n}` : '–'}</td><td class="num">${a.below}</td><td class="num">${a.above}</td><td class="num">${esc(pct(a))}</td></tr>`;
+  const few = acc.platform.n < MIN_ORDERS || acc.sim.n < MIN_ORDERS;
+  return `<h3 class="mt-4 text-[14px] font-semibold">${esc(t('sim.acc.title'))}</h3>
+    <div class="table-scroll mt-2"><table class="xtable"><thead><tr><th></th><th class="num">${esc(t('sim.acc.n'))}</th><th class="num">${esc(t('sim.acc.in'))}</th><th class="num">${esc(t('sim.acc.below'))}</th><th class="num">${esc(t('sim.acc.above'))}</th><th class="num">${esc(t('sim.acc.ratio'))}</th></tr></thead>
+    <tbody>${row('platform', acc.platform)}${row('sim', acc.sim)}</tbody></table></div>
+    <p class="mt-1 text-[12px] text-muted">${esc(t('sim.acc.note'))}${few ? ` ${esc(t('sim.acc.few', { n: MIN_ORDERS }))}` : ''}</p>`;
+}
+
 export function adSimHtml(posts) {
   const h = followHistory(posts);
   const spend = isNum(h.spend) ? Math.round(h.spend) : '';
@@ -33,7 +45,7 @@ export function adSimHtml(posts) {
       <label class="field"><span class="field-label">${esc(t('sim.spend'))}</span><input class="input tabular-nums" inputmode="decimal" id="sim-spend" value="${spend}" placeholder="0" /></label>
       <label class="field"><span class="field-label">${esc(t('sim.credit'))}</span><input class="input tabular-nums" inputmode="decimal" id="sim-credit" value="" placeholder="0" /></label></div>` : ''}
     <div id="sim-out">${resultHtml(h, spend === '' ? null : spend, 0)}</div>
-    <p class="mt-2 text-[12px] text-muted">${esc(t('sim.note'))}</p></section>`;
+    <p class="mt-2 text-[12px] text-muted">${esc(t('sim.note'))}</p>${accuracyHtml(posts)}</section>`;
 }
 
 /** Recalculates while typing. */
