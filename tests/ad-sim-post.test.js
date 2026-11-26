@@ -65,3 +65,21 @@ describe('card on a post', () => {
     expect(html).not.toMatch(/\b(sim|adv|fn)\.[a-z]/);
   });
 });
+
+describe('before D+1 views', () => {
+  it('still compares the platform quote with all orders, without a verdict or funnel', () => {
+    const post = normalizePost({ id: 'nov', date: '2026-01-20', validity: '유효', adQuotes: [{ stage: 'D+1', capturedAt: '2026-01-21T18:00:00+08:00', estimate: [4, 12], pay: 40 }] });
+    const ctx = postAdContext(post, [...history, post], baseline);
+    expect(ctx.which).toBeNull();
+    expect(ctx.advice).toBeNull();
+    expect(ctx.similar).toBeNull();
+    const keys = ctx.comments.map((c) => c.key);
+    expect(keys).toEqual(['quoteCheap', 'quoteAgrees']); // 5元 vs my usual 6元 (all orders); 40元 × median rate 0.3 = 12
+  });
+  it.each(['ko', 'en', 'zh'])('renders the card without raw keys in %s', async (lang) => {
+    applyLang(lang);
+    const { decisionCardHtml } = await import('../src/views/xhs/ad-sim.js');
+    const post = normalizePost({ id: 'nov', date: '2026-01-20', adQuotes: [{ stage: 'D+1', estimate: [4, 12], pay: 40 }] });
+    expect(decisionCardHtml(post, [...history, post], baseline)).not.toMatch(/\b(sim|adv|fn)\.[a-z]/);
+  });
+});

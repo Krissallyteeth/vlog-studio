@@ -39,21 +39,28 @@ function commentText(c) {
   const v = { ...c.vars };
   for (const k of ['cost', 'all', 'usual']) if (k in v) v[k] = y(v[k]);
   if (v.side) v.side = t(`sim.c.side.${v.side}`);
+  if (v.basis) v.basis = t(`sim.c.basis.${v.basis}`);
   if (v.steps) v.steps = v.steps.map((s) => t(`fn.step.${s}`)).join(' · ');
   return t(`sim.c.${c.key}`, v);
 }
 
 /** For one post: verdict of the ad advice at its latest stage, and comments on price and effect. */
 function postCommentHtml(ctx) {
-  if (!ctx.which) return `<p class="mt-3 text-[13px] text-muted">${esc(t('sim.c.noStage'))}</p>`;
   const stageName = ctx.which === 'd2' ? 'D+2' : 'D+1';
   const verdict = ctx.advice?.verdict;
-  const head = verdict && verdict !== 'unknown'
+  const head = !ctx.which
+    ? `<p class="text-[13px] text-muted">${esc(t('sim.c.noStage'))}</p>`
+    : verdict && verdict !== 'unknown'
     ? `<p class="text-[14px]"><span class="badge ${verdict === 'go' ? 'cf-good' : verdict === 'skip' ? 'cf-bad' : 'cf-mid'}">${esc(t(`adv.v.${verdict}`))}</span> ${esc(t('sim.c.verdictWhy', { stage: stageName }))}</p>`
     : `<p class="text-[13px] text-muted">${esc(t('sim.c.verdictUnknown', { stage: stageName }))}</p>`;
   const items = ctx.comments.map((c) => `<li class="rounded-[8px] px-2 py-1.5 text-[13px] leading-relaxed ${TONE[c.tone]}">${esc(commentText(c))}</li>`).join('');
   return `<div class="mt-3 rounded-[12px] border border-line p-3" id="sim-comment"><p class="text-[13px] font-semibold">${esc(t('sim.c.title'))}</p><div class="mt-2">${head}</div>
     ${items ? `<ul class="mt-2 flex flex-col gap-1.5">${items}</ul>` : ''}<p class="mt-2 text-[11px] text-muted">${esc(t('sim.c.note'))}</p></div>`;
+}
+
+/** The "if this post gets an ad" card alone (upload screen, right after saving an estimate). */
+export function decisionCardHtml(post, posts, baseline) {
+  return postCommentHtml(postAdContext(post, posts, baseline));
 }
 
 /** `opts.post` (with `opts.baseline`): the card on a post, using orders on posts like this one. */

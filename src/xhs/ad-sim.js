@@ -148,10 +148,10 @@ export function postAdContext(post, posts, baseline) {
   const which = isNum(stage(post, 'd2').views) ? 'd2' : isNum(stage(post, 'd1').views) ? 'd1' : null;
   const all = followHistory(posts);
   const out = { which, all, similar: null, history: all, advice: null, funnel: null, quote: null, comments: [] };
-  if (!which) return out;
-  out.advice = adviceAt(post, posts, baseline, which);
+  // Without views yet: no verdict, no "posts like this one"; the quote is still compared with all orders.
+  if (which) out.advice = adviceAt(post, posts, baseline, which);
   const views = (p) => stage(p, which).views;
-  const before = ordered(posts).filter((p) => p.id !== post.id && p.date && p.date < post.date && isValid(p) && !adInWindow(p, which).any && isNum(views(p)));
+  const before = which ? ordered(posts).filter((p) => p.id !== post.id && p.date && p.date < post.date && isValid(p) && !adInWindow(p, which).any && isNum(views(p))) : [];
   const medView = before.length >= 3 ? median(before.map(views)) : null;
   if (isNum(medView)) {
     const high = views(post) >= medView;
@@ -177,7 +177,7 @@ export function postAdContext(post, posts, baseline) {
   if (out.similar?.cost && all.cost) {
     const r = out.similar.cost.median / all.cost.median;
     c.push({ key: r <= CHEAP ? 'similarCheap' : r >= DEAR ? 'similarDear' : 'similarSame', tone: r <= CHEAP ? 'good' : r >= DEAR ? 'warn' : 'info', vars: { cost: out.similar.cost.median, all: all.cost.median, n: out.similar.n, side: out.similar.high ? 'high' : 'low', stage: which === 'd2' ? 'D+2' : 'D+1' } });
-  } else if (all.n) c.push({ key: 'similarFew', tone: 'info', vars: { n: out.similar?.n ?? 0, min: MIN_SIMILAR } });
+  } else if (all.n && which) c.push({ key: 'similarFew', tone: 'info', vars: { n: out.similar?.n ?? 0, min: MIN_SIMILAR } });
   // 2. The platform's quote for this post (latest one), against my costs and my simulator.
   const q = [...(post.adQuotes ?? [])].reverse().find((x) => x.estimate && isNum(x.pay) && x.pay > 0);
   if (q && out.history?.rate) {
@@ -188,7 +188,7 @@ export function postAdContext(post, posts, baseline) {
     out.quote = { quote: q, quoteCost, mine };
     if (isNum(quoteCost) && isNum(usual)) {
       const r = quoteCost / usual;
-      c.push({ key: r <= CHEAP ? 'quoteCheap' : r >= DEAR ? 'quoteDear' : 'quoteSame', tone: r <= CHEAP ? 'good' : r >= DEAR ? 'warn' : 'info', vars: { lo: q.estimate[0], hi: q.estimate[1], pay: q.pay, cost: Math.round(quoteCost * 100) / 100, usual: Math.round(usual * 100) / 100 } });
+      c.push({ key: r <= CHEAP ? 'quoteCheap' : r >= DEAR ? 'quoteDear' : 'quoteSame', tone: r <= CHEAP ? 'good' : r >= DEAR ? 'warn' : 'info', vars: { lo: q.estimate[0], hi: q.estimate[1], pay: q.pay, cost: Math.round(quoteCost * 100) / 100, usual: Math.round(usual * 100) / 100, basis: out.similar?.cost ? 'similar' : 'all' } });
     }
     if (mine) {
       const myMid = mine.followers.median;
@@ -197,7 +197,7 @@ export function postAdContext(post, posts, baseline) {
     }
   }
   // 3. An ad buys exposure: weak click or opening at this stage wastes part of it.
-  if (baseline) {
+  if (baseline && which) {
     const f = postFunnel(post, posts, baseline, which);
     out.funnel = f;
     const weak = f.checks.map((x) => x.step).filter((s) => ['click', 'opening'].includes(s));

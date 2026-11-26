@@ -3,7 +3,8 @@ import { $, esc, toast } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { quoteOutcome } from '../../xhs/ad-sim.js';
 import { parseAdQuote } from '../../xhs/ocr-ad-quote.js';
-import { getPost, savePosts } from '../../xhs/store.js';
+import { activeBaseline, getPost, listPosts, onXhsChange, savePosts } from '../../xhs/store.js';
+import { decisionCardHtml } from './ad-sim.js';
 
 /*
  * 薯条 purchase screen ("预计提升转化数 7-31") on the D+1 / D+2 upload screen: its own upload slot,
@@ -21,7 +22,7 @@ export function quoteCardHtml() {
   return `<section class="card mt-3" id="aq-card"><h2 class="text-[16px] font-semibold">${icon('coin', 'size-5 inline -mt-0.5')} ${esc(t('aq.title'))}</h2>
     <p class="mt-1 text-[13px] text-muted">${esc(t('aq.help'))}</p>
     <label class="btn btn-secondary mt-3 cursor-pointer">${icon('upload', 'size-5')}${esc(t('aq.pick'))}<input type="file" id="aq-files" accept="image/*" multiple class="sr-only" /></label>
-    <div id="aq-out" class="mt-3"></div></section>`;
+    <div id="aq-out" class="mt-3"></div><div id="aq-decision"></div></section>`;
 }
 
 function numInput(id, v, label) {
@@ -50,6 +51,25 @@ export function bindQuote(root, ctx) {
   let parsed = null;
   let decision = '';
   const out = () => $('#aq-out', root);
+  // Once this post has an estimate for the chosen stage: the "if this post gets an ad" card right here,
+  // with whatever is saved (D+1 numbers or not), redrawn when the post, the stage or the data change.
+  const drawDecision = async () => {
+    const box = $('#aq-decision', root);
+    if (!box) return;
+    const { post, stage } = ctx();
+    const [posts, baseline] = await Promise.all([listPosts(), activeBaseline()]);
+    const fresh = post && posts.find((p) => p.id === post.id);
+    const has = fresh?.adQuotes?.some((q) => q.stage === stageLabel(stage));
+    box.innerHTML = has ? decisionCardHtml(fresh, posts, baseline) : '';
+  };
+  drawDecision();
+  const off = onXhsChange(() => (root.isConnected ? drawDecision() : off()));
+  root.addEventListener('click', (e) => {
+    if (e.target.closest('[data-stage]')) setTimeout(drawDecision);
+  });
+  root.addEventListener('change', (e) => {
+    if (e.target.id === 'ocr-post') setTimeout(drawDecision);
+  });
   root.addEventListener('change', async (e) => {
     if (e.target.id !== 'aq-files' || !e.target.files?.length) return;
     const files = [...e.target.files];
