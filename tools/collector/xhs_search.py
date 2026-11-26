@@ -8,6 +8,8 @@ likes, comments or follows, and it does not hide that it is automated.
 Usage (see README.md):
     python tools/collector/xhs_search.py login
     python tools/collector/xhs_search.py search "海南 新家" "租房改造" --details 8
+    python tools/collector/xhs_search.py serve      # waiting mode for the app's 검색하기 button
+    python tools/collector/xhs_search.py install    # Windows: let the app start `serve` with a link
 """
 
 import argparse
@@ -28,6 +30,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUT = REPO_ROOT / "private-data" / "xhs-search"
 MAX_KEYWORDS = 5
 MAX_DETAILS = 10
+MAX_KEYWORD_LEN = 40
 RESULT_WAIT_S = 30
 
 STATE_FEEDS_JS = """() => {
@@ -93,13 +96,14 @@ def current_user(page):
     return eval_json(page, CURRENT_USER_JS)
 
 
-def wait_login(page, timeout_s=300):
+def wait_login(page, timeout_s=300, log=print, progress=lambda *a, **k: None):
     page.goto(HOME, wait_until="domcontentloaded", timeout=60000)
     time.sleep(3)
     user = current_user(page)
     if user:
         return user
-    print("\n[로그인] 열린 Chrome 창에서 '登录'을 누르고, 小红书 앱으로 QR 코드를 스캔하세요. (최대 5분 대기)")
+    progress("login")
+    log("\n[로그인] 열린 Chrome 창에서 '登录'을 누르고, 小红书 앱으로 QR 코드를 스캔하세요. (최대 5분 대기)")
     end = time.time() + timeout_s
     while time.time() < end:
         time.sleep(3)
@@ -234,50 +238,120 @@ def cmd_logout(_args):
     return 0
 
 
-def cmd_search(args):
+def clean_keywords(keywords):
+    out = []
+    for k in keywords:
+        k = " ".join(str(k).split())[:MAX_KEYWORD_LEN]
+        if k and k not in out:
+            out.append(k)
+    return out[:MAX_KEYWORDS]
+
+
+def collect(keywords, details, out_dir, log=print, progress=lambda *a, **k: None):
+    """One collection run. Returns (exit_code, saved_path or None)."""
     from playwright.sync_api import sync_playwright
 
-    keywords = [k.strip() for k in args.keywords if k.strip()][:MAX_KEYWORDS]
+    keywords = clean_keywords(keywords)
     if not keywords:
-        print("검색어를 1개 이상 넣어 주세요.")
-        return 2
-    details = max(0, min(args.details, MAX_DETAILS))
-    out_dir = Path(args.out).expanduser() if args.out else DEFAULT_OUT
+        log("검색어를 1개 이상 넣어 주세요.")
+        return 2, None
+    details = max(0, min(details, MAX_DETAILS))
     entries, all_notes = [], []
+    progress("starting", total=len(keywords))
     with sync_playwright() as p:
         ctx = open_browser(p)
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         try:
-            if not wait_login(page):
-                print("[로그인] 로그인하지 않으면 검색 결과를 읽을 수 없어요.")
-                return 1
+            if not wait_login(page, log=log, progress=progress):
+                log("[로그인] 로그인하지 않으면 검색 결과를 읽을 수 없어요.")
+                return 1, None
             for i, kw in enumerate(keywords):
                 if i:
                     pause(6, 12)
-                print(f"[검색] {kw} …")
+                progress("keyword", index=i, keyword=kw, total=len(keywords))
+                log(f"[검색] {kw} …")
                 try:
                     entry, notes = search_keyword(page, kw, details)
                 except Blocked as b:
                     entries.append({"keyword": kw, "searchedAt": xp.now_cst(), "status": "blocked", "error": str(b), "related": None, "noteIds": [n["id"] for n in b.notes]})
                     all_notes.extend(b.notes)
-                    print("[중단] 小红书가 로그인 또는 보안 확인을 요청했어요. 지금까지 읽은 것만 저장합니다. 잠시 뒤 다시 시도하세요.")
+                    log("[중단] 小红书가 로그인 또는 보안 확인을 요청했어요. 지금까지 읽은 것만 저장합니다. 잠시 뒤 다시 시도하세요.")
                     break
                 except Exception as e:  # keep the other keywords
                     entry, notes = {"keyword": kw, "searchedAt": xp.now_cst(), "status": "error", "error": str(e)[:200], "related": None, "noteIds": []}, []
                 entries.append(entry)
                 all_notes.extend(notes)
-                print(f"        노트 {len(notes)}개 (상세 {sum(1 for n in notes if n['detail'])}개)")
+                log(f"        노트 {len(notes)}개 (상세 {sum(1 for n in notes if n['detail'])}개)")
                 if entry["status"] == "empty":
-                    print("        小红书가 결과 0개라고 답했어요.")
+                    log("        小红书가 결과 0개라고 답했어요.")
                 elif entry["status"] == "error":
-                    print(f"        결과를 읽지 못했어요(0개라는 뜻이 아니에요): {entry['error']}")
+                    log(f"        결과를 읽지 못했어요(0개라는 뜻이 아니에요): {entry['error']}")
         finally:
             ctx.close()
+    progress("saving")
     path = write_file(out_dir, entries, all_notes)
     if not all_notes:
-        print(f"\n[저장] {path}\n읽은 노트가 없어요. 이 파일은 앱에 넣지 말고, 시간을 두고 다시 시도하세요.")
+        log(f"\n[저장] {path}\n읽은 노트가 없어요. 이 파일은 앱에 넣지 말고, 시간을 두고 다시 시도하세요.")
+        return 1, path
+    log(f"\n[저장] {path}\nVLOG Studio → 더보기 → 검색 근거 추천 → '수집 파일 가져오기'에서 이 파일을 고르세요.")
+    return 0, path
+
+
+def cmd_search(args):
+    out_dir = Path(args.out).expanduser() if args.out else DEFAULT_OUT
+    return collect(args.keywords, args.details, out_dir)[0]
+
+
+def cmd_serve(_args):
+    import xhs_server
+
+    return xhs_server.serve()
+
+
+LINK_KEY = r"Software\Classes\vlogstudio-collector"
+
+
+def link_command():
+    # The link's own text is never passed on: the collector only ever starts its waiting mode.
+    return f'"{sys.executable}" "{Path(__file__).resolve()}" serve'
+
+
+def cmd_install(_args):
+    if sys.platform != "win32":
+        print("[설치] 링크로 켜기는 Windows에서만 지원해요. 대신 'serve' 명령으로 켜 두세요.")
         return 1
-    print(f"\n[저장] {path}\nVLOG Studio → 더보기 → 검색 근거 추천 → '수집 파일 가져오기'에서 이 파일을 고르세요.")
+    import winreg
+
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, LINK_KEY) as k:
+        winreg.SetValueEx(k, None, 0, winreg.REG_SZ, "URL:VLOG Studio collector")
+        winreg.SetValueEx(k, "URL Protocol", 0, winreg.REG_SZ, "")
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, LINK_KEY + r"\shell\open\command") as k:
+        winreg.SetValueEx(k, None, 0, winreg.REG_SZ, link_command())
+    print("[설치] 완료. 이제 VLOG Studio의 '검색하기'를 누르면 수집기가 켜져요.")
+    print("        처음 한 번 Chrome이 열지 물으면 '항상 허용'에 체크하고 '열기'를 누르세요.")
+    return 0
+
+
+def cmd_uninstall(_args):
+    if sys.platform != "win32":
+        return 0
+    import winreg
+
+    def delete(path):
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path) as k:
+                while True:
+                    try:
+                        sub = winreg.EnumKey(k, 0)
+                    except OSError:
+                        break
+                    delete(path + "\\" + sub)
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, path)
+        except FileNotFoundError:
+            pass
+
+    delete(LINK_KEY)
+    print("[제거] 링크로 켜기를 지웠어요. 로그인 정보까지 지우려면 'logout'을 실행하세요.")
     return 0
 
 
@@ -290,8 +364,12 @@ def main(argv=None):
     s.add_argument("keywords", nargs="+", help=f"검색어 (최대 {MAX_KEYWORDS}개)")
     s.add_argument("--details", type=int, default=8, help=f"검색어마다 본문·태그를 읽을 노트 수 (기본 8, 최대 {MAX_DETAILS})")
     s.add_argument("--out", help="저장 폴더 (기본: 저장소의 private-data/xhs-search)")
+    sub.add_parser("serve", help="앱의 '검색하기'를 기다리는 대기 모드 (이 PC 안에서만)")
+    sub.add_parser("install", help="Windows: 앱에서 링크로 대기 모드를 켤 수 있게 등록")
+    sub.add_parser("uninstall", help="Windows: 링크로 켜기 등록 지우기")
     args = ap.parse_args(argv)
-    return {"login": cmd_login, "logout": cmd_logout, "search": cmd_search}[args.cmd](args)
+    cmds = {"login": cmd_login, "logout": cmd_logout, "search": cmd_search, "serve": cmd_serve, "install": cmd_install, "uninstall": cmd_uninstall}
+    return cmds[args.cmd](args)
 
 
 if __name__ == "__main__":

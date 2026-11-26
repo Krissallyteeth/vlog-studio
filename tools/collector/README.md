@@ -26,7 +26,20 @@ pip install -r tools/collector/requirements.txt
 
 Google Chrome이 없으면 추가로 `python -m playwright install chromium`.
 
-## 사용
+## 앱에서 바로 수집 (Windows, 추천)
+
+1. 처음 한 번: `tools/collector/install.bat`을 더블클릭합니다. 필요한 것을 설치하고, 앱이 수집기를 켤 수 있게 등록합니다.
+2. VLOG Studio → 더보기 → **검색 근거 추천** → 맨 위 칸에 검색어를 한 줄에 하나씩(최대 5개) 넣고 **검색하기**.
+3. Chrome이 열지 물으면 "항상 허용"에 체크하고 **열기**. 수집기 창(검은 창)과 수집용 Chrome 창이 뜹니다.
+   처음이거나 로그인이 풀렸으면 그 Chrome 창에서 QR을 스캔합니다.
+4. 끝나면 결과가 앱에 바로 나옵니다. 파일도 `private-data/xhs-search/`에 남습니다.
+
+- **누를 때만 켜집니다.** 수집기는 30분 동안 요청이 없으면 저절로 꺼지고, 창을 닫으면 바로 꺼집니다.
+- 대기 모드는 이 PC 안(`127.0.0.1:47831`)에서만 받고, VLOG Studio 주소에서 온 요청만 처리합니다. 한 번에 하나만 실행합니다.
+- 등록을 지우려면 `tools/collector/uninstall.bat`. 휴대폰에서는 쓸 수 없습니다.
+- 손으로 켜 두려면: `python tools/collector/xhs_search.py serve`
+
+## 사용 (명령으로 직접)
 
 1. 로그인 (한 번만, 창이 열리면 小红书 앱으로 QR 스캔):
 

@@ -3,6 +3,7 @@ import { navigate } from '../../router.js';
 import { $, confirmDialog, copyText, esc, toast } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { getMetaValue, setMetaValue } from '../../xhs/db.js';
+import { MAX_KEYWORDS, MAX_KEYWORD_LEN, collectorStatus, followJob, launchCollector, parseKeywords, startCollect, waitForCollector } from '../../xhs/collector-client.js';
 import { HOT_RATIO, MIN_NOTES, analyzeEvidence, buildBrief, checkAnswer, parseEvidence, tagKey } from '../../xhs/search-evidence.js';
 import { listPosts, savePosts } from '../../xhs/store.js';
 import { xhsPage } from './shell.js';
@@ -15,7 +16,9 @@ import { xhsPage } from './shell.js';
 
 const KEY = 'local:searchEvidence';
 const KEEP = 5;
-const draft = { sel: 0, topic: '', hook: '', answer: '', check: null };
+const draft = { sel: 0, topic: '', hook: '', answer: '', check: null, keywords: '' };
+// The collection started with 검색하기. Kept outside the view so it survives re-renders.
+const run = { busy: false, key: '', vars: {}, tone: '', log: [] };
 
 const n0 = (v) => (v == null ? `<span class="text-muted">${esc(t('se.notCollected'))}</span>` : esc(Number(v).toLocaleString()));
 const pctTxt = (v) => (v == null ? t('se.notCollected') : `${Math.round(v * 100)}%`);
@@ -23,6 +26,72 @@ const pctTxt = (v) => (v == null ? t('se.notCollected') : `${Math.round(v * 100)
 async function loadSets() {
   const list = (await getMetaValue(KEY)) ?? [];
   return Array.isArray(list) ? list : [];
+}
+
+/** Keeps a collector file on this device (newest first, same file once). Throws for anything else. */
+async function storeSet(data) {
+  const parsed = parseEvidence(data);
+  const rest = (await loadSets()).filter((s) => parseEvidence(s).id !== parsed.id);
+  await setMetaValue(KEY, [data, ...rest].slice(0, KEEP));
+  draft.sel = 0;
+  draft.check = null;
+  return parsed;
+}
+
+function runStateHtml() {
+  if (!run.key) return '';
+  const tone = run.tone === 'bad' ? 'cf-bad' : run.tone === 'good' ? 'cf-good' : 'cf-mid';
+  const log = run.log.length
+    ? `<details class="mt-2 text-[12px] text-muted"><summary class="cursor-pointer">${esc(t('se.run.log'))}</summary><pre class="mt-1 whitespace-pre-wrap">${esc(run.log.join('\n'))}</pre></details>`
+    : '';
+  return `<p class="mt-3 rounded-lg ${tone} p-2.5 text-[13px]" role="status">${esc(t(run.key, run.vars))}</p>${log}`;
+}
+
+function setRun(key, vars = {}, tone = '') {
+  Object.assign(run, { key, vars, tone });
+  const box = document.getElementById('se-run-state');
+  if (box) box.innerHTML = runStateHtml();
+  const go = document.getElementById('se-run-go');
+  if (go) go.disabled = run.busy;
+}
+
+const PHASE_KEY = { starting: 'se.run.starting', login: 'se.run.login', keyword: 'se.run.keyword', saving: 'se.run.saving' };
+
+function showJob(job) {
+  run.log = (job.log ?? []).slice(-12);
+  if (job.state === 'running') setRun(PHASE_KEY[job.phase] ?? 'se.run.starting', { i: (job.index ?? 0) + 1, n: job.total ?? 0, kw: job.keyword ?? '' });
+}
+
+async function runCollect() {
+  if (run.busy) return;
+  const { keywords, error } = parseKeywords(draft.keywords);
+  if (error) return toast(t(`se.run.${error}`, { max: MAX_KEYWORDS, len: MAX_KEYWORD_LEN }), { tone: 'error' });
+  run.busy = true;
+  run.log = [];
+  try {
+    setRun('se.run.checking');
+    let status = await collectorStatus();
+    if (!status) {
+      setRun('se.run.launching');
+      launchCollector();
+      status = await waitForCollector();
+    }
+    if (!status) return setRun('se.run.off', {}, 'bad');
+    const start = await startCollect(keywords);
+    if (start.status !== 202 && start.status !== 409) return setRun('se.run.refused', {}, 'bad');
+    if (start.status === 409) setRun('se.run.attached');
+    const job = await followJob(showJob);
+    if (!job) return setRun('se.run.lost', {}, 'bad');
+    if (job.state !== 'done' || !job.result) return setRun(`se.run.fail.${job.reason ?? 'error'}`, {}, 'bad');
+    const parsed = await storeSet(job.result);
+    setRun('se.run.done', { k: parsed.keywords.length, n: parsed.notes.length }, 'good');
+    if (location.hash.startsWith('#/search')) navigate('/search');
+  } catch {
+    setRun('se.run.fail.error', {}, 'bad');
+  } finally {
+    run.busy = false;
+    setRun(run.key, run.vars, run.tone);
+  }
 }
 
 function keywordCard(k, ev) {
@@ -104,6 +173,13 @@ export async function renderSearch({ isCurrent }) {
     : '';
 
   const body = `
+    <section class="card mb-3"><h2 class="text-[16px] font-semibold">${esc(t('se.run.title'))}</h2>
+      <p class="mt-1 text-[13px] text-muted">${esc(t('se.run.hint', { max: MAX_KEYWORDS }))}</p>
+      <textarea class="textarea mt-3" rows="3" id="se-keywords" placeholder="${esc(t('se.run.ph'))}">${esc(draft.keywords)}</textarea>
+      <button type="button" class="btn btn-primary mt-2" id="se-run-go" data-x="run" ${run.busy ? 'disabled' : ''}>${icon('search', 'size-5')}${esc(t('se.run.go'))}</button>
+      <div id="se-run-state">${runStateHtml()}</div>
+      <p class="mt-2 text-[12px] text-muted">${esc(t('se.run.setup'))}</p>
+    </section>
     <section class="notice notice-strong">${icon('info', 'size-5 mt-0.5')}<div class="text-[14px] leading-relaxed"><b>${esc(t('se.howTitle'))}</b>
       <ol class="mt-1 list-decimal pl-5 text-muted"><li>${esc(t('se.how1'))}</li><li>${esc(t('se.how2'))}</li><li>${esc(t('se.how3'))}</li><li>${esc(t('se.how4'))}</li></ol>
       <p class="mt-1 text-[12px] text-muted">${esc(t('se.privacy'))}</p></div></section>
@@ -146,6 +222,7 @@ export async function renderSearch({ isCurrent }) {
     if (e.target.id === 'se-topic') draft.topic = e.target.value;
     if (e.target.id === 'se-hook') draft.hook = e.target.value;
     if (e.target.id === 'se-answer') draft.answer = e.target.value;
+    if (e.target.id === 'se-keywords') draft.keywords = e.target.value;
   });
   root.addEventListener('change', async (e) => {
     if (e.target.id === 'se-set') {
@@ -155,12 +232,7 @@ export async function renderSearch({ isCurrent }) {
     }
     if (e.target.id === 'se-file' && e.target.files?.[0]) {
       try {
-        const data = JSON.parse(await e.target.files[0].text());
-        const parsed = parseEvidence(data);
-        const rest = sets.filter((s) => parseEvidence(s).id !== parsed.id);
-        await setMetaValue(KEY, [data, ...rest].slice(0, KEEP));
-        draft.sel = 0;
-        draft.check = null;
+        const parsed = await storeSet(JSON.parse(await e.target.files[0].text()));
         toast(t('se.imported', { n: parsed.notes.length, k: parsed.keywords.length }));
         return navigate('/search');
       } catch {
@@ -171,6 +243,7 @@ export async function renderSearch({ isCurrent }) {
   root.addEventListener('click', async (e) => {
     const x = e.target.closest('[data-x]')?.dataset.x;
     if (!x) return;
+    if (x === 'run') return runCollect();
     if (x === 'remove' && raw) {
       if (!(await confirmDialog({ title: t('se.removeSet'), message: t('se.removeHint'), danger: true }))) return;
       await setMetaValue(KEY, sets.filter((_, i) => i !== draft.sel));
