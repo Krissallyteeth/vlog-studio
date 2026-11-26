@@ -28,6 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUT = REPO_ROOT / "private-data" / "xhs-search"
 MAX_KEYWORDS = 5
 MAX_DETAILS = 10
+RESULT_WAIT_S = 30
 
 STATE_FEEDS_JS = """() => {
   const f = window.__INITIAL_STATE__?.search?.feeds;
@@ -113,20 +114,44 @@ def wait_login(page, timeout_s=300):
     return None
 
 
+def wait_results(page, captured):
+    """Waits until the results are on the page or the site has answered. Returns the items (possibly empty)."""
+    end = time.time() + RESULT_WAIT_S
+    while time.time() < end:
+        page.wait_for_timeout(1500)  # unlike time.sleep, lets response events through
+        check_blocked(page)
+        items = xp.feed_items(eval_json(page, STATE_FEEDS_JS)) or captured["api"]
+        if items:
+            return items
+        if captured["answered"] or captured["problems"]:
+            return []
+    return []
+
+
 def search_keyword(page, keyword, details):
     entry = {"keyword": keyword, "searchedAt": xp.now_cst(), "status": "ok", "error": None, "related": None, "noteIds": []}
-    captured = {"api": [], "related": []}
+    captured = {"api": [], "related": [], "answered": False, "problems": []}
 
     def on_response(resp):
         try:
             path = urlparse(resp.url).path
             if "/api/sns/web/" not in path or "search" not in path:
                 return
-            data = resp.json()
             if path.endswith("/search/notes"):
-                captured["api"].extend((data.get("data") or {}).get("items") or [])
-            else:
-                captured["related"].extend(xp.related_words(data, keyword))
+                if resp.request.method == "OPTIONS":
+                    return
+                try:
+                    data = resp.json()
+                except Exception:
+                    data = None
+                found, problem = xp.search_result(resp.status, data)
+                if problem:
+                    captured["problems"].append(problem)
+                else:
+                    captured["answered"] = True
+                    captured["api"].extend(found)
+            elif not xp.is_filter_path(path):
+                captured["related"].extend(xp.related_words(resp.json(), keyword))
         except Exception:
             pass
 
@@ -134,15 +159,13 @@ def search_keyword(page, keyword, details):
     try:
         page.goto(f"https://www.xiaohongshu.com/search_result?keyword={quote(keyword)}&source=web_search_result_notes", wait_until="domcontentloaded", timeout=60000)
         check_blocked(page)
-        items = []
-        for _ in range(10):
-            time.sleep(1.5)
+        items = wait_results(page, captured)
+        if not items and not captured["answered"] and not captured["problems"]:
+            # Nothing came back at all (slow load): reload once. Never after an answer or an error.
+            pause()
+            page.reload(wait_until="domcontentloaded", timeout=60000)
             check_blocked(page)
-            items = xp.feed_items(eval_json(page, STATE_FEEDS_JS))
-            if items:
-                break
-        if not items:
-            items = captured["api"]
+            items = wait_results(page, captured)
         # Hot-query cards inside the results are real search phrases too.
         related = list(dict.fromkeys(captured["related"] + xp.related_words([i for i in items if isinstance(i, dict) and i.get("modelType") not in (None, "note")], keyword)))
         entry["related"] = related or None
@@ -152,7 +175,7 @@ def search_keyword(page, keyword, details):
             if n:
                 notes.append(n)
         if not notes:
-            entry["status"] = "empty"
+            entry["status"], entry["error"] = xp.no_notes_status(len(items), captured["answered"], captured["problems"])
             return entry, []
         entry["noteIds"] = [n["id"] for n in notes]
         for n in notes[:details]:
@@ -177,10 +200,17 @@ def search_keyword(page, keyword, details):
 def write_file(out_dir, keywords, notes):
     out_dir.mkdir(parents=True, exist_ok=True)
     data = xp.evidence_file(keywords, notes, tool_version=VERSION)
-    name = "xhs-search_" + data["collectedAt"][:16].replace(":", "").replace("T", "_") + ".json"
-    path = out_dir / name
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    return path
+    text = json.dumps(data, ensure_ascii=False, indent=2)
+    stem = "xhs-search_" + data["collectedAt"][:19].replace(":", "").replace("T", "_")
+    n = 1
+    while True:
+        path = out_dir / (f"{stem}.json" if n == 1 else f"{stem}-{n}.json")
+        try:
+            with path.open("x", encoding="utf-8") as f:  # "x": never overwrite an earlier result
+                f.write(text)
+            return path
+        except FileExistsError:
+            n += 1
 
 
 def cmd_login(_args):
@@ -237,9 +267,16 @@ def cmd_search(args):
                 entries.append(entry)
                 all_notes.extend(notes)
                 print(f"        노트 {len(notes)}개 (상세 {sum(1 for n in notes if n['detail'])}개)")
+                if entry["status"] == "empty":
+                    print("        小红书가 결과 0개라고 답했어요.")
+                elif entry["status"] == "error":
+                    print(f"        결과를 읽지 못했어요(0개라는 뜻이 아니에요): {entry['error']}")
         finally:
             ctx.close()
     path = write_file(out_dir, entries, all_notes)
+    if not all_notes:
+        print(f"\n[저장] {path}\n읽은 노트가 없어요. 이 파일은 앱에 넣지 말고, 시간을 두고 다시 시도하세요.")
+        return 1
     print(f"\n[저장] {path}\nVLOG Studio → 더보기 → 검색 근거 추천 → '수집 파일 가져오기'에서 이 파일을 고르세요.")
     return 0
 

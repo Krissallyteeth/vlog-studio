@@ -1,8 +1,13 @@
 """Run: python -m unittest discover -s tools/collector  (fictional data only)."""
 
+import json
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 import xhs_parse as xp
+import xhs_search as xs
 
 
 def card(**over):
@@ -103,6 +108,101 @@ class Related(unittest.TestCase):
     def test_words(self):
         payload = {"data": {"sug_items": [{"text": "收纳 小户型"}, {"text": "收纳"}, {"query": "租房改造"}, {"text": "x" * 40}]}}
         self.assertEqual(xp.related_words(payload, "收纳"), ["收纳 小户型", "租房改造"])
+
+    def test_filter_menu_is_not_a_related_search(self):
+        payload = {"data": {"filters": [{"name": "排序依据", "filter_tags": [{"name": "综合"}, {"name": "最新"}]}], "sug": [{"text": "海南新房"}]}}
+        self.assertEqual(xp.related_words(payload, "海南 新家"), ["海南新房"])
+        self.assertTrue(xp.is_filter_path("/api/sns/web/v1/search/filter"))
+        self.assertTrue(xp.is_filter_path("/api/sns/web/v1/search/filters"))
+        self.assertFalse(xp.is_filter_path("/api/sns/web/v1/search/recommend"))
+
+
+class ResultStatus(unittest.TestCase):
+    def test_search_result(self):
+        self.assertEqual(xp.search_result(200, {"code": 0, "success": True, "data": {"items": [1]}}), ([1], None))
+        self.assertEqual(xp.search_result(200, {"code": 0, "data": {"items": []}}), ([], None))
+        self.assertEqual(xp.search_result(200, {"code": 0, "data": {"has_more": False}}), ([], None))
+        # Not a usable answer: unknown, never zero
+        self.assertEqual(xp.search_result(461, {}), (None, "HTTP 461"))
+        self.assertEqual(xp.search_result(200, {"code": -100, "success": False}), (None, "code -100"))
+        self.assertIsNone(xp.search_result(200, None)[0])
+        self.assertIsNone(xp.search_result(200, {"code": 0, "data": {}})[0])
+
+    def test_no_notes_status(self):
+        self.assertEqual(xp.no_notes_status(0, True, []), ("empty", None))
+        self.assertEqual(xp.no_notes_status(0, False, [])[0], "error")
+        self.assertEqual(xp.no_notes_status(0, True, ["HTTP 461"])[0], "error")
+        self.assertEqual(xp.no_notes_status(3, True, [])[0], "error")
+
+
+class WriteFile(unittest.TestCase):
+    def test_never_overwrites(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(xp, "now_cst", return_value="2026-01-01T10:00:05+08:00"):
+            paths = [xs.write_file(Path(d), [{"keyword": str(i)}], []) for i in range(3)]
+            self.assertEqual(
+                [p.name for p in paths],
+                ["xhs-search_2026-01-01_100005.json", "xhs-search_2026-01-01_100005-2.json", "xhs-search_2026-01-01_100005-3.json"],
+            )
+            self.assertEqual([json.loads(p.read_text(encoding="utf-8"))["keywords"][0]["keyword"] for p in paths], ["0", "1", "2"])
+
+
+class FakePage:
+    """Stands in for a Playwright page: `loads` is one callable per page load."""
+
+    def __init__(self, *loads):
+        self.url = "https://www.xiaohongshu.com/search_result"
+        self.loads, self.n, self.handler, self.feeds = loads, 0, None, None
+
+    def on(self, _name, fn):
+        self.handler = fn
+
+    def remove_listener(self, *_a):
+        pass
+
+    def goto(self, *_a, **_k):
+        self.loads[min(self.n, len(self.loads) - 1)](self)
+        self.n += 1
+
+    reload = goto
+
+    def wait_for_timeout(self, _ms):
+        pass
+
+    def evaluate(self, js):
+        return json.dumps(self.feeds) if js == xs.STATE_FEEDS_JS and self.feeds else ""
+
+    def respond(self, path, data, status=200):
+        self.handler(mock.Mock(url="https://edith.xiaohongshu.com" + path, status=status, json=lambda: data, request=mock.Mock(method="POST")))
+
+
+NOTES = "/api/sns/web/v1/search/notes"
+
+
+class SearchKeyword(unittest.TestCase):
+    def run_search(self, page):
+        with mock.patch.object(xs, "pause"), mock.patch.object(xs, "RESULT_WAIT_S", 0.05):
+            return xs.search_keyword(page, "收纳", 0)
+
+    def test_nothing_loaded_reloads_once_and_is_not_zero(self):
+        page = FakePage(lambda p: p.respond("/api/sns/web/v1/search/filter", {"data": [{"name": "가상 메뉴"}]}))
+        entry, notes = self.run_search(page)
+        self.assertEqual((entry["status"], notes, page.n), ("error", [], 2))
+        self.assertIsNone(entry["related"])
+
+    def test_reload_recovers(self):
+        page = FakePage(lambda p: None, lambda p: setattr(p, "feeds", [card()]))
+        entry, notes = self.run_search(page)
+        self.assertEqual((entry["status"], entry["error"], len(notes), page.n), ("ok", None, 1, 2))
+
+    def test_real_zero_is_empty_without_reload(self):
+        page = FakePage(lambda p: p.respond(NOTES, {"code": 0, "data": {"items": []}}))
+        entry, _ = self.run_search(page)
+        self.assertEqual((entry["status"], page.n), ("empty", 1))
+
+    def test_api_refusal_is_error_without_reload(self):
+        page = FakePage(lambda p: p.respond(NOTES, {}, status=461))
+        entry, _ = self.run_search(page)
+        self.assertEqual((entry["status"], entry["error"], page.n), ("error", "search API: HTTP 461", 1))
 
 
 if __name__ == "__main__":

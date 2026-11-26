@@ -12,6 +12,11 @@ SCHEMA = "vlog-studio.xhs-search/1"
 CST = timezone(timedelta(hours=8))
 
 TEXT_LIMIT = 600
+# Labels of the search page's own filter menu: not search phrases.
+FILTER_LABELS = frozenset(
+    "排序依据 综合 最新 最热 最多点赞 最多评论 最多收藏 笔记类型 不限 视频 图文 发布时间 一天内 一周内 半年内 "
+    "搜索范围 已看过 未看过 已关注 位置距离 同城 附近".split()
+)
 TAG_RE = re.compile(r"#([^\s#\[\]]{1,30})(?:\[[^\]]*\])?#?")
 
 
@@ -161,6 +166,40 @@ def detail_from_state(note_detail_map, note_id):
     return entry.get("note") if isinstance(entry, dict) else None
 
 
+def is_filter_path(path):
+    """True for the filter-menu endpoint (its texts are menu labels, not related searches)."""
+    return any("filter" in part for part in path.lower().split("/"))
+
+
+def search_result(http_status, data):
+    """Result API answer -> (items, problem). items is None when the answer is not usable (unknown, not zero)."""
+    if http_status != 200:
+        return None, f"HTTP {http_status}"
+    if not isinstance(data, dict):
+        return None, "unreadable response"
+    if data.get("success") is False or data.get("code") not in (None, 0):
+        return None, f"code {data.get('code')}"
+    body = data.get("data")
+    if not isinstance(body, dict):
+        return None, "no data"
+    items = body.get("items")
+    if items is None:
+        # Items left out counts as zero only when the answer also says there are no more pages.
+        return ([], None) if body.get("has_more") is False else (None, "no items")
+    return (items, None) if isinstance(items, list) else (None, "no items")
+
+
+def no_notes_status(item_count, answered, problems):
+    """Status and reason when no note was read. 'empty' only if the site really answered with zero results."""
+    if item_count:
+        return "error", f"{item_count} result items but no readable note"
+    if problems:
+        return "error", "search API: " + ", ".join(dict.fromkeys(problems))
+    if answered:
+        return "empty", None
+    return "error", "search results did not load"
+
+
 def related_words(obj, keyword, limit=30):
     """Short search phrases found in suggestion / hot-query payloads. Structure is not fixed, so look for text fields."""
     found = []
@@ -171,8 +210,9 @@ def related_words(obj, keyword, limit=30):
         if isinstance(x, dict):
             for k in ("text", "query", "word", "name", "search_word", "searchWord"):
                 v = x.get(k)
-                if isinstance(v, str) and 2 <= len(v.strip()) <= 30 and v.strip() != keyword and v.strip() not in found:
-                    found.append(v.strip())
+                word = v.strip() if isinstance(v, str) else ""
+                if 2 <= len(word) <= 30 and word != keyword and word not in FILTER_LABELS and word not in found:
+                    found.append(word)
             for v in x.values():
                 walk(v, depth + 1)
         elif isinstance(x, list):

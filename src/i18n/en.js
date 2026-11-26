@@ -1781,7 +1781,7 @@ export default {
   "se.needPost": "Pick a post first",
   "se.needPick": "Enter a title or hashtags",
   "se.status.ok": "",
-  "se.status.empty": "No results were read. Try another keyword or collect again later.",
+  "se.status.empty": "小红书 answered with no results for this keyword. Try another keyword.",
   "se.status.blocked": "小红书 asked for a login or security check, so collecting stopped here. Try again later.",
-  "se.status.error": "Something went wrong reading this keyword. Collect again.",
+  "se.status.error": "Results for this keyword could not be read (this does not mean zero). Collect again later.",
 };

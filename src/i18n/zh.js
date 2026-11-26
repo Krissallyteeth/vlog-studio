@@ -1781,7 +1781,7 @@ export default {
   "se.needPost": "请先选择笔记",
   "se.needPick": "请输入标题或话题",
   "se.status.ok": "",
-  "se.status.empty": "没有读到搜索结果，请换关键词或稍后再采集。",
+  "se.status.empty": "小红书显示这个关键词没有搜索结果，请换个关键词。",
   "se.status.blocked": "小红书要求登录或安全验证，采集在此停止，请稍后再试。",
-  "se.status.error": "读取这个关键词时出错，请重新采集。",
+  "se.status.error": "没有读到这个关键词的结果（不代表结果为0），请稍后重新采集。",
 };
