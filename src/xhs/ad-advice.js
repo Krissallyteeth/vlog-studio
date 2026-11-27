@@ -20,8 +20,14 @@ const perFollow = (list) => {
   return f > 0 ? sum(known, (o) => o.spend) / f : null;
 };
 
-/** What the app says at D+1 ('d1') or D+2 ('d2'): { verdict: go|hold|skip|unknown, reasons, expect }. */
-export function adviceAt(post, posts, baseline, which = 'd1') {
+/**
+ * What the app says at D+1 ('d1') or D+2 ('d2'): { verdict: go|hold|skip|unknown, reasons, expect }.
+ * `model` (optional, learning.js "advice"): each signal's part of the score is multiplied by the
+ * weight learned from how that signal did on my past ads (1 = original rule).
+ */
+export function adviceAt(post, posts, baseline, which = 'd1', model = null) {
+  const learned = model?.advice?.status === 'active' && !model.advice.locked ? model.advice.weights : null;
+  const w = (signal) => (learned && isNum(learned[signal]) ? learned[signal] : 1);
   const d = stage(post, which);
   if (!isNum(d.views) || !post.date) return null;
   const decideOn = day(post.date, which === 'd1' ? 1 : 2);
@@ -37,14 +43,14 @@ export function adviceAt(post, posts, baseline, which = 'd1') {
   const rel = relDiff(d.views, medView, 1);
   // Clearly above/below (±20%) counts in full; close to my median only half, so a post a little
   // under it is not ruled out by that alone.
-  score += rel >= 0.2 ? 1 : rel <= -0.2 ? -1 : d.views >= medView ? 0.5 : -0.5;
+  score += w('views') * (rel >= 0.2 ? 1 : rel <= -0.2 ? -1 : d.views >= medView ? 0.5 : -0.5);
   reasons.push({ key: d.views >= medView ? 'viewsHigh' : 'viewsLow', vars: { v: d.views, med: Math.round(medView), pct: Math.round(Math.abs(rel) * 100) } });
   // 2. The cover: an ad buys exposure; a cover people do not click wastes it.
   const ctrValues = before.map((p) => stage(p, which).ctr).filter(isNum);
   const ctrBase = ctrValues.length >= 3 ? median(ctrValues) : null;
   const ctrRel = relDiff(d.ctr, ctrBase, METRIC.ctr.dir);
   if (isNum(ctrRel) && ctrRel < -METRIC.ctr.band) {
-    score -= 0.5;
+    score -= 0.5 * w('ctr');
     reasons.push({ key: 'ctrWeak', vars: { v: d.ctr, base: ctrBase } });
   }
   // 3. D+2: is the post still growing on its own (D+1 → D+2 views) compared with my usual growth?
@@ -56,8 +62,8 @@ export function adviceAt(post, posts, baseline, which = 'd1') {
     if (isNum(mine) && isNum(usual) && usual > 0) {
       const up = mine >= usual * 1.3;
       const down = mine <= usual * 0.8;
-      if (up) score += 1;
-      if (down) score -= 0.5;
+      if (up) score += w('growth');
+      if (down) score -= 0.5 * w('growth');
       if (up || down) reasons.push({ key: up ? 'growing' : 'stalling', vars: { now: Math.round(mine * 100) / 100, usual: Math.round(usual * 100) / 100 } });
     }
   }
@@ -68,21 +74,21 @@ export function adviceAt(post, posts, baseline, which = 'd1') {
   const sideCost = perFollow(side);
   const expect = side.length >= MIN && isNum(sideCost) ? { cost: Math.round(sideCost * 100) / 100, n: side.length, all: isNum(all) ? Math.round(all * 100) / 100 : null } : null;
   if (expect && isNum(all)) {
-    if (expect.cost <= all * 0.9) score += 0.5;
-    if (expect.cost >= all * 1.3) score -= 0.5;
+    if (expect.cost <= all * 0.9) score += 0.5 * w('cost');
+    if (expect.cost >= all * 1.3) score -= 0.5 * w('cost');
     reasons.push({ key: 'expect', vars: { cost: expect.cost, n: expect.n, all: expect.all } });
   }
   const verdict = score >= 1 ? 'go' : score <= -1 ? 'skip' : 'hold';
-  return { verdict, reasons, expect, decideOn };
+  return { verdict, reasons, expect, decideOn, weighted: !!learned };
 }
 
 /**
  * The whole story of a post's ad: D+1 and D+2 advice, what was done, how it turned out.
  * final.key: followed | against | ranBeforeAdvice | notRun | notYet; final.outcome: good | mid | bad | unknown.
  */
-export function adTimeline(post, posts, baseline, { today = new Date().toISOString().slice(0, 10) } = {}) {
-  const d1 = adviceAt(post, posts, baseline, 'd1');
-  const d2 = adviceAt(post, posts, baseline, 'd2');
+export function adTimeline(post, posts, baseline, { today = new Date().toISOString().slice(0, 10), model = null } = {}) {
+  const d1 = adviceAt(post, posts, baseline, 'd1', model);
+  const d2 = adviceAt(post, posts, baseline, 'd2', model);
   const ads = (post.ads ?? []).filter((a) => a.executed !== false).sort((a, b) => (stageDay(a.stage) ?? 99) - (stageDay(b.stage) ?? 99));
   const first = ads[0];
   const followerAds = ads.filter((a) => goalType(a.goal) === 'follow');
@@ -102,7 +108,7 @@ export function adTimeline(post, posts, baseline, { today = new Date().toISOStri
     advised = n === 1 ? d1 : n >= 2 ? d2 ?? d1 : null;
     key = !advised || advised.verdict === 'unknown' ? 'ranBeforeAdvice' : advised.verdict === 'skip' ? 'against' : 'followed';
   }
-  return { d1, d2, ad: first ? { stage: first.stage, spend: sum(ads, (a) => a.spend), perFollow: actual, usual: isNum(usual) ? Math.round(usual * 100) / 100 : null } : null, final: { key, outcome, advised: advised?.verdict ?? null } };
+  return { d1, d2, ad: first ? { stage: first.stage, spend: sum(ads, (a) => a.spend), perFollow: actual, usual: isNum(usual) ? Math.round(usual * 100) / 100 : null } : null, final: { key, outcome, advised: advised?.verdict ?? null }, advice: advised };
 }
 
 /** Over all posts: how decisions and advice turned out (to learn whether the advice is worth following). */

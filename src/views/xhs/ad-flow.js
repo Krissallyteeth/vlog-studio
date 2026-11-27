@@ -39,5 +39,5 @@ export function adFlowHtml(tl) {
     <ol class="mt-2 flex flex-col gap-1.5">${step(t('adv.d1'), tl.d1)}${step(t('adv.d2'), tl.d2)}
       <li class="rounded-[10px] bg-surface-2 p-2 text-[13px]"><b>${esc(t('adv.decision'))}</b> ${emph(done)}</li>
       <li class="rounded-[10px] p-2 text-[13px] ${tone}"><b>${esc(t('adv.final'))}</b> <span class="font-semibold">${emph(t(finalKey))}</span></li></ol>
-    <p class="mt-1 text-[12px] text-muted">${esc(t('adv.note'))}</p></div>`;
+    <p class="mt-1 text-[12px] text-muted">${esc(t('adv.note'))}${tl.d1?.weighted || tl.d2?.weighted ? ` ${esc(t('adv.learned'))}` : ''}</p></div>`;
 }

@@ -33,7 +33,7 @@ const CF = { good: 'cf-good', mid: 'cf-mid', bad: 'cf-bad' };
 
 export async function renderDashboard({ isCurrent, keepY }) {
   const [posts, income, baseline, settings, learning] = await Promise.all([listPosts(), listIncome(), activeBaseline(), getSettings(), loadLearning()]);
-  const model = learnModel(posts, baseline, learning);
+  const model = learnModel(posts, baseline, learning, { experiments: settings.experiments });
   const learnLog = posts.length ? await updateLearningLog(model, learning) : learning.log;
   if (!isCurrent()) return null;
   const list = ordered(posts);

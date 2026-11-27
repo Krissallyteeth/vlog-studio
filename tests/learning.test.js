@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { applyLang } from '../src/i18n/index.js';
 import { postAdContext } from '../src/xhs/ad-sim.js';
 import { postFunnel } from '../src/xhs/funnel.js';
-import { applies, calibrate, learnAds, learnEdit, learnFunnel, learnModel, recentMedian, signature, spearman } from '../src/xhs/learning.js';
+import { applies, calibrate, learnAds, learnAdvice, learnEdit, learnFactors, learnFunnel, learnModel, recentMedian, signature, spearman, timeSlot } from '../src/xhs/learning.js';
+import { adviceAt } from '../src/xhs/ad-advice.js';
 import { normalizePost } from '../src/xhs/store.js';
 import { learningCardHtml } from '../src/views/xhs/learning.js';
 
@@ -97,6 +98,51 @@ describe('learning card', () => {
     const html = learningCardHtml(model, log);
     expect(html).not.toMatch(/\b(lr|fn)\.[a-z]/);
     expect(html).toContain('data-lr-lock="funnel"');
-    expect(signature(model)).toEqual({ funnel: '', edit: '', ads: '' });
+    expect(signature(model)).toEqual({ funnel: '', edit: '', ads: '', advice: '', factors: '' });
+  });
+});
+
+describe('learnAdvice', () => {
+  const day = (i) => `2026-04-${String(i).padStart(2, '0')}`;
+  const base = [1, 2, 3, 4].map((i) => normalizePost({ id: `b${i}`, date: day(i), validity: '유효', d1: { ...usual, views: 100 } }));
+  // Ads on D+1: high-view posts got cheap followers, low-view posts dear ones.
+  const adPost = (i, views, follows) => normalizePost({ id: `a${i}`, date: day(i), validity: '유효', d1: { ...usual, views }, ads: [{ id: `ad${i}`, orderNo: `O${i}`, stage: 'D+1', start: `${day(i + 1)}T20:00`, goal: '关注', spend: 40, order: { follows } }] });
+  const posts = [...base, adPost(6, 200, 20), adPost(8, 200, 20), adPost(10, 50, 10), adPost(12, 200, 20), adPost(14, 50, 10), adPost(16, 200, 20)];
+  it('counts how often each signal pointed the right way and turns it into a weight', () => {
+    const m = learnAdvice(posts, null);
+    expect(m.n).toBe(5); // the first ad has no earlier price to compare with
+    expect(m.status).toBe('active');
+    expect(m.signals.views).toMatchObject({ n: 5, right: 5, weight: 1.5 });
+  });
+  it('scales the advice score by the learned weights, only when active and not locked', () => {
+    const post = normalizePost({ id: 'x', date: day(20), validity: '유효', d1: { ...usual, views: 400 } });
+    const all = [...posts, post];
+    expect(adviceAt(post, all, null, 'd1').verdict).toBe('go');
+    const weak = { advice: { status: 'active', locked: false, weights: { views: 0.25 } } };
+    expect(adviceAt(post, all, null, 'd1', weak)).toMatchObject({ verdict: 'hold', weighted: true });
+    expect(adviceAt(post, all, null, 'd1', { advice: { ...weak.advice, locked: true } }).verdict).toBe('go');
+  });
+});
+
+describe('learnFactors', () => {
+  const mkType = (i, type, followers, time) => normalizePost({ id: `f${i}`, date: `2026-05-${String(i).padStart(2, '0')}`, time, validity: '유효', contentType: type, d1: { ...usual, views: 100, newFollowers: followers } });
+  const posts = [
+    ...[1, 2, 3, 4, 5].map((i) => mkType(i, '인테리어', 5, '19:30')),
+    ...[6, 7, 8, 9, 10].map((i) => mkType(i, '여행', 1, '08:00')),
+    mkType(11, '위스키', 9, '12:00'),
+  ];
+  it('ranks factors by the difference between their groups (3+ posts each)', () => {
+    const m = learnFactors(posts, { experiments: [] });
+    expect(m.status).toBe('active');
+    const top = m.results.find((r) => r.factor === 'type' && r.outcome === 'followRate');
+    expect(top.best).toMatchObject({ level: '인테리어', n: 5, median: 0.05 });
+    expect(top.worst.level).toBe('여행');
+    expect(top.groups.map((g) => g.level)).not.toContain('위스키'); // 1 post: not compared
+  });
+  it('needs 10 valid posts', () => {
+    expect(learnFactors(posts.slice(0, 6)).status).toBe('learning');
+  });
+  it('puts posting times into slots', () => {
+    expect([timeSlot('07:10'), timeSlot('12:00'), timeSlot('19:30'), timeSlot('23:00'), timeSlot('')]).toEqual(['morning', 'day', 'evening', 'night', null]);
   });
 });

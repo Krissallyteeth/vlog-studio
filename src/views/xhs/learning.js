@@ -48,10 +48,34 @@ function sigText(area, v) {
   if (!v) return t('lr.none');
   if (area === 'funnel') return stepNames(v.split('>'));
   if (area === 'edit') return v.split(',').map((x) => { const [k, verdict] = x.split(':'); return `${t(`fn.step.${k}`)} ${t(`lr.edit.v.${verdict}`)}`; }).join(', ');
+  if (area === 'advice') return v.split(',').map((x) => { const [k, w] = x.split(':'); return `${t(`lr.sig.${k}`)} ×${w}`; }).join(', ');
+  if (area === 'factors') return v.split(',').map((x) => { const [f, o, level] = x.split('/'); return `${factorName(f)} → ${levelName(f, level)} (${t(`lr.out.${o}`)})`; }).join(', ');
   return `×${v}`;
 }
 
+/** Factor and level in words. Experiments carry their own names. */
+let expNames = {};
+const factorName = (f) => (f.startsWith('exp:') ? expNames[f] ?? t('lr.f.exp') : t(`lr.f.${f}`));
+function levelName(f, level) {
+  if (f === 'region') return t(`oi.region.${level}`);
+  if (f === 'time') return t(`lr.time.${level}`);
+  if (f === 'weekday') return t('date.weekdays')[Number(level)] ?? String(level);
+  if (f === 'sponsored') return t(`lr.sponsored.${level}`);
+  return String(level);
+}
+const pctOrNum = (o, v) => (o === 'followRate' ? `${(v * 100).toFixed(2)}%` : String(Math.round(v)));
+
 function areaBody(area, m) {
+  if (area === 'advice') {
+    const parts = Object.entries(m.signals).map(([k, x]) => t('lr.advice.sig', { sig: t(`lr.sig.${k}`), m: x.right, n: x.n, w: x.weight }));
+    return (m.status === 'active' ? t('lr.advice.active', { n: m.n }) : t('lr.advice.learning', { n: m.n, need: m.need })) + (parts.length ? ` ${parts.join(' · ')}` : '');
+  }
+  if (area === 'factors') {
+    if (m.status !== 'active') return t('lr.factors.learning', { n: m.n, need: m.need });
+    expNames = {};
+    for (const r of m.results) if (r.name) expNames[r.factor] = r.name;
+    return m.results.slice(0, 3).map((r) => t('lr.factors.row', { f: factorName(r.factor), o: t(`lr.out.${r.outcome}`), best: levelName(r.factor, r.best.level), bv: pctOrNum(r.outcome, r.best.median), bn: r.best.n, worst: levelName(r.factor, r.worst.level), wv: pctOrNum(r.outcome, r.worst.median), wn: r.worst.n })).join(' · ');
+  }
   if (area === 'funnel') {
     const named = m.steps.filter((s) => isNum(s.rho)).sort((a, b) => b.weight - a.weight);
     return m.status === 'active'

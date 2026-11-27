@@ -155,7 +155,7 @@ export function postAdContext(post, posts, baseline, model = null) {
   const all = followHistory(posts, { recent });
   const out = { which, all, similar: null, history: all, advice: null, funnel: null, quote: null, comments: [], recent };
   // Without views yet: no verdict, no "posts like this one"; the quote is still compared with all orders.
-  if (which) out.advice = adviceAt(post, posts, baseline, which);
+  if (which) out.advice = adviceAt(post, posts, baseline, which, model);
   const views = (p) => stage(p, which).views;
   const before = which ? ordered(posts).filter((p) => p.id !== post.id && p.date && p.date < post.date && isValid(p) && !adInWindow(p, which).any && isNum(views(p))) : [];
   const medView = before.length >= 3 ? median(before.map(views)) : null;
