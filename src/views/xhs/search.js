@@ -272,7 +272,12 @@ export async function renderSearch({ isCurrent }) {
       return navigate('/search');
     }
     if (x === 'copy' && ev) {
-      const ok = await copyText(buildBrief(ev, an));
+      // Title patterns learned from my own posts (when learned and not locked).
+      const [{ listPosts }, { learnTitles, applies }] = await Promise.all([import('../../xhs/store.js'), import('../../xhs/learning.js')]);
+      const titles = learnTitles(await listPosts());
+      const locked = ((await getMetaValue('learning')) ?? {}).locked ?? {};
+      const myTitles = applies({ titles: { ...titles, locked: locked.titles === true } }, 'titles') ? titles.traits : null;
+      const ok = await copyText(buildBrief(ev, an, { myTitles }));
       toast(t(ok ? 'se.copied' : 'se.copyFail'));
     }
   });

@@ -2,6 +2,7 @@ import { t } from '../../i18n/index.js';
 import { esc, toast } from '../../ui/dom.js';
 import { getMetaValue, setMetaValue } from '../../xhs/db.js';
 import { AREAS, learnModel, signature } from '../../xhs/learning.js';
+import { fmt } from '../../xhs/format.js';
 import { nowCst } from './ad-quote.js';
 import { notifyChanged } from '../../xhs/store.js';
 
@@ -49,6 +50,8 @@ function sigText(area, v) {
   if (area === 'funnel') return stepNames(v.split('>'));
   if (area === 'edit') return v.split(',').map((x) => { const [k, verdict] = x.split(':'); return `${t(`fn.step.${k}`)} ${t(`lr.edit.v.${verdict}`)}`; }).join(', ');
   if (area === 'advice') return v.split(',').map((x) => { const [k, w] = x.split(':'); return `${t(`lr.sig.${k}`)} ×${w}`; }).join(', ');
+  if (area === 'baseline') return v.split(',').map((k) => t(`m.${k}`)).join(', ');
+  if (area === 'titles') return v.split(',').map((x) => { const [k, d] = x.split(':'); return `${t(`lr.tt.${k}`)} ${d === '+' ? '↑' : '↓'}`; }).join(', ');
   if (area === 'factors') return v.split(',').map((x) => { const [f, o, level] = x.split('/'); return `${factorName(f)} → ${levelName(f, level)} (${t(`lr.out.${o}`)})`; }).join(', ');
   return `×${v}`;
 }
@@ -66,6 +69,15 @@ function levelName(f, level) {
 const pctOrNum = (o, v) => (o === 'followRate' ? `${(v * 100).toFixed(2)}%` : String(Math.round(v)));
 
 function areaBody(area, m) {
+  if (area === 'baseline') {
+    if (m.status === 'learning') return t('lr.baseline.learning', { n: m.n, need: m.need });
+    const moved = m.metrics.filter((x) => x.moved).map((x) => t('lr.baseline.moved', { m: t(`m.${x.key}`), base: fmt(x.key, x.base), now: fmt(x.key, x.recent) }));
+    return m.status === 'active' ? t('lr.baseline.active', { list: moved.join(' · ') }) : t('lr.baseline.steady', { n: m.n });
+  }
+  if (area === 'titles') {
+    if (m.status !== 'active') return t('lr.titles.learning', { n: m.n, need: m.need });
+    return m.traits.slice(0, 3).map((x) => t('lr.titles.row', { trait: t(`lr.tt.${x.key}`, x.vars), a: fmt('ctr', x.with.ctr), an: x.with.n, b: fmt('ctr', x.without.ctr), bn: x.without.n })).join(' · ');
+  }
   if (area === 'advice') {
     const parts = Object.entries(m.signals).map(([k, x]) => t('lr.advice.sig', { sig: t(`lr.sig.${k}`), m: x.right, n: x.n, w: x.weight }));
     return (m.status === 'active' ? t('lr.advice.active', { n: m.n }) : t('lr.advice.learning', { n: m.n, need: m.need })) + (parts.length ? ` ${parts.join(' · ')}` : '');
@@ -94,10 +106,10 @@ function areaBody(area, m) {
 export function learningCardHtml(model, log) {
   const rows = AREAS.map((a) => {
     const m = model[a];
-    const status = m.locked ? 'locked' : m.status;
-    const badge = `<span class="badge ${status === 'active' ? 'cf-good' : status === 'locked' ? 'bg-surface-2' : 'cf-mid'}">${esc(t(`lr.status.${status}`, { n: m.n, need: m.need }))}</span>`;
+    const status = m.locked ? 'locked' : m.status === 'active' && a === 'baseline' ? 'suggest' : m.status;
+    const badge = `<span class="badge ${status === 'active' || status === 'steady' ? 'cf-good' : status === 'suggest' ? 'cf-mid' : status === 'locked' ? 'bg-surface-2' : 'cf-mid'}">${esc(t(`lr.status.${status}`, { n: m.n, need: m.need }))}</span>`;
     return `<li class="rounded-[10px] bg-surface-2 p-3 text-[13px]"><div class="flex flex-wrap items-center justify-between gap-2"><b>${esc(t(`lr.area.${a}`))}</b><span class="flex items-center gap-2">${badge}<button type="button" class="link-btn text-[12px]" data-lr-lock="${a}">${esc(t(m.locked ? 'lr.unlock' : 'lr.lock'))}</button></span></div>
-      <p class="mt-1 text-[12px] text-muted">${esc(t(`lr.what.${a}`))}</p><p class="mt-1 leading-relaxed">${esc(areaBody(a, m))}</p></li>`;
+      <p class="mt-1 text-[12px] text-muted">${esc(t(`lr.what.${a}`))}</p><p class="mt-1 leading-relaxed">${esc(areaBody(a, m))}</p>${status === 'suggest' ? `<a class="btn btn-secondary btn-sm mt-2" href="#/xhs/baseline">${esc(t('lr.baseline.open'))}</a>` : ''}</li>`;
   }).join('');
   const recent = log.slice(0, 5).map((x) => `<li>${esc(x.at.slice(0, 16).replace('T', ' '))} · ${esc(t(`lr.area.${x.area}`))}: ${esc(sigText(x.area, x.from))} → ${esc(sigText(x.area, x.to))}</li>`).join('');
   return `<section class="card" id="learning-card"><h3 class="text-[15px] font-semibold">${esc(t('lr.title'))}</h3>

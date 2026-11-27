@@ -2,7 +2,8 @@ import { adviceRecord } from './ad-advice.js';
 import { estimateAccuracy, followOrders } from './ad-sim.js';
 import { postFunnel, funnelValues } from './funnel.js';
 import { METRIC } from './metrics.js';
-import { isValid, median, ordered } from './stats.js';
+import { isValid, median, ordered, relDiff, stage, validPosts } from './stats.js';
+import { titleTraits } from './search-evidence.js';
 import { applies } from './learn-apply.js';
 
 export { applies, calibrate, recentMedian } from './learn-apply.js';
@@ -28,10 +29,15 @@ export { applies, calibrate, recentMedian } from './learn-apply.js';
  *  - factors: type, shooting region, posting time, weekday, sponsorship and my experiments —
  *            which ones go with the biggest differences in views and follow rate (medians,
  *            groups of 3+ posts) → shown as what to plan around.
+ *  - baseline: once 11+ valid posts came after the fixed baseline, if the recent medians of the
+ *            core metrics moved beyond their band (last 11 and last 5 the same way) → a new
+ *            baseline is suggested. Applying it stays a user decision (#/xhs/baseline).
+ *  - titles: traits of my own titles (numbers, emoji, question, exclamation, long/short) against
+ *            the D+1 click rate → shown, and added to the search-evidence brief for Claude.
  */
 
-export const AREAS = ['funnel', 'edit', 'ads', 'advice', 'factors'];
-export const NEED = { funnel: 8, edit: 3, ads: 3, advice: 5, factors: 10 };
+export const AREAS = ['funnel', 'edit', 'ads', 'advice', 'factors', 'baseline', 'titles'];
+export const NEED = { funnel: 8, edit: 3, ads: 3, advice: 5, factors: 10, baseline: 11, titles: 10 };
 const SHRINK = { funnel: 10 }; // weight of my data = n / (n + SHRINK)
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -128,7 +134,7 @@ export function learnAds(posts) {
 /** Everything learned, with the user's locks ({ locked: { funnel: true } }). */
 export function learnModel(posts, baseline, state = {}, { experiments = [] } = {}) {
   const locked = state?.locked ?? {};
-  const m = { funnel: learnFunnel(posts), edit: learnEdit(posts, baseline), ads: learnAds(posts), advice: learnAdvice(posts, baseline), factors: learnFactors(posts, { experiments }), locked };
+  const m = { funnel: learnFunnel(posts), edit: learnEdit(posts, baseline), ads: learnAds(posts), advice: learnAdvice(posts, baseline), factors: learnFactors(posts, { experiments }), baseline: learnBaseline(posts, baseline), titles: learnTitles(posts), locked };
   for (const a of AREAS) m[a].locked = locked[a] === true;
   return m;
 }
@@ -141,6 +147,8 @@ export function signature(model) {
     ads: model.ads.status === 'active' ? String(Math.round(model.ads.ratio * 10) / 10) : '',
     advice: model.advice.status === 'active' ? Object.entries(model.advice.weights).sort().map(([k, v]) => `${k}:${Math.round(v * 4) / 4}`).join(',') : '',
     factors: model.factors.status === 'active' ? model.factors.results.slice(0, 2).map((r) => `${r.factor}/${r.outcome}/${r.best.level}`).join(',') : '',
+    baseline: model.baseline.status === 'active' ? model.baseline.shifted.join(',') : '',
+    titles: model.titles.status === 'active' ? model.titles.traits.slice(0, 2).map((x) => `${x.key}:${x.effect >= 0 ? '+' : '-'}`).join(',') : '',
   };
 }
 
@@ -226,4 +234,63 @@ export function learnFactors(posts, { experiments = [] } = {}) {
   }
   results.sort((a, b) => b.score - a.score);
   return { area: 'factors', n: valid.length, need: NEED.factors, status: valid.length >= NEED.factors && results.length ? 'active' : 'learning', results };
+}
+
+/* ── baseline ───────────────────────────────────────────────────────────────────────────── */
+export const CORE = ['views', 'ctr', 'exit2s', 'retain5s'];
+
+export function learnBaseline(posts, baseline) {
+  const valid = validPosts(posts);
+  const out = { area: 'baseline', need: NEED.baseline, n: 0, status: 'learning', shifted: [], metrics: [] };
+  if (!baseline) return out;
+  const inBase = new Set(baseline.postIds ?? []);
+  const lastBaseIdx = Math.max(-1, ...valid.map((p, i) => (inBase.has(p.id) ? i : -1)));
+  const after = valid.slice(lastBaseIdx + 1);
+  out.n = after.length;
+  if (after.length < NEED.baseline) return out;
+  const med = (list, k) => median(list.map((p) => stage(p)[k]));
+  const last11 = valid.slice(-NEED.baseline);
+  const last5 = valid.slice(-5);
+  for (const k of CORE) {
+    const band = METRIC[k].band;
+    const base = baseline.medians?.[k];
+    const r11 = relDiff(med(last11, k), base, METRIC[k].dir);
+    const r5 = relDiff(med(last5, k), base, METRIC[k].dir);
+    const moved = isNum(r11) && isNum(r5) && Math.abs(r11) > band && Math.sign(r11) === Math.sign(r5) && Math.abs(r5) > band;
+    out.metrics.push({ key: k, base, recent: med(last11, k), rel: r11, moved });
+    if (moved) out.shifted.push(k);
+  }
+  out.status = out.shifted.length >= 2 ? 'active' : 'steady';
+  return out;
+}
+
+/* ── titles ─────────────────────────────────────────────────────────────────────────────── */
+const TITLE_SHRINK = 10;
+
+export function learnTitles(posts) {
+  const rows = validPosts(posts).filter((p) => p.title && isNum(stage(p).ctr)).map((p) => ({ tr: titleTraits(p.title), ctr: stage(p).ctr }));
+  const out = { area: 'titles', need: NEED.titles, n: rows.length, status: 'learning', traits: [] };
+  if (!rows.length) return out;
+  const midLen = median(rows.map((r) => r.tr.length));
+  const tests = [
+    { key: 'digits', has: (r) => r.tr.digits },
+    { key: 'emoji', has: (r) => r.tr.emoji },
+    { key: 'question', has: (r) => r.tr.question },
+    { key: 'exclaim', has: (r) => r.tr.exclaim },
+    { key: 'long', has: (r) => r.tr.length > midLen, vars: { len: midLen } },
+  ];
+  const all = median(rows.map((r) => r.ctr));
+  for (const x of tests) {
+    const yes = rows.filter(x.has);
+    const no = rows.filter((r) => !x.has(r));
+    if (yes.length < FACTOR_MIN || no.length < FACTOR_MIN || !isNum(all) || all <= 0) continue;
+    const a = median(yes.map((r) => r.ctr));
+    const b = median(no.map((r) => r.ctr));
+    const effect = (a - b) / all;
+    const used = yes.length + no.length;
+    out.traits.push({ key: x.key, vars: x.vars ?? {}, with: { n: yes.length, ctr: a }, without: { n: no.length, ctr: b }, effect, score: (used / (used + TITLE_SHRINK)) * effect });
+  }
+  out.traits.sort((p, q) => Math.abs(q.score) - Math.abs(p.score));
+  out.status = rows.length >= NEED.titles && out.traits.length ? 'active' : 'learning';
+  return out;
 }

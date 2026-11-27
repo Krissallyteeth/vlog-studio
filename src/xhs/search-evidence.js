@@ -210,7 +210,14 @@ const pct = (v) => (v == null ? '미수집' : `${Math.round(v * 100)}%`);
  * Every note gets a reference (N1, N2 …) so each suggestion can name its evidence; all notes are
  * listed, grouped by keyword like the screen. Instructions are in Korean; the content asked for is Chinese.
  */
-export function buildBrief(ev, an, { topic = '', hook = '' } = {}) {
+const TRAIT_KO = { digits: '숫자가 들어간 제목', emoji: '이모지가 들어간 제목', question: '질문형 제목', exclaim: '느낌표 제목', long: '{len}자보다 긴 제목' };
+const pct1 = (v) => (typeof v === 'number' ? `${(v * 100).toFixed(1)}%` : '미수집');
+
+/**
+ * `myTitles`: title patterns learned from my own posts (learning.js "titles"), added as a section so
+ * the suggestions also fit what worked on my account.
+ */
+export function buildBrief(ev, an, { topic = '', hook = '', myTitles = null } = {}) {
   const hotIds = new Set(an.keywords.flatMap((k) => k.hot.map((n) => n.id)));
   const ratio = new Map(an.keywords.flatMap((k) => k.hot.map((n) => [`${k.keyword}|${n.id}`, n.ratio])));
   const groups = an.keywords.map((k) => ({
@@ -232,10 +239,16 @@ export function buildBrief(ev, an, { topic = '', hook = '' } = {}) {
   lines.push('3. 제목마다 참고한 노트 번호(N1 등)와 이유를 한 줄로 적어.');
   lines.push('4. 다른 노트의 문장을 그대로 베끼지 마. 내 주제와 경험에 맞게 새로 써.');
   lines.push('5. 결과물(제목·본문·해시태그)은 중국어 간체로, 설명은 한국어로 써.');
+  if (myTitles?.length) lines.push('7. [내 계정 제목 패턴]은 내 글의 D+1 클릭률에서 나온 관찰이야. 검색 근거와 부딪치지 않는 선에서 반영하고, 반영했으면 그렇다고 적어.');
   lines.push('');
   lines.push('요청: 제목 후보 10개(각 20자 안팎), 본문 1개(300~500자, 첫 줄에 Hook), 해시태그 8~10개, 표지 문구 후보 3개.');
   if (topic.trim()) lines.push(`[내 주제] ${topic.trim()}`);
   if (hook.trim()) lines.push(`[내 Hook·핵심 장면] ${hook.trim()}`);
+  if (myTitles?.length) {
+    lines.push('');
+    lines.push('[내 계정 제목 패턴] (내 유효 글 D+1 표지 클릭률 중앙값, 각 3편 이상 묶음)');
+    for (const x of myTitles.slice(0, 3)) lines.push(`- ${TRAIT_KO[x.key].replace('{len}', x.vars?.len ?? '')}: ${pct1(x.with.ctr)}(${x.with.n}편) vs 아닌 제목 ${pct1(x.without.ctr)}(${x.without.n}편)`);
+  }
   lines.push('');
   lines.push(`[근거 자료] 수집 ${ev.collectedAt || '시각 미상'} (중국 표준시), 검색어 ${an.keywords.map((k) => `${k.keyword}${statusText[k.status] ?? ''}`).join(', ')}`);
   lines.push(`爆款 후보 = 같은 검색어 안에서 좋아요가 중앙값의 ${HOT_RATIO}배 이상인 노트 (노트 ${MIN_NOTES}개 미만이면 계산 안 함)`);
